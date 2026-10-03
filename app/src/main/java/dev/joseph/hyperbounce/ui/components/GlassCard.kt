@@ -10,10 +10,10 @@ package dev.joseph.hyperbounce.ui.components
  */
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -26,6 +26,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.kyant.backdrop.Backdrop
+import dev.joseph.hyperbounce.ui.state.ComponentStyle
+import dev.joseph.hyperbounce.ui.state.LocalComponentStyle
+import top.yukonga.miuix.kmp.basic.Card
+import top.yukonga.miuix.kmp.basic.CardDefaults
+import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 @Composable
 fun GlassCard(
@@ -34,32 +39,52 @@ fun GlassCard(
     cornerRadius: Dp = 10.dp,
     content: @Composable ColumnScope.() -> Unit
 ) {
-    val isDark = dev.joseph.hyperbounce.ui.theme.LocalIsDarkTheme.current
-    val shape = RoundedCornerShape(cornerRadius)
-    val cardColor = if (isDark) Color(0xFF1C1C1E) else Color(0xFFFFFFFF)
-    
-    Column(
-        modifier
-            .fillMaxWidth()
-            .background(cardColor, shape)
-            .clip(shape),
-        content = content
-    )
+    val componentStyle = LocalComponentStyle.current
+    if (componentStyle == ComponentStyle.MIUIX) {
+        Card(
+            modifier = modifier.fillMaxWidth(),
+            cornerRadius = 16.dp,
+            insideMargin = PaddingValues(0.dp),
+            colors = CardDefaults.defaultColors(
+                color = MiuixTheme.colorScheme.surfaceContainer
+            ),
+            content = content
+        )
+    } else {
+        val isDark = dev.joseph.hyperbounce.ui.theme.LocalIsDarkTheme.current
+        val shape = RoundedCornerShape(cornerRadius)
+        val cardColor = if (isDark) Color(0xFF1C1C1E) else Color(0xFFFFFFFF)
+        
+        Column(
+            modifier
+                .fillMaxWidth()
+                .background(cardColor, shape)
+                .clip(shape),
+            content = content
+        )
+    }
 }
 
 /** A faint 1px inset divider between rows inside a [GlassCard]. */
 @Composable
 fun RowDivider(color: Color, insetStart: Dp = 56.dp) {
+    val componentStyle = LocalComponentStyle.current
+    val dividerColor = if (componentStyle == ComponentStyle.MIUIX) {
+        MiuixTheme.colorScheme.dividerLine
+    } else {
+        color
+    }
+    val inset = if (componentStyle == ComponentStyle.MIUIX) 16.dp else insetStart
     Box(
         Modifier
             .fillMaxWidth()
-            .padding(start = insetStart)
+            .padding(start = inset)
     ) {
         Spacer(
             Modifier
                 .fillMaxWidth()
                 .height(0.75.dp)
-                .background(color)
+                .background(dividerColor)
         )
     }
 }

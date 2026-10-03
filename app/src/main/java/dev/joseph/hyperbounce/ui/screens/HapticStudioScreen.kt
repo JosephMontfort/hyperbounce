@@ -510,17 +510,17 @@ fun HapticStudioScreen(
                                         }
                                     },
                                     backdrop = backdrop,
-                                    height = 38.dp,
-                                    horizontalPadding = 26.dp,
-                                    modifier = Modifier.widthIn(min = 96.dp),
+                                    height = 46.dp,
+                                    horizontalPadding = 20.dp,
+                                    modifier = Modifier.widthIn(min = 100.dp),
                                     tint = if (isTrimMode) colors.accentBlue else Color.Unspecified,
                                     surfaceColor = if (isTrimMode) colors.accentBlue.copy(alpha = 0.35f) else colors.separator.copy(alpha = 0.25f)
                                 ) {
                                     BasicText(
-                                        text = "Trim",
+                                        text = if (isTrimMode) "Done" else "Trim",
                                         style = HyperBounceType.body.copy(
                                             color = if (isTrimMode) Color.White else colors.label,
-                                            fontSize = 13.5.sp,
+                                            fontSize = 14.5.sp,
                                             fontWeight = FontWeight.SemiBold
                                         )
                                     )

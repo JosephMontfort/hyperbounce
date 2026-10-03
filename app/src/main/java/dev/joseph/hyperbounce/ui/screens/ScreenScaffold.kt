@@ -67,9 +67,20 @@ import dev.joseph.hyperbounce.ui.glass.MenuAlignment
 import dev.joseph.hyperbounce.ui.glass.MenuAnimationPreset
 import dev.joseph.hyperbounce.ui.glass.ProgressiveBlurHeader
 import dev.joseph.hyperbounce.ui.theme.HyperBounceColors
+import androidx.compose.foundation.Image
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import dev.joseph.hyperbounce.ui.state.ComponentStyle
+import dev.joseph.hyperbounce.ui.state.LocalComponentStyle
+import top.yukonga.miuix.kmp.basic.IconButton
+import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
+import top.yukonga.miuix.kmp.basic.TopAppBar
+import top.yukonga.miuix.kmp.basic.TopAppBarDefaults
+import top.yukonga.miuix.kmp.icon.MiuixIcons
+import top.yukonga.miuix.kmp.icon.extended.Back
+import top.yukonga.miuix.kmp.theme.MiuixTheme
 import dev.joseph.hyperbounce.ui.theme.HyperBounceType
 import kotlinx.coroutines.launch
-
 
 @Composable
 fun ScreenScaffold(
@@ -94,6 +105,68 @@ fun ScreenScaffold(
                 lazyListState.animateScrollToItem(targetIndex)
             } catch (_: Exception) {}
         }
+    }
+
+    val contentBackdrop = rememberLayerBackdrop()
+
+    val componentStyle = LocalComponentStyle.current
+    if (componentStyle == ComponentStyle.MIUIX) {
+        val scrollBehavior = MiuixScrollBehavior()
+        Box(
+            Modifier
+                .fillMaxSize()
+                .background(MiuixTheme.colorScheme.background)
+        ) {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .nestedScroll(scrollBehavior.nestedScrollConnection)
+                    .safeDrawingPadding(),
+                state = lazyListState
+            ) {
+                item {
+                    Spacer(Modifier.height(TopAppBarDefaults.CollapsedHeight + 36.dp))
+                }
+                content(contentBackdrop)
+                item {
+                    Spacer(Modifier.height(56.dp))
+                }
+            }
+
+            TopAppBar(
+                title = title,
+                largeTitle = title,
+                subtitle = subtitle ?: "",
+                color = MiuixTheme.colorScheme.background,
+                scrollBehavior = scrollBehavior,
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Image(
+                            imageVector = MiuixIcons.Back,
+                            contentDescription = "Back",
+                            colorFilter = ColorFilter.tint(MiuixTheme.colorScheme.onSurface)
+                        )
+                    }
+                },
+                actions = {
+                    if (onResetPage != null) {
+                        IconButton(
+                            onClick = {
+                                onResetPage()
+                                android.widget.Toast.makeText(context, "Settings restored to defaults", android.widget.Toast.LENGTH_SHORT).show()
+                            }
+                        ) {
+                            ResetArrowIcon(
+                                color = MiuixTheme.colorScheme.onSurface,
+                                size = 16.dp,
+                                strokeWidth = 2.dp
+                            )
+                        }
+                    }
+                }
+            )
+        }
+        return
     }
     val collapseProgress by remember {
         derivedStateOf {

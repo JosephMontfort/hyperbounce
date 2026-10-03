@@ -30,6 +30,8 @@ enum class ComponentStyle(val label: String) {
     MIUIX("MIUIX")
 }
 
+val LocalComponentStyle = androidx.compose.runtime.compositionLocalOf { ComponentStyle.LiquidGlass }
+
 enum class AccentPreset(val label: String, val argb: Long?) {
     Auto("Automatic", null),
     Blue("Blue", 0xFF0088FFL),

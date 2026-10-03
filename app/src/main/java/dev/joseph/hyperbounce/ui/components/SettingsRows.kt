@@ -49,23 +49,39 @@ import com.kyant.backdrop.Backdrop
 import dev.joseph.hyperbounce.ui.glass.LiquidSlider
 import dev.joseph.hyperbounce.ui.glass.LiquidToggle
 import dev.joseph.hyperbounce.ui.search.searchHighlight
+import dev.joseph.hyperbounce.ui.state.ComponentStyle
+import dev.joseph.hyperbounce.ui.state.LocalComponentStyle
 import dev.joseph.hyperbounce.ui.theme.HyperBounceColors
 import dev.joseph.hyperbounce.ui.theme.HyperBounceType
 import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.roundToInt
+import top.yukonga.miuix.kmp.basic.BasicComponent
+import top.yukonga.miuix.kmp.basic.SmallTitle
+import top.yukonga.miuix.kmp.preference.ArrowPreference
+import top.yukonga.miuix.kmp.preference.OverlayDropdownPreference
+import top.yukonga.miuix.kmp.preference.SliderPreference
+import top.yukonga.miuix.kmp.preference.SwitchPreference
 
-/** Small caps-style section label above a [GlassCard], iOS grouped-list style. */
+/** Small caps-style section label above a [GlassCard], iOS grouped-list style, or SmallTitle in MIUIX mode. */
 @Composable
 fun SectionHeader(text: String, colors: HyperBounceColors, modifier: Modifier = Modifier) {
-    BasicText(
-        text.uppercase(),
-        modifier = modifier.padding(start = 20.dp, top = 20.dp, bottom = 6.dp),
-        style = HyperBounceType.caption.copy(
-            color = colors.secondaryLabel,
-            letterSpacing = 0.6f.sp()
+    val componentStyle = LocalComponentStyle.current
+    if (componentStyle == ComponentStyle.MIUIX) {
+        SmallTitle(
+            text = text,
+            modifier = modifier
         )
-    )
+    } else {
+        BasicText(
+            text.uppercase(),
+            modifier = modifier.padding(start = 20.dp, top = 20.dp, bottom = 6.dp),
+            style = HyperBounceType.caption.copy(
+                color = colors.secondaryLabel,
+                letterSpacing = 0.6f.sp()
+            )
+        )
+    }
 }
 
 /** Section footers removed per user preference across all tuning screens. */
@@ -101,29 +117,40 @@ fun SettingsNavRow(
     modifier: Modifier = Modifier,
     searchKey: String? = null
 ) {
-    Row(
-        modifier
-            .searchHighlight(searchKey ?: title, colors)
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = onClick
-            )
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        if (icon != null) {
-            IconChip(iconTint ?: Color.Transparent) { icon() }
-        }
-        Column(Modifier.weight(1f)) {
-            BasicText(title, style = HyperBounceType.headline.copy(color = colors.label, fontWeight = FontWeight.SemiBold))
-            if (subtitle != null) {
-                BasicText(subtitle, style = HyperBounceType.footnote.copy(color = colors.secondaryLabel))
+    val componentStyle = LocalComponentStyle.current
+    if (componentStyle == ComponentStyle.MIUIX) {
+        ArrowPreference(
+            title = title,
+            summary = subtitle,
+            startAction = icon?.let { { IconChip(iconTint ?: Color.Transparent) { icon() } } },
+            onClick = onClick,
+            modifier = modifier.searchHighlight(searchKey ?: title, colors)
+        )
+    } else {
+        Row(
+            modifier
+                .searchHighlight(searchKey ?: title, colors)
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = onClick
+                )
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            if (icon != null) {
+                IconChip(iconTint ?: Color.Transparent) { icon() }
             }
+            Column(Modifier.weight(1f)) {
+                BasicText(title, style = HyperBounceType.headline.copy(color = colors.label, fontWeight = FontWeight.SemiBold))
+                if (subtitle != null) {
+                    BasicText(subtitle, style = HyperBounceType.footnote.copy(color = colors.secondaryLabel))
+                }
+            }
+            ChevronIcon(color = colors.tertiaryLabel, size = 11.dp, strokeWidth = 1.8.dp, pointingLeft = false)
         }
-        ChevronIcon(color = colors.tertiaryLabel, size = 11.dp, strokeWidth = 1.8.dp, pointingLeft = false)
     }
 }
 
@@ -141,35 +168,47 @@ fun SettingsClickableRow(
     modifier: Modifier = Modifier,
     searchKey: String? = null
 ) {
-    val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
-    val bgAlpha by animateFloatAsState(if (isPressed) 0.15f else 0.0f)
+    val componentStyle = LocalComponentStyle.current
+    if (componentStyle == ComponentStyle.MIUIX) {
+        BasicComponent(
+            title = title,
+            summary = subtitle,
+            startAction = icon?.let { { IconChip(iconTint ?: Color.Transparent) { icon() } } },
+            endActions = trailing?.let { { trailing() } },
+            onClick = onClick,
+            modifier = modifier.searchHighlight(searchKey ?: title, colors)
+        )
+    } else {
+        val interactionSource = remember { MutableInteractionSource() }
+        val isPressed by interactionSource.collectIsPressedAsState()
+        val bgAlpha by animateFloatAsState(if (isPressed) 0.15f else 0.0f)
 
-    Row(
-        modifier
-            .searchHighlight(searchKey ?: title, colors)
-            .background(colors.label.copy(alpha = bgAlpha))
-            .clickable(
-                interactionSource = interactionSource,
-                indication = null,
-                onClick = onClick
-            )
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        if (icon != null) {
-            IconChip(iconTint ?: Color.Transparent) { icon() }
-        }
-        Column(Modifier.weight(1f)) {
-            BasicText(title, style = HyperBounceType.headline.copy(color = titleColor ?: colors.label, fontWeight = FontWeight.SemiBold))
-            if (subtitle != null) {
-                BasicText(subtitle, style = HyperBounceType.footnote.copy(color = colors.secondaryLabel))
+        Row(
+            modifier
+                .searchHighlight(searchKey ?: title, colors)
+                .background(colors.label.copy(alpha = bgAlpha))
+                .clickable(
+                    interactionSource = interactionSource,
+                    indication = null,
+                    onClick = onClick
+                )
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            if (icon != null) {
+                IconChip(iconTint ?: Color.Transparent) { icon() }
             }
-        }
-        if (trailing != null) {
-            trailing()
+            Column(Modifier.weight(1f)) {
+                BasicText(title, style = HyperBounceType.headline.copy(color = titleColor ?: colors.label, fontWeight = FontWeight.SemiBold))
+                if (subtitle != null) {
+                    BasicText(subtitle, style = HyperBounceType.footnote.copy(color = colors.secondaryLabel))
+                }
+            }
+            if (trailing != null) {
+                trailing()
+            }
         }
     }
 }
@@ -189,34 +228,47 @@ fun SettingsToggleRow(
     modifier: Modifier = Modifier,
     searchKey: String? = null
 ) {
-    val displayAlpha = if (enabled) 1f else 0.35f
-    Row(
-        modifier
-            .searchHighlight(searchKey ?: title, colors)
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 10.dp)
-            .graphicsLayer { alpha = displayAlpha },
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        if (icon != null) {
-            IconChip(iconTint ?: Color.Transparent) { icon() }
-        }
-        Column(Modifier.weight(1f)) {
-            BasicText(title, style = HyperBounceType.headline.copy(color = colors.label, fontWeight = FontWeight.SemiBold))
-            if (subtitle != null) {
-                BasicText(subtitle, style = HyperBounceType.footnote.copy(color = colors.secondaryLabel))
-            }
-        }
-        val isDark = dev.joseph.hyperbounce.ui.theme.LocalIsDarkTheme.current
-        val cardColor = if (isDark) Color(0xFF1C1C1E) else Color(0xFFFFFFFF)
-        val localBackdrop = com.kyant.backdrop.backdrops.rememberCanvasBackdrop { drawRect(cardColor) }
-        
-        LiquidToggle(
-            selected = { checked },
-            onSelect = { if (enabled) onCheckedChange(it) },
-            backdrop = localBackdrop
+    val componentStyle = LocalComponentStyle.current
+    if (componentStyle == ComponentStyle.MIUIX) {
+        SwitchPreference(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+            title = title,
+            summary = subtitle,
+            enabled = enabled,
+            startAction = icon?.let { { IconChip(iconTint ?: Color.Transparent) { icon() } } },
+            modifier = modifier.searchHighlight(searchKey ?: title, colors)
         )
+    } else {
+        val displayAlpha = if (enabled) 1f else 0.35f
+        Row(
+            modifier
+                .searchHighlight(searchKey ?: title, colors)
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 10.dp)
+                .graphicsLayer { alpha = displayAlpha },
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            if (icon != null) {
+                IconChip(iconTint ?: Color.Transparent) { icon() }
+            }
+            Column(Modifier.weight(1f)) {
+                BasicText(title, style = HyperBounceType.headline.copy(color = colors.label, fontWeight = FontWeight.SemiBold))
+                if (subtitle != null) {
+                    BasicText(subtitle, style = HyperBounceType.footnote.copy(color = colors.secondaryLabel))
+                }
+            }
+            val isDark = dev.joseph.hyperbounce.ui.theme.LocalIsDarkTheme.current
+            val cardColor = if (isDark) Color(0xFF1C1C1E) else Color(0xFFFFFFFF)
+            val localBackdrop = com.kyant.backdrop.backdrops.rememberCanvasBackdrop { drawRect(cardColor) }
+            
+            LiquidToggle(
+                selected = { checked },
+                onSelect = { if (enabled) onCheckedChange(it) },
+                backdrop = localBackdrop
+            )
+        }
     }
 }
 
@@ -235,32 +287,45 @@ fun SettingsDropdownRow(
     searchKey: String? = null,
     icon: (@Composable () -> Unit)? = null
 ) {
-    Row(
-        modifier
-            .searchHighlight(searchKey ?: title, colors)
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        if (icon != null) {
-            IconChip(iconTint ?: Color.Transparent) { icon() }
-        }
-        Column(Modifier.weight(1f)) {
-            BasicText(
-                title,
-                style = HyperBounceType.headline.copy(color = colors.label, fontWeight = FontWeight.SemiBold)
-            )
-            if (subtitle != null) {
-                BasicText(subtitle, style = HyperBounceType.footnote.copy(color = colors.secondaryLabel))
-            }
-        }
-        DropdownPicker(
-            options = options,
+    val componentStyle = LocalComponentStyle.current
+    if (componentStyle == ComponentStyle.MIUIX) {
+        OverlayDropdownPreference(
+            items = options,
             selectedIndex = selectedIndex,
-            onSelect = onSelect,
-            backdrop = backdrop
+            title = title,
+            summary = subtitle,
+            startAction = icon?.let { { IconChip(iconTint ?: Color.Transparent) { icon() } } },
+            onSelectedIndexChange = onSelect,
+            modifier = modifier.searchHighlight(searchKey ?: title, colors)
         )
+    } else {
+        Row(
+            modifier
+                .searchHighlight(searchKey ?: title, colors)
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            if (icon != null) {
+                IconChip(iconTint ?: Color.Transparent) { icon() }
+            }
+            Column(Modifier.weight(1f)) {
+                BasicText(
+                    title,
+                    style = HyperBounceType.headline.copy(color = colors.label, fontWeight = FontWeight.SemiBold)
+                )
+                if (subtitle != null) {
+                    BasicText(subtitle, style = HyperBounceType.footnote.copy(color = colors.secondaryLabel))
+                }
+            }
+            DropdownPicker(
+                options = options,
+                selectedIndex = selectedIndex,
+                onSelect = onSelect,
+                backdrop = backdrop
+            )
+        }
     }
 }
 
@@ -283,117 +348,141 @@ fun SettingsSliderRow(
     modifier: Modifier = Modifier,
     searchKey: String? = null
 ) {
-    val displayAlpha = if (enabled) 1f else 0.35f
+    val componentStyle = LocalComponentStyle.current
     val customValueHost = dev.joseph.hyperbounce.ui.glass.LocalCustomValueHost.current
-
-    Column(
-        modifier
-            .searchHighlight(searchKey ?: title, colors)
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 12.dp)
-    ) {
-        Row(
-            Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+    if (componentStyle == ComponentStyle.MIUIX) {
+        SliderPreference(
+            value = value,
+            onValueChange = onValueChange,
+            title = title,
+            summary = subtitle,
+            valueRange = valueRange,
+            valueText = valueLabel(value),
+            enabled = enabled,
+            onClick = if (allowCustomInput) {
+                {
+                    customValueHost.show(
+                        title = title,
+                        currentValue = value,
+                        defaultValue = defaultValue,
+                        valueRange = valueRange,
+                        onApply = onValueChange
+                    )
+                }
+            } else null,
+            modifier = modifier.searchHighlight(searchKey ?: title, colors)
+        )
+    } else {
+        val displayAlpha = if (enabled) 1f else 0.35f
+        Column(
+            modifier
+                .searchHighlight(searchKey ?: title, colors)
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 12.dp)
         ) {
-            Column(
-                modifier = Modifier
-                    .weight(1f, fill = false)
-                    .padding(end = 12.dp)
-            ) {
-                BasicText(
-                    title,
-                    style = HyperBounceType.headline.copy(color = colors.label.copy(alpha = displayAlpha), fontWeight = FontWeight.SemiBold)
-                )
-                if (subtitle != null) {
-                    BasicText(
-                        subtitle,
-                        modifier = Modifier.padding(top = 2.dp),
-                        style = HyperBounceType.footnote.copy(color = colors.secondaryLabel.copy(alpha = displayAlpha))
-                    )
-                }
-            }
-
             Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                // Circular Reset Button (resets to defaultValue in real time)
-                val isModified = abs(value - defaultValue) > 0.0001f
-                Box(
+                Column(
                     modifier = Modifier
-                        .size(24.dp)
-                        .clip(CircleShape)
-                        .background(
-                            if (isModified) colors.accentBlue.copy(alpha = 0.2f)
-                            else colors.separator.copy(alpha = 0.25f)
-                        )
-                        .clickable(enabled = enabled) {
-                            onValueChange(defaultValue)
-                        },
-                    contentAlignment = Alignment.Center
-                ) {
-                    ResetArrowIcon(
-                        color = if (isModified) colors.accentBlue else colors.secondaryLabel.copy(alpha = 0.5f),
-                        size = 11.dp,
-                        strokeWidth = 1.6.dp
-                    )
-                }
-
-                // Numeric Value Label (Long-press to enter custom value if allowed)
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(6.dp))
-                        .combinedClickable(
-                            enabled = enabled && allowCustomInput,
-                            onClick = {},
-                            onLongClick = {
-                                if (allowCustomInput) {
-                                    customValueHost.show(
-                                        title = title,
-                                        currentValue = value,
-                                        defaultValue = defaultValue,
-                                        valueRange = valueRange,
-                                        onApply = onValueChange
-                                    )
-                                }
-                            }
-                        )
-                        .padding(horizontal = 4.dp, vertical = 2.dp)
+                        .weight(1f, fill = false)
+                        .padding(end = 12.dp)
                 ) {
                     BasicText(
-                        valueLabel(value),
-                        style = HyperBounceType.monoValue.copy(color = colors.secondaryLabel.copy(alpha = displayAlpha))
+                        title,
+                        style = HyperBounceType.headline.copy(color = colors.label.copy(alpha = displayAlpha), fontWeight = FontWeight.SemiBold)
                     )
+                    if (subtitle != null) {
+                        BasicText(
+                            subtitle,
+                            modifier = Modifier.padding(top = 2.dp),
+                            style = HyperBounceType.footnote.copy(color = colors.secondaryLabel.copy(alpha = displayAlpha))
+                        )
+                    }
+                }
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    // Circular Reset Button (resets to defaultValue in real time)
+                    val isModified = abs(value - defaultValue) > 0.0001f
+                    Box(
+                        modifier = Modifier
+                            .size(24.dp)
+                            .clip(CircleShape)
+                            .background(
+                                if (isModified) colors.accentBlue.copy(alpha = 0.2f)
+                                else colors.separator.copy(alpha = 0.25f)
+                            )
+                            .clickable(enabled = enabled) {
+                                onValueChange(defaultValue)
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        ResetArrowIcon(
+                            color = if (isModified) colors.accentBlue else colors.secondaryLabel.copy(alpha = 0.5f),
+                            size = 11.dp,
+                            strokeWidth = 1.6.dp
+                        )
+                    }
+
+                    // Numeric Value Label (Long-press to enter custom value if allowed)
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(6.dp))
+                            .combinedClickable(
+                                enabled = enabled && allowCustomInput,
+                                onClick = {},
+                                onLongClick = {
+                                    if (allowCustomInput) {
+                                        customValueHost.show(
+                                            title = title,
+                                            currentValue = value,
+                                            defaultValue = defaultValue,
+                                            valueRange = valueRange,
+                                            onApply = onValueChange
+                                        )
+                                    }
+                                }
+                            )
+                            .padding(horizontal = 4.dp, vertical = 2.dp)
+                    ) {
+                        BasicText(
+                            valueLabel(value),
+                            style = HyperBounceType.monoValue.copy(color = colors.secondaryLabel.copy(alpha = displayAlpha))
+                        )
+                    }
                 }
             }
-        }
 
-        Box(Modifier.padding(top = 8.dp)) {
-            if (enabled) {
-                val isDark = dev.joseph.hyperbounce.ui.theme.LocalIsDarkTheme.current
-                val cardColor = if (isDark) Color(0xFF1C1C1E) else Color(0xFFFFFFFF)
-                val localBackdrop = com.kyant.backdrop.backdrops.rememberCanvasBackdrop { drawRect(cardColor) }
+            Box(Modifier.padding(top = 8.dp)) {
+                if (enabled) {
+                    val isDark = dev.joseph.hyperbounce.ui.theme.LocalIsDarkTheme.current
+                    val cardColor = if (isDark) Color(0xFF1C1C1E) else Color(0xFFFFFFFF)
+                    val localBackdrop = com.kyant.backdrop.backdrops.rememberCanvasBackdrop { drawRect(cardColor) }
 
-                LiquidSlider(
-                    value = { value },
-                    onValueChange = onValueChange,
-                    valueRange = valueRange,
-                    visibilityThreshold = (valueRange.endInclusive - valueRange.start) / 1000f,
-                    backdrop = localBackdrop,
-                    modifier = Modifier.fillMaxWidth()
-                )
-            } else {
-                // Static disabled track — no interaction, no backdrop capture needed.
-                Box(
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 9.dp)
-                        .height(6.dp)
-                        .clip(RoundedCornerShape(3.dp))
-                        .background(colors.separator.copy(alpha = 0.4f))
-                )
+                    LiquidSlider(
+                        value = { value },
+                        onValueChange = onValueChange,
+                        valueRange = valueRange,
+                        visibilityThreshold = (valueRange.endInclusive - valueRange.start) / 1000f,
+                        backdrop = localBackdrop,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                } else {
+                    // Static disabled track — no interaction, no backdrop capture needed.
+                    Box(
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 9.dp)
+                            .height(6.dp)
+                            .clip(RoundedCornerShape(3.dp))
+                            .background(colors.separator.copy(alpha = 0.4f))
+                    )
+                }
             }
         }
     }

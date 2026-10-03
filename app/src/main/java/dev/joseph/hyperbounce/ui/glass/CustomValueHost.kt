@@ -205,6 +205,178 @@ fun GlassDialogHost(
         }
     )
 
+    val componentStyle = dev.joseph.hyperbounce.ui.state.LocalComponentStyle.current
+    if (componentStyle == dev.joseph.hyperbounce.ui.state.ComponentStyle.MIUIX && displayedRequest != null) {
+        val req = displayedRequest!!
+        when (req) {
+            is GlassDialogRequest.CustomValue -> {
+                var textValue by remember(req) {
+                    mutableStateOf(
+                        if (req.currentValue % 1f == 0f && req.valueRange.endInclusive > 10f) {
+                            req.currentValue.toInt().toString()
+                        } else {
+                            String.format(Locale.US, "%.3f", req.currentValue).trimEnd('0').trimEnd('.')
+                        }
+                    )
+                }
+                fun requestApply() {
+                    val parsed = textValue.toFloatOrNull()
+                    if (parsed != null) {
+                        req.onApply(parsed)
+                    }
+                    hostState.dismiss()
+                }
+                top.yukonga.miuix.kmp.window.WindowDialog(
+                    show = isVisible,
+                    title = "Custom Value",
+                    summary = "${req.title}\nStock Range: [${req.valueRange.start} .. ${req.valueRange.endInclusive}] • Default: ${req.defaultValue}",
+                    onDismissRequest = { hostState.dismiss() },
+                    onDismissFinished = {
+                        displayedRequest = null
+                        isClosing = false
+                    },
+                    content = {
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
+                            top.yukonga.miuix.kmp.basic.TextField(
+                                value = textValue,
+                                onValueChange = { textValue = it },
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                singleLine = true,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                top.yukonga.miuix.kmp.basic.TextButton(
+                                    text = "Cancel",
+                                    onClick = { hostState.dismiss() },
+                                    modifier = Modifier.weight(1f)
+                                )
+                                Spacer(Modifier.width(16.dp))
+                                top.yukonga.miuix.kmp.basic.TextButton(
+                                    text = "Apply",
+                                    onClick = { requestApply() },
+                                    colors = top.yukonga.miuix.kmp.basic.ButtonDefaults.textButtonColorsPrimary(),
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+                        }
+                    }
+                )
+            }
+            is GlassDialogRequest.Confirmation -> {
+                top.yukonga.miuix.kmp.window.WindowDialog(
+                    show = isVisible,
+                    title = req.title,
+                    summary = req.message,
+                    onDismissRequest = {
+                        req.onCancel?.invoke()
+                        hostState.dismiss()
+                    },
+                    onDismissFinished = {
+                        displayedRequest = null
+                        isClosing = false
+                    },
+                    content = {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            top.yukonga.miuix.kmp.basic.TextButton(
+                                text = req.cancelText,
+                                onClick = {
+                                    req.onCancel?.invoke()
+                                    hostState.dismiss()
+                                },
+                                modifier = Modifier.weight(1f)
+                            )
+                            Spacer(Modifier.width(16.dp))
+                            top.yukonga.miuix.kmp.basic.TextButton(
+                                text = req.confirmText,
+                                onClick = {
+                                    req.onConfirm()
+                                    hostState.dismiss()
+                                },
+                                colors = top.yukonga.miuix.kmp.basic.ButtonDefaults.textButtonColorsPrimary(),
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                    }
+                )
+            }
+            is GlassDialogRequest.TextInput -> {
+                var inputVal by remember(req) { mutableStateOf(req.initialValue) }
+                top.yukonga.miuix.kmp.window.WindowDialog(
+                    show = isVisible,
+                    title = req.title,
+                    summary = req.message ?: "",
+                    onDismissRequest = {
+                        req.onCancel?.invoke()
+                        hostState.dismiss()
+                    },
+                    onDismissFinished = {
+                        displayedRequest = null
+                        isClosing = false
+                    },
+                    content = {
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
+                            top.yukonga.miuix.kmp.basic.TextField(
+                                value = inputVal,
+                                onValueChange = { inputVal = it },
+                                singleLine = true,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                top.yukonga.miuix.kmp.basic.TextButton(
+                                    text = req.cancelText,
+                                    onClick = {
+                                        req.onCancel?.invoke()
+                                        hostState.dismiss()
+                                    },
+                                    modifier = Modifier.weight(1f)
+                                )
+                                Spacer(Modifier.width(16.dp))
+                                top.yukonga.miuix.kmp.basic.TextButton(
+                                    text = req.confirmText,
+                                    onClick = {
+                                        req.onConfirm(inputVal)
+                                        hostState.dismiss()
+                                    },
+                                    colors = top.yukonga.miuix.kmp.basic.ButtonDefaults.textButtonColorsPrimary(),
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+                        }
+                    }
+                )
+            }
+            is GlassDialogRequest.Custom -> {
+                top.yukonga.miuix.kmp.window.WindowDialog(
+                    show = isVisible,
+                    title = req.title,
+                    onDismissRequest = { hostState.dismiss() },
+                    onDismissFinished = {
+                        displayedRequest = null
+                        isClosing = false
+                    },
+                    content = {
+                        req.content { hostState.dismiss() }
+                    }
+                )
+            }
+        }
+    }
+
     CompositionLocalProvider(
         LocalGlassDialogHost provides hostState
     ) {
@@ -214,7 +386,7 @@ fun GlassDialogHost(
                 Modifier
                     .fillMaxSize()
                     .then(
-                        if (animProgress > 0.001f) {
+                        if (animProgress > 0.001f && componentStyle != dev.joseph.hyperbounce.ui.state.ComponentStyle.MIUIX) {
                             Modifier.blur((24.dp * animProgress))
                         } else {
                             Modifier
@@ -225,7 +397,7 @@ fun GlassDialogHost(
             }
 
             // Full-screen overlay with smooth dimming and AndroidLiquidGlass styled Dialog
-            if (animProgress > 0.001f && displayedRequest != null) {
+            if (animProgress > 0.001f && displayedRequest != null && componentStyle != dev.joseph.hyperbounce.ui.state.ComponentStyle.MIUIX) {
                 val req = displayedRequest!!
                 val isDark = isSystemInDarkTheme()
                 val cardBg = if (isDark) Color(0xFF1E1E20) else Color(0xFFFFFFFF)

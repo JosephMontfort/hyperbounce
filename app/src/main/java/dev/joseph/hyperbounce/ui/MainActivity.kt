@@ -91,6 +91,8 @@ import dev.joseph.hyperbounce.ui.screens.ToggleAppearanceScreen
 import dev.joseph.hyperbounce.ui.screens.TogglePhysicsScreen
 import dev.joseph.hyperbounce.ui.screens.TuningScreen
 import dev.joseph.hyperbounce.ui.state.AppTheme
+import dev.joseph.hyperbounce.ui.state.ComponentStyle
+import dev.joseph.hyperbounce.ui.state.LocalComponentStyle
 import dev.joseph.hyperbounce.ui.state.SettingsRepository
 import dev.joseph.hyperbounce.ui.theme.HyperBounceBackground
 import dev.joseph.hyperbounce.ui.theme.HyperBounceColors
@@ -98,6 +100,15 @@ import dev.joseph.hyperbounce.ui.theme.HyperBounceType
 import dev.joseph.hyperbounce.ui.theme.LocalIsDarkTheme
 import dev.joseph.hyperbounce.ui.theme.hyperBounceColors
 import kotlinx.coroutines.launch
+import top.yukonga.miuix.kmp.basic.FloatingNavigationBar
+import top.yukonga.miuix.kmp.basic.FloatingNavigationBarItem
+import top.yukonga.miuix.kmp.icon.MiuixIcons
+import top.yukonga.miuix.kmp.icon.extended.Home
+import top.yukonga.miuix.kmp.icon.extended.Info
+import top.yukonga.miuix.kmp.icon.extended.Settings
+import top.yukonga.miuix.kmp.theme.MiuixTheme
+import top.yukonga.miuix.kmp.theme.darkColorScheme
+import top.yukonga.miuix.kmp.theme.lightColorScheme
 
 class MainActivity : ComponentActivity() {
 
@@ -156,12 +167,15 @@ private fun HyperiOSApp(repository: SettingsRepository) {
         keyboardController?.hide()
     }
 
-    CompositionLocalProvider(
-        LocalIsDarkTheme provides isDark,
-        LocalGlassSettings provides repository.globalGlass.snapshot(),
-        dev.joseph.hyperbounce.ui.glass.LocalMorphPhysics provides repository.morphPhysics.snapshot()
-    ) {
-        dev.joseph.hyperbounce.ui.glass.CustomValueDialogHost(colors) {
+    val miuixColors = if (isDark) darkColorScheme() else lightColorScheme()
+    MiuixTheme(colors = miuixColors) {
+        CompositionLocalProvider(
+            LocalComponentStyle provides repository.componentStyle,
+            LocalIsDarkTheme provides isDark,
+            LocalGlassSettings provides repository.globalGlass.snapshot(),
+            dev.joseph.hyperbounce.ui.glass.LocalMorphPhysics provides repository.morphPhysics.snapshot()
+        ) {
+            dev.joseph.hyperbounce.ui.glass.CustomValueDialogHost(colors) {
             BoxWithConstraints(Modifier.fillMaxSize()) {
                 val screenWidth = constraints.maxWidth.toFloat()
                 val dragOffset = remember { Animatable(0f) }
@@ -409,51 +423,89 @@ private fun HyperiOSApp(repository: SettingsRepository) {
                 if (backStack.size <= 1) {
                     val barProgress = if (backStack.isEmpty()) 1f else (dragOffset.value / screenWidth.coerceAtLeast(1f)).coerceIn(0f, 1f)
                     if (barProgress > 0.001f) {
-                        Box(
-                            Modifier
-                                .align(Alignment.BottomCenter)
-                                .navigationBarsPadding()
-                                .padding(bottom = 16.dp)
-                                .graphicsLayer {
-                                    alpha = barProgress
-                                    translationY = (1f - barProgress) * 72.dp.toPx()
-                                }
-                        ) {
-                            Box(Modifier.width(264.dp)) {
-                                val tabItemColor = if (isDark) Color.White else Color.Black
-                                LiquidBottomTabs(
-                                    selectedTabIndex = { pagerState.targetPage },
-                                    onTabSelected = selectTab,
-                                    backdrop = navBackdrop,
-                                    tabsCount = 3,
-                                    modifier = Modifier.padding(bottom = 24.dp)
+                        if (repository.componentStyle == ComponentStyle.MIUIX) {
+                            Box(
+                                Modifier
+                                    .align(Alignment.BottomCenter)
+                                    .navigationBarsPadding()
+                                    .padding(bottom = 16.dp)
+                                    .graphicsLayer {
+                                        alpha = barProgress
+                                        translationY = (1f - barProgress) * 72.dp.toPx()
+                                    }
+                            ) {
+                                FloatingNavigationBar(
+                                    color = if (isDark) Color(0xFF242424) else Color(0xFFF6F6F6),
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    modifier = Modifier.padding(bottom = 16.dp)
                                 ) {
-                                    LiquidBottomTab(onClick = { selectTab(0) }) {
-                                        Image(
-                                            painter = painterResource(R.drawable.ic_nav_home),
-                                            contentDescription = null,
-                                            modifier = Modifier.size(20.dp),
-                                            colorFilter = ColorFilter.tint(tabItemColor)
-                                        )
-                                        BasicText("Home", style = HyperBounceType.caption.copy(color = tabItemColor))
+                                    FloatingNavigationBarItem(
+                                        selected = pagerState.targetPage == 0,
+                                        onClick = { selectTab(0) },
+                                        icon = MiuixIcons.Home,
+                                        label = "Home"
+                                    )
+                                    FloatingNavigationBarItem(
+                                        selected = pagerState.targetPage == 1,
+                                        onClick = { selectTab(1) },
+                                        icon = MiuixIcons.Settings,
+                                        label = "Settings"
+                                    )
+                                    FloatingNavigationBarItem(
+                                        selected = pagerState.targetPage == 2,
+                                        onClick = { selectTab(2) },
+                                        icon = MiuixIcons.Info,
+                                        label = "About"
+                                    )
+                                }
+                            }
+                        } else {
+                            Box(
+                                Modifier
+                                    .align(Alignment.BottomCenter)
+                                    .navigationBarsPadding()
+                                    .padding(bottom = 16.dp)
+                                    .graphicsLayer {
+                                        alpha = barProgress
+                                        translationY = (1f - barProgress) * 72.dp.toPx()
                                     }
-                                    LiquidBottomTab(onClick = { selectTab(1) }) {
-                                        Image(
-                                            painter = painterResource(R.drawable.ic_nav_settings),
-                                            contentDescription = null,
-                                            modifier = Modifier.size(20.dp),
-                                            colorFilter = ColorFilter.tint(tabItemColor)
-                                        )
-                                        BasicText("Settings", style = HyperBounceType.caption.copy(color = tabItemColor))
-                                    }
-                                    LiquidBottomTab(onClick = { selectTab(2) }) {
-                                        Image(
-                                            painter = painterResource(R.drawable.ic_nav_about),
-                                            contentDescription = null,
-                                            modifier = Modifier.size(20.dp),
-                                            colorFilter = ColorFilter.tint(tabItemColor)
-                                        )
-                                        BasicText("About", style = HyperBounceType.caption.copy(color = tabItemColor))
+                            ) {
+                                Box(Modifier.width(264.dp)) {
+                                    val tabItemColor = if (isDark) Color.White else Color.Black
+                                    LiquidBottomTabs(
+                                        selectedTabIndex = { pagerState.targetPage },
+                                        onTabSelected = selectTab,
+                                        backdrop = navBackdrop,
+                                        tabsCount = 3,
+                                        modifier = Modifier.padding(bottom = 24.dp)
+                                    ) {
+                                        LiquidBottomTab(onClick = { selectTab(0) }) {
+                                            Image(
+                                                painter = painterResource(R.drawable.ic_nav_home),
+                                                contentDescription = null,
+                                                modifier = Modifier.size(20.dp),
+                                                colorFilter = ColorFilter.tint(tabItemColor)
+                                            )
+                                            BasicText("Home", style = HyperBounceType.caption.copy(color = tabItemColor))
+                                        }
+                                        LiquidBottomTab(onClick = { selectTab(1) }) {
+                                            Image(
+                                                painter = painterResource(R.drawable.ic_nav_settings),
+                                                contentDescription = null,
+                                                modifier = Modifier.size(20.dp),
+                                                colorFilter = ColorFilter.tint(tabItemColor)
+                                            )
+                                            BasicText("Settings", style = HyperBounceType.caption.copy(color = tabItemColor))
+                                        }
+                                        LiquidBottomTab(onClick = { selectTab(2) }) {
+                                            Image(
+                                                painter = painterResource(R.drawable.ic_nav_about),
+                                                contentDescription = null,
+                                                modifier = Modifier.size(20.dp),
+                                                colorFilter = ColorFilter.tint(tabItemColor)
+                                            )
+                                            BasicText("About", style = HyperBounceType.caption.copy(color = tabItemColor))
+                                        }
                                     }
                                 }
                             }
@@ -461,6 +513,7 @@ private fun HyperiOSApp(repository: SettingsRepository) {
                     }
                 }
             }
+        }
         }
     }
 }

@@ -54,6 +54,30 @@ fun LiquidButton(
     size: Dp? = null,
     content: @Composable RowScope.() -> Unit
 ) {
+    val componentStyle = dev.joseph.hyperbounce.ui.state.LocalComponentStyle.current
+    if (componentStyle == dev.joseph.hyperbounce.ui.state.ComponentStyle.MIUIX) {
+        val btnColors = if (tint.isSpecified) {
+            top.yukonga.miuix.kmp.basic.ButtonDefaults.buttonColorsPrimary(color = tint)
+        } else if (surfaceColor.isSpecified) {
+            top.yukonga.miuix.kmp.basic.ButtonDefaults.buttonColors(color = surfaceColor)
+        } else {
+            top.yukonga.miuix.kmp.basic.ButtonDefaults.buttonColors()
+        }
+        val btnModifier = if (size != null) {
+            modifier.size(size)
+        } else {
+            modifier.height(height)
+        }
+        top.yukonga.miuix.kmp.basic.Button(
+            onClick = onClick,
+            modifier = btnModifier,
+            colors = btnColors,
+            insideMargin = androidx.compose.foundation.layout.PaddingValues(horizontal = horizontalPadding, vertical = 0.dp),
+            content = content
+        )
+        return
+    }
+
     val animationScope = rememberCoroutineScope()
 
     val interactiveHighlight = remember(animationScope) {

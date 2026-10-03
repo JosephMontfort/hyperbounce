@@ -99,5 +99,10 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.9.0")
     implementation("androidx.lifecycle:lifecycle-runtime:2.9.0")
     implementation("androidx.savedstate:savedstate:1.3.0")
+
+    // Miuix Compose Multiplatform UI components, preferences & icons
+    implementation("top.yukonga.miuix.kmp:miuix-ui:0.9.4")
+    implementation("top.yukonga.miuix.kmp:miuix-preference:0.9.4")
+    implementation("top.yukonga.miuix.kmp:miuix-icons:0.9.4")
 }
 
