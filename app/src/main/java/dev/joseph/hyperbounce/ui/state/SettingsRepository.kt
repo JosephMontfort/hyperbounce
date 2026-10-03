@@ -63,6 +63,8 @@ class SettingsRepository(context: Context) {
     private val prefs: SharedPreferences =
         context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
+    private val reloadablePrefs = mutableListOf<ReloadablePref>()
+
     init {
         appContext = context.applicationContext
         // Local prefs (above) are this app's own always-available source of truth — the UI
@@ -124,8 +126,6 @@ class SettingsRepository(context: Context) {
         }
         return json.toString(2)
     }
-
-    private val reloadablePrefs = mutableListOf<ReloadablePref>()
 
     fun importSettingsFromJson(jsonStr: String): Boolean {
         return try {
