@@ -132,7 +132,6 @@ private fun HyperiOSApp(repository: SettingsRepository) {
 
     val colors = hyperBounceColors(repository.appTheme)
     val backdrop = rememberLayerBackdrop()
-    val navBackdrop = rememberLayerBackdrop()
 
     val pagerState = rememberPagerState(initialPage = 0) { 3 }
     val pagerScope = rememberCoroutineScope()
@@ -200,14 +199,17 @@ private fun HyperiOSApp(repository: SettingsRepository) {
 
                 BackHandler(enabled = backStack.isNotEmpty()) { pop() }
 
-                Box(Modifier.fillMaxSize().layerBackdrop(navBackdrop)) {
-                    Box(
-                        Modifier
-                            .fillMaxSize()
-                            .layerBackdrop(backdrop)
-                    ) {
-                        HyperBounceBackground(colors, Modifier.fillMaxSize())
-                    }
+                // IMPORTANT: layerBackdrop tags ONLY this background's own render node as the
+                // thing drawBackdrop() consumers sample from. It must never wrap a Box
+                // that also contains those same glass consumers or other layerBackdrop nodes as children.
+                // The background and the screen content below must remain siblings under a plain Box.
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .layerBackdrop(backdrop)
+                ) {
+                    HyperBounceBackground(colors, Modifier.fillMaxSize())
+                }
 
                     if (backStack.isEmpty()) {
                         // Root Pager
@@ -340,7 +342,6 @@ private fun HyperiOSApp(repository: SettingsRepository) {
                             }
                         }
                     }
-                }
 
                 // Floating bottom-center tab bar (fluidly synchronized with screen transitions)
                 if (backStack.size <= 1) {
@@ -361,7 +362,7 @@ private fun HyperiOSApp(repository: SettingsRepository) {
                                 LiquidBottomTabs(
                                     selectedTabIndex = { pagerState.targetPage },
                                     onTabSelected = selectTab,
-                                    backdrop = navBackdrop,
+                                    backdrop = backdrop,
                                     tabsCount = 3,
                                     modifier = Modifier.padding(bottom = 24.dp)
                                 ) {
