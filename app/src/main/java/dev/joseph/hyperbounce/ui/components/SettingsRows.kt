@@ -48,6 +48,7 @@ import androidx.compose.ui.window.DialogProperties
 import com.kyant.backdrop.Backdrop
 import dev.joseph.hyperbounce.ui.glass.LiquidSlider
 import dev.joseph.hyperbounce.ui.glass.LiquidToggle
+import dev.joseph.hyperbounce.ui.search.searchHighlight
 import dev.joseph.hyperbounce.ui.theme.HyperBounceColors
 import dev.joseph.hyperbounce.ui.theme.HyperBounceType
 import java.util.Locale
@@ -96,10 +97,13 @@ fun SettingsNavRow(
     onClick: () -> Unit,
     iconTint: Color? = null,
     subtitle: String? = null,
-    icon: (@Composable () -> Unit)? = null
+    icon: (@Composable () -> Unit)? = null,
+    modifier: Modifier = Modifier,
+    searchKey: String? = null
 ) {
     Row(
-        Modifier
+        modifier
+            .searchHighlight(searchKey ?: title, colors)
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
@@ -133,14 +137,17 @@ fun SettingsClickableRow(
     subtitle: String? = null,
     titleColor: Color? = null,
     trailing: (@Composable () -> Unit)? = null,
-    icon: (@Composable () -> Unit)? = null
+    icon: (@Composable () -> Unit)? = null,
+    modifier: Modifier = Modifier,
+    searchKey: String? = null
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val bgAlpha by animateFloatAsState(if (isPressed) 0.15f else 0.0f)
 
     Row(
-        Modifier
+        modifier
+            .searchHighlight(searchKey ?: title, colors)
             .background(colors.label.copy(alpha = bgAlpha))
             .clickable(
                 interactionSource = interactionSource,
@@ -178,11 +185,14 @@ fun SettingsToggleRow(
     iconTint: Color? = null,
     subtitle: String? = null,
     enabled: Boolean = true,
-    icon: (@Composable () -> Unit)? = null
+    icon: (@Composable () -> Unit)? = null,
+    modifier: Modifier = Modifier,
+    searchKey: String? = null
 ) {
     val displayAlpha = if (enabled) 1f else 0.35f
     Row(
-        Modifier
+        modifier
+            .searchHighlight(searchKey ?: title, colors)
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 10.dp)
             .graphicsLayer { alpha = displayAlpha },
@@ -222,10 +232,12 @@ fun SettingsDropdownRow(
     modifier: Modifier = Modifier,
     subtitle: String? = null,
     iconTint: Color? = null,
+    searchKey: String? = null,
     icon: (@Composable () -> Unit)? = null
 ) {
     Row(
         modifier
+            .searchHighlight(searchKey ?: title, colors)
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -267,13 +279,16 @@ fun SettingsSliderRow(
     defaultValue: Float = valueRange.start,
     subtitle: String? = null,
     enabled: Boolean = true,
-    allowCustomInput: Boolean = true
+    allowCustomInput: Boolean = true,
+    modifier: Modifier = Modifier,
+    searchKey: String? = null
 ) {
     val displayAlpha = if (enabled) 1f else 0.35f
     val customValueHost = dev.joseph.hyperbounce.ui.glass.LocalCustomValueHost.current
 
     Column(
-        Modifier
+        modifier
+            .searchHighlight(searchKey ?: title, colors)
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 12.dp)
     ) {

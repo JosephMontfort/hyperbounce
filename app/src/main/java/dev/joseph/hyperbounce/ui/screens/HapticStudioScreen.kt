@@ -510,31 +510,19 @@ fun HapticStudioScreen(
                                     },
                                     backdrop = backdrop,
                                     height = 38.dp,
-                                    horizontalPadding = 18.dp,
+                                    horizontalPadding = 26.dp,
+                                    modifier = Modifier.widthIn(min = 96.dp),
                                     tint = if (isTrimMode) colors.accentBlue else Color.Unspecified,
                                     surfaceColor = if (isTrimMode) colors.accentBlue.copy(alpha = 0.35f) else colors.separator.copy(alpha = 0.25f)
                                 ) {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                    ) {
-                                        if (isTrimMode) {
-                                            Box(
-                                                modifier = Modifier
-                                                    .size(7.dp)
-                                                    .clip(CircleShape)
-                                                    .background(Color.White)
-                                            )
-                                        }
-                                        BasicText(
-                                            text = if (isTrimMode) "Trim Active" else "Trim",
-                                            style = HyperBounceType.body.copy(
-                                                color = if (isTrimMode) Color.White else colors.label,
-                                                fontSize = 13.5.sp,
-                                                fontWeight = FontWeight.SemiBold
-                                            )
+                                    BasicText(
+                                        text = "Trim",
+                                        style = HyperBounceType.body.copy(
+                                            color = if (isTrimMode) Color.White else colors.label,
+                                            fontSize = 13.5.sp,
+                                            fontWeight = FontWeight.SemiBold
                                         )
-                                    }
+                                    )
                                 }
                             }
 
@@ -750,9 +738,9 @@ fun HapticStudioScreen(
                                 },
                                 backdrop = backdrop,
                                 height = 38.dp,
-                                horizontalPadding = 16.dp,
+                                horizontalPadding = 24.dp,
                                 tint = colors.accentPink,
-                                modifier = Modifier.padding(start = 8.dp)
+                                modifier = Modifier.padding(start = 8.dp).widthIn(min = 120.dp)
                             ) {
                                 BasicText(
                                     text = "Build Pack",

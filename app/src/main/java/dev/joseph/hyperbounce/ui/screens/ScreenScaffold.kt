@@ -86,6 +86,15 @@ fun ScreenScaffold(
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val lazyListState = rememberLazyListState()
+    val targetIndex = dev.joseph.hyperbounce.ui.search.SearchHighlightState.targetScrollIndex
+    androidx.compose.runtime.LaunchedEffect(targetIndex) {
+        if (targetIndex != null && targetIndex >= 0) {
+            kotlinx.coroutines.delay(220)
+            try {
+                lazyListState.animateScrollToItem(targetIndex)
+            } catch (_: Exception) {}
+        }
+    }
     val collapseProgress by remember {
         derivedStateOf {
             if (lazyListState.firstVisibleItemIndex > 0) 1f

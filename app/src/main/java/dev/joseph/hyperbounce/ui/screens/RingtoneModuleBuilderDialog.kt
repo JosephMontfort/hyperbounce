@@ -605,12 +605,7 @@ private fun StepConfirmationContent(
     onConfirm: () -> Unit
 ) {
     val context = LocalContext.current
-    val hasStoragePerm = remember { RingtoneModuleBuilder.hasStoragePermission(context) }
-    var editingItem by remember { mutableStateOf<RingtoneModuleBuilder.RingtonePackageItem?>(null) }
-    var editTitleInput by remember { mutableStateOf("") }
-    val isDark = isSystemInDarkTheme()
-    val cardBg = if (isDark) Color(0xFF1E1E20) else Color(0xFFFFFFFF)
-    val cancelBtnBg = if (isDark) Color(0xFF2C2C2E) else Color(0xFFE5E5EA)
+    val dialogHost = dev.joseph.hyperbounce.ui.glass.LocalGlassDialogHost.current
 
     Column(modifier = Modifier.fillMaxWidth()) {
         BasicText(
@@ -638,7 +633,7 @@ private fun StepConfirmationContent(
         LazyColumn(
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(max = 220.dp),
+                .heightIn(max = 260.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             items(items, key = { it.presetId }) { item ->
@@ -704,125 +699,25 @@ private fun StepConfirmationContent(
                                     .clip(CircleShape)
                                     .background(colors.accentBlue)
                                     .clickable {
-                                        editingItem = item
-                                        editTitleInput = item.title
+                                        dialogHost.showTextInput(
+                                            title = "Rename Ringtone",
+                                            message = "Customize ringtone title for this pack. Target audio: ${RingtoneModuleBuilder.sanitizeFileName(item.title)}.ogg",
+                                            initialValue = item.title,
+                                            confirmText = "Done",
+                                            confirmColor = colors.accentBlue,
+                                            onConfirm = { newTitle ->
+                                                val trimmed = newTitle.trim()
+                                                if (trimmed.isNotBlank()) {
+                                                    onRenameItem(item.presetId, trimmed)
+                                                }
+                                            }
+                                        )
                                     },
                                 contentAlignment = Alignment.Center
                             ) {
                                 PencilIcon(color = Color.White, size = 15.dp)
                             }
                         }
-                    }
-                }
-            }
-        }
-
-        Spacer(Modifier.height(12.dp))
-
-        // Destination Info Box
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(10.dp))
-                .background(colors.accentBlue.copy(alpha = 0.06f))
-                .border(0.5.dp, colors.accentBlue.copy(alpha = 0.22f), RoundedCornerShape(10.dp))
-                .padding(12.dp)
-        ) {
-            Column {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    BasicText(
-                        text = "Magisk / KernelSU / APatch Module",
-                        style = HyperBounceType.caption.copy(
-                            color = colors.accentBlue,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 11.5.sp
-                        )
-                    )
-                }
-                Spacer(Modifier.height(4.dp))
-                BasicText(
-                    text = "Download/${RingtoneModuleBuilder.MODULE_NAME}",
-                    style = HyperBounceType.caption.copy(
-                        color = colors.label,
-                        fontWeight = FontWeight.Medium,
-                        fontSize = 12.sp
-                    )
-                )
-                Spacer(Modifier.height(2.dp))
-                BasicText(
-                    text = "Non-destructive. Fully isolated overlay with zero modifications to system partition.",
-                    style = HyperBounceType.caption.copy(
-                        color = colors.secondaryLabel,
-                        fontSize = 10.5.sp
-                    )
-                )
-            }
-        }
-
-        // Storage Permission Guidance
-        if (!hasStoragePerm) {
-            Spacer(Modifier.height(8.dp))
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(colors.accentBlue.copy(alpha = 0.10f))
-                    .padding(8.dp)
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        BasicText(
-                            text = "Storage Permission",
-                            style = HyperBounceType.caption.copy(
-                                color = colors.accentBlue,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 11.sp
-                            )
-                        )
-                        BasicText(
-                            text = "Allow access to write the module zip to Downloads folder.",
-                            style = HyperBounceType.caption.copy(
-                                color = colors.label,
-                                fontSize = 10.sp
-                            )
-                        )
-                    }
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(6.dp))
-                            .background(colors.accentBlue)
-                            .clickable {
-                                try {
-                                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                                        val intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION).apply {
-                                            data = Uri.parse("package:${context.packageName}")
-                                        }
-                                        context.startActivity(intent)
-                                    } else {
-                                        val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-                                            data = Uri.parse("package:${context.packageName}")
-                                        }
-                                        context.startActivity(intent)
-                                    }
-                                } catch (_: Exception) {
-                                    val intent = Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)
-                                    context.startActivity(intent)
-                                }
-                            }
-                            .padding(horizontal = 8.dp, vertical = 4.dp)
-                    ) {
-                        BasicText(
-                            text = "Grant",
-                            style = HyperBounceType.caption.copy(
-                                color = Color.White,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 10.5.sp
-                            )
-                        )
                     }
                 }
             }
@@ -880,7 +775,13 @@ private fun StepConfirmationContent(
                     .height(50.dp)
                     .clip(CircleShape)
                     .background(if (isBuilding) colors.accentPink.copy(alpha = 0.6f) else colors.accentPink)
-                    .clickable(enabled = !isBuilding) { onConfirm() },
+                    .clickable(enabled = !isBuilding) {
+                        if (!RingtoneModuleBuilder.hasStoragePermission(context)) {
+                            RingtoneModuleBuilder.requestStoragePermission(context)
+                        } else {
+                            onConfirm()
+                        }
+                    },
                 contentAlignment = Alignment.Center
             ) {
                 BasicText(
@@ -891,139 +792,6 @@ private fun StepConfirmationContent(
                         fontWeight = FontWeight.SemiBold
                     )
                 )
-            }
-        }
-    }
-
-    if (editingItem != null) {
-        val targetItem = editingItem!!
-        val cleanPreview = editTitleInput.filter { it.isLetterOrDigit() }.ifBlank { "CustomRingtone" }
-
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.5f))
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null
-                ) { editingItem = null },
-            contentAlignment = Alignment.Center
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth(0.90f)
-                    .clip(RoundedCornerShape(32.dp))
-                    .background(cardBg)
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null
-                    ) {}
-                    .padding(22.dp)
-            ) {
-                Column(
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    BasicText(
-                        text = "Rename Ringtone",
-                        style = HyperBounceType.headline.copy(
-                            color = colors.label,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 18.sp
-                        )
-                    )
-                    Spacer(Modifier.height(4.dp))
-                    BasicText(
-                        text = "Customize ringtone title and audio filename for this pack.",
-                        style = HyperBounceType.caption.copy(
-                            color = colors.secondaryLabel,
-                            fontSize = 12.sp
-                        )
-                    )
-
-                    Spacer(Modifier.height(14.dp))
-
-                    val inputBg = if (isDark) Color(0xFF2C2C2E) else Color(0xFFE5E5EA)
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(14.dp))
-                            .background(inputBg)
-                            .padding(horizontal = 16.dp, vertical = 14.dp)
-                    ) {
-                        BasicTextField(
-                            value = editTitleInput,
-                            onValueChange = { editTitleInput = it },
-                            singleLine = true,
-                            textStyle = HyperBounceType.body.copy(
-                                color = colors.label,
-                                fontWeight = FontWeight.SemiBold,
-                                fontSize = 15.sp
-                            ),
-                            cursorBrush = SolidColor(colors.accentBlue),
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                    }
-
-                    Spacer(Modifier.height(8.dp))
-                    BasicText(
-                        text = "Target audio file: $cleanPreview.ogg",
-                        style = HyperBounceType.caption.copy(
-                            color = colors.accentOrange,
-                            fontWeight = FontWeight.Medium,
-                            fontSize = 11.sp
-                        )
-                    )
-
-                    Spacer(Modifier.height(18.dp))
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(50.dp)
-                                .clip(CircleShape)
-                                .background(cancelBtnBg)
-                                .clickable { editingItem = null },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            BasicText(
-                                text = "Cancel",
-                                style = TextStyle(
-                                    color = colors.label,
-                                    fontSize = 15.5.sp,
-                                    fontWeight = FontWeight.Medium
-                                )
-                            )
-                        }
-
-                        val canSave = editTitleInput.isNotBlank()
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(50.dp)
-                                .clip(CircleShape)
-                                .background(if (canSave) colors.accentBlue else colors.accentBlue.copy(alpha = 0.4f))
-                                .clickable(enabled = canSave) {
-                                    onRenameItem(targetItem.presetId, editTitleInput.trim())
-                                    editingItem = null
-                                },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            BasicText(
-                                text = "Done",
-                                style = TextStyle(
-                                    color = if (canSave) Color.White else Color.White.copy(alpha = 0.5f),
-                                    fontSize = 15.5.sp,
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                            )
-                        }
-                    }
-                }
             }
         }
     }
@@ -1041,102 +809,122 @@ private fun StepSuccessContent(
     val zipPath = zipFile?.absolutePath ?: "/storage/emulated/0/Download/${RingtoneModuleBuilder.MODULE_NAME}"
     val itemCount = result?.items?.size ?: 0
 
-    Column(modifier = Modifier.fillMaxWidth()) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Box(
+            modifier = Modifier
+                .size(54.dp)
+                .clip(CircleShape)
+                .background(colors.accentGreen.copy(alpha = 0.16f)),
+            contentAlignment = Alignment.Center
         ) {
             Box(
                 modifier = Modifier
-                    .size(34.dp)
+                    .size(40.dp)
                     .clip(CircleShape)
                     .background(colors.accentGreen),
                 contentAlignment = Alignment.Center
             ) {
                 CheckmarkIcon(
                     color = Color.White,
-                    size = 18.dp,
-                    strokeWidth = 2.4.dp
-                )
-            }
-
-            Column {
-                BasicText(
-                    text = "Module Created Successfully!",
-                    style = HyperBounceType.headline.copy(
-                        color = colors.label,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 17.5.sp
-                    )
-                )
-                BasicText(
-                    text = "$itemCount ringtone(s) bundled with haptics.",
-                    style = HyperBounceType.caption.copy(
-                        color = colors.secondaryLabel,
-                        fontSize = 11.5.sp
-                    )
+                    size = 20.dp,
+                    strokeWidth = 2.6.dp
                 )
             }
         }
 
         Spacer(Modifier.height(14.dp))
-        RowDivider(colors.separator)
-        Spacer(Modifier.height(12.dp))
+        BasicText(
+            text = "Module Packaged",
+            style = HyperBounceType.headline.copy(
+                color = colors.label,
+                fontWeight = FontWeight.Bold,
+                fontSize = 20.sp
+            )
+        )
+        Spacer(Modifier.height(4.dp))
+        BasicText(
+            text = "$itemCount ringtone(s) ready to flash via Magisk or KernelSU",
+            style = HyperBounceType.footnote.copy(
+                color = colors.secondaryLabel,
+                fontSize = 13.sp,
+                textAlign = TextAlign.Center
+            )
+        )
 
-        // File Location Card
+        Spacer(Modifier.height(18.dp))
+
+        // Archive Details Card
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(10.dp))
-                .background(colors.separator.copy(alpha = 0.12f))
-                .padding(12.dp)
+                .clip(RoundedCornerShape(16.dp))
+                .background(colors.separator.copy(alpha = 0.10f))
+                .padding(16.dp)
         ) {
             Column {
-                BasicText(
-                    text = "MODULE SAVED TO DOWNLOADS:",
-                    style = HyperBounceType.caption.copy(
-                        color = colors.secondaryLabel,
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = 10.sp
-                    )
-                )
-                Spacer(Modifier.height(4.dp))
-                BasicText(
-                    text = zipPath,
-                    style = HyperBounceType.body.copy(
-                        color = colors.accentBlue,
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = 12.sp
-                    )
-                )
-
-                Spacer(Modifier.height(10.dp))
-
-                // Action Row: Copy Path & Share File
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    BasicText(
+                        text = "SAVED ARCHIVE",
+                        style = HyperBounceType.caption.copy(
+                            color = colors.secondaryLabel,
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 11.sp
+                        )
+                    )
+                    BasicText(
+                        text = "Download/",
+                        style = HyperBounceType.caption.copy(
+                            color = colors.accentBlue,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 11.sp
+                        )
+                    )
+                }
+
+                Spacer(Modifier.height(6.dp))
+                BasicText(
+                    text = RingtoneModuleBuilder.MODULE_NAME,
+                    style = HyperBounceType.body.copy(
+                        color = colors.label,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 14.5.sp
+                    )
+                )
+
+                Spacer(Modifier.height(12.dp))
+
+                // Actions: Copy & Share
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     Box(
                         modifier = Modifier
                             .weight(1f)
-                            .clip(RoundedCornerShape(6.dp))
-                            .background(colors.separator.copy(alpha = 0.25f))
+                            .height(38.dp)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(colors.separator.copy(alpha = 0.22f))
                             .clickable {
                                 val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                                 val clip = ClipData.newPlainText("Module Path", zipPath)
                                 clipboard.setPrimaryClip(clip)
                                 Toast.makeText(context, "Path copied to clipboard", Toast.LENGTH_SHORT).show()
-                            }
-                            .padding(vertical = 7.dp),
+                            },
                         contentAlignment = Alignment.Center
                     ) {
                         BasicText(
                             text = "Copy Path",
-                            style = HyperBounceType.caption.copy(
+                            style = TextStyle(
                                 color = colors.label,
                                 fontWeight = FontWeight.SemiBold,
-                                fontSize = 11.sp
+                                fontSize = 13.sp
                             )
                         )
                     }
@@ -1144,8 +932,9 @@ private fun StepSuccessContent(
                     Box(
                         modifier = Modifier
                             .weight(1f)
-                            .clip(RoundedCornerShape(6.dp))
-                            .background(colors.accentBlue.copy(alpha = 0.2f))
+                            .height(38.dp)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(colors.accentBlue)
                             .clickable {
                                 try {
                                     val file = File(zipPath)
@@ -1163,16 +952,15 @@ private fun StepSuccessContent(
                                 } catch (e: Exception) {
                                     Toast.makeText(context, "Share failed: ${e.message}", Toast.LENGTH_SHORT).show()
                                 }
-                            }
-                            .padding(vertical = 7.dp),
+                            },
                         contentAlignment = Alignment.Center
                     ) {
                         BasicText(
                             text = "Share Zip",
-                            style = HyperBounceType.caption.copy(
-                                color = colors.accentBlue,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 11.sp
+                            style = TextStyle(
+                                color = Color.White,
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 13.sp
                             )
                         )
                     }
@@ -1180,34 +968,33 @@ private fun StepSuccessContent(
             }
         }
 
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(14.dp))
 
         // Flashing instructions
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(10.dp))
+                .clip(RoundedCornerShape(14.dp))
                 .background(colors.separator.copy(alpha = 0.08f))
-                .padding(12.dp)
+                .padding(14.dp)
         ) {
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 BasicText(
-                    text = "How to Flash & Activate:",
+                    text = "Installation Instructions",
                     style = HyperBounceType.caption.copy(
                         color = colors.label,
                         fontWeight = FontWeight.Bold,
-                        fontSize = 11.5.sp
+                        fontSize = 12.sp
                     )
                 )
                 InstructionBullet(colors, "1. Open Magisk, KernelSU, or APatch manager")
-                InstructionBullet(colors, "2. Modules tab -> Install from storage")
-                InstructionBullet(colors, "3. Pick HyperiOS_Haptic_Ringtones_Module.zip in Download")
-                InstructionBullet(colors, "4. Reboot device")
-                InstructionBullet(colors, "5. Select in Settings > Sound > Ringtone")
+                InstructionBullet(colors, "2. Go to Modules tab and tap Install from storage")
+                InstructionBullet(colors, "3. Select HyperiOS_Haptic_Ringtones_Module.zip in Download")
+                InstructionBullet(colors, "4. Reboot device to activate")
             }
         }
 
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(18.dp))
         Box(
             modifier = Modifier
                 .fillMaxWidth()

@@ -169,6 +169,8 @@ private fun HyperiOSApp(repository: SettingsRepository) {
                 var activeAnimationJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
 
                 val push: (Destination) -> Unit = { destination ->
+                    focusManager.clearFocus()
+                    keyboardController?.hide()
                     activeAnimationJob?.cancel()
                     if (isPopping || dragOffset.value > 0f) {
                         isPopping = false

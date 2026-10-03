@@ -1,26 +1,37 @@
 package dev.joseph.hyperbounce.ui.screens
 
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import com.kyant.backdrop.Backdrop
 import dev.joseph.hyperbounce.R
 import dev.joseph.hyperbounce.ui.Destination
+import dev.joseph.hyperbounce.ui.components.ChevronIcon
 import dev.joseph.hyperbounce.ui.components.FeatureCategoryRow
 import dev.joseph.hyperbounce.ui.components.GlassCard
 import dev.joseph.hyperbounce.ui.components.HyperLightSearchBar
 import dev.joseph.hyperbounce.ui.components.RowDivider
 import dev.joseph.hyperbounce.ui.components.SectionHeader
+import dev.joseph.hyperbounce.ui.components.SettingsClickableRow
+import dev.joseph.hyperbounce.ui.search.SearchHighlightState
+import dev.joseph.hyperbounce.ui.search.SearchIndex
 import dev.joseph.hyperbounce.ui.state.SettingsRepository
 import dev.joseph.hyperbounce.ui.theme.HyperBounceColors
+import dev.joseph.hyperbounce.ui.theme.HyperBounceType
 
 private data class FeatureItem(
     val title: String,
@@ -139,15 +150,12 @@ fun TuningScreen(
         )
     }
 
-    val filteredFeatures = remember(searchQuery, features) {
-        if (searchQuery.isBlank()) {
-            features
-        } else {
-            val q = searchQuery.trim().lowercase()
-            features.filter {
-                it.title.lowercase().contains(q) || it.description.lowercase().contains(q)
-            }
-        }
+    val focusManager = LocalFocusManager.current
+    val keyboardController = LocalSoftwareKeyboardController.current
+
+    val isSearching = searchQuery.isNotBlank()
+    val searchResults = remember(searchQuery) {
+        if (isSearching) SearchIndex.search(searchQuery) else emptyList()
     }
 
     RootScaffold(
@@ -156,7 +164,11 @@ fun TuningScreen(
         colors = colors,
         backdrop = backdrop,
         repository = repository,
-        onAbout = { onNavigate(Destination.About) }
+        onAbout = {
+            keyboardController?.hide()
+            focusManager.clearFocus()
+            onNavigate(Destination.About)
+        }
     ) {
         // HyperLight-style Search Bar with increased bounce
         HyperLightSearchBar(
@@ -166,18 +178,70 @@ fun TuningScreen(
             modifier = Modifier.padding(bottom = 12.dp)
         )
 
-        GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
-            filteredFeatures.forEachIndexed { index, feature ->
-                if (index > 0) {
-                    RowDivider(colors.separator, insetStart = 72.dp)
+        if (isSearching) {
+            SectionHeader("SEARCH RESULTS (${searchResults.size})", colors)
+            if (searchResults.isNotEmpty()) {
+                GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
+                    searchResults.forEachIndexed { index, result ->
+                        if (index > 0) {
+                            RowDivider(colors.separator, insetStart = 16.dp)
+                        }
+                        SettingsClickableRow(
+                            title = result.title,
+                            subtitle = result.category,
+                            colors = colors,
+                            trailing = {
+                                ChevronIcon(
+                                    color = colors.tertiaryLabel,
+                                    size = 11.dp,
+                                    strokeWidth = 1.8.dp,
+                                    pointingLeft = false
+                                )
+                            },
+                            onClick = {
+                                keyboardController?.hide()
+                                focusManager.clearFocus()
+                                searchQuery = ""
+                                SearchHighlightState.highlight(result.highlightKey, result.scrollIndex)
+                                onNavigate(result.destination)
+                            }
+                        )
+                    }
                 }
-                FeatureCategoryRow(
-                    title = feature.title,
-                    description = feature.description,
-                    colors = colors,
-                    onClick = { onNavigate(feature.destination) },
-                    icon = feature.icon
-                )
+            } else {
+                GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 32.dp, horizontal = 16.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        BasicText(
+                            text = "No tuning options found",
+                            style = HyperBounceType.body.copy(color = colors.secondaryLabel)
+                        )
+                    }
+                }
+            }
+        } else {
+            GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
+                features.forEachIndexed { index, feature ->
+                    if (index > 0) {
+                        RowDivider(colors.separator, insetStart = 72.dp)
+                    }
+                    FeatureCategoryRow(
+                        title = feature.title,
+                        description = feature.description,
+                        colors = colors,
+                        onClick = {
+                            keyboardController?.hide()
+                            focusManager.clearFocus()
+                            searchQuery = ""
+                            onNavigate(feature.destination)
+                        },
+                        icon = feature.icon
+                    )
+                }
             }
         }
     }

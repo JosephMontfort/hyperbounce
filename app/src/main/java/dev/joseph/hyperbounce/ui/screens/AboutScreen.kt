@@ -1,5 +1,7 @@
 package dev.joseph.hyperbounce.ui.screens
 
+import android.os.Build
+import android.widget.Toast
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -17,7 +19,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -31,6 +32,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -39,6 +41,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.kyant.backdrop.Backdrop
 import dev.joseph.hyperbounce.R
+import dev.joseph.hyperbounce.safemode.SystemPropertiesHelper
 import dev.joseph.hyperbounce.ui.components.ChevronIcon
 import dev.joseph.hyperbounce.ui.components.GlassCard
 import dev.joseph.hyperbounce.ui.components.RowDivider
@@ -66,7 +69,16 @@ fun AboutScreen(
                 DeveloperSection(colors, contentBackdrop)
             }
             item {
-                LibrariesSection(colors, contentBackdrop)
+                SystemInfoSection(colors, contentBackdrop)
+            }
+            item {
+                OpenSourceLicensesSection(colors, contentBackdrop)
+            }
+            item {
+                DonationSection(colors, contentBackdrop)
+            }
+            item {
+                Spacer(Modifier.height(36.dp))
             }
         }
     } else {
@@ -85,7 +97,9 @@ fun AboutScreen(
             Spacer(Modifier.height(8.dp))
             AboutHeader(colors)
             DeveloperSection(colors, backdrop)
-            LibrariesSection(colors, backdrop)
+            SystemInfoSection(colors, backdrop)
+            OpenSourceLicensesSection(colors, backdrop)
+            DonationSection(colors, backdrop)
             Spacer(Modifier.height(120.dp)) // Bottom tab clearance
         }
     }
@@ -203,71 +217,144 @@ private fun DeveloperSection(colors: HyperBounceColors, backdrop: Backdrop) {
     }
 }
 
-private data class LibraryItem(
+@Composable
+private fun SystemInfoSection(colors: HyperBounceColors, backdrop: Backdrop) {
+    val deviceModel = remember {
+        val marketName = SystemPropertiesHelper.get("ro.product.marketname", "").trim()
+        if (marketName.isNotEmpty()) {
+            marketName
+        } else {
+            val model = SystemPropertiesHelper.get("ro.product.model", "").trim()
+            if (model.isNotEmpty()) model else Build.MODEL
+        }
+    }
+
+    val hyperOsVersion = remember {
+        val miOs = SystemPropertiesHelper.get("ro.mi.os.version.name", "").trim()
+        if (miOs.isNotEmpty()) {
+            miOs
+        } else {
+            val miui = SystemPropertiesHelper.get("ro.miui.ui.version.name", "").trim()
+            if (miui.isNotEmpty()) miui else "HyperOS"
+        }
+    }
+
+    val androidVersion = remember {
+        "Android ${Build.VERSION.RELEASE}"
+    }
+
+    SectionHeader("System Information", colors)
+    GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
+        SystemInfoRow(label = "Device Model", value = deviceModel, colors = colors)
+        RowDivider(colors.separator, insetStart = 16.dp)
+        SystemInfoRow(label = "HyperOS Version", value = hyperOsVersion, colors = colors)
+        RowDivider(colors.separator, insetStart = 16.dp)
+        SystemInfoRow(label = "Android Version", value = androidVersion, colors = colors)
+    }
+}
+
+@Composable
+private fun SystemInfoRow(
+    label: String,
+    value: String,
+    colors: HyperBounceColors
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        BasicText(
+            text = label,
+            style = HyperBounceType.body.copy(
+                color = colors.label,
+                fontWeight = FontWeight.Normal,
+                fontSize = 16.sp
+            )
+        )
+        BasicText(
+            text = value,
+            style = HyperBounceType.body.copy(
+                color = colors.secondaryLabel,
+                fontWeight = FontWeight.Normal,
+                fontSize = 15.sp
+            )
+        )
+    }
+}
+
+private data class LicenseItem(
     val name: String,
-    val description: String,
+    val developer: String,
+    val license: String,
     val url: String
 )
 
 @Composable
-private fun LibrariesSection(colors: HyperBounceColors, backdrop: Backdrop) {
-    val libraries = remember {
+private fun OpenSourceLicensesSection(colors: HyperBounceColors, backdrop: Backdrop) {
+    val licenses = remember {
         listOf(
-            LibraryItem(
-                name = "AndroidLiquidGlass (Backdrop)",
-                description = "Real-time optics, blur, refraction, vibrancy and liquid dynamics engine by Kyant0",
-                url = "https://github.com/Kyant0/AndroidLiquidGlass"
-            ),
-            LibraryItem(
-                name = "Shapes",
-                description = "Modern smooth corners, capsules and squircle shapes for Compose by Kyant0",
-                url = "https://github.com/Kyant0/shapes"
-            ),
-            LibraryItem(
-                name = "LibXposed",
-                description = "Modern, type-safe API 102 ART hooking framework and IPC service bridge interface",
+            LicenseItem(
+                name = "LibXposed API",
+                developer = "libxposed",
+                license = "Apache-2.0",
                 url = "https://github.com/libxposed/api"
             ),
-            LibraryItem(
-                name = "Jetpack Compose & Multiplatform",
-                description = "Declarative reactive UI framework by AndroidX and JetBrains Compose Multiplatform",
-                url = "https://github.com/JetBrains/compose-multiplatform"
+            LicenseItem(
+                name = "Android Liquid Glass",
+                developer = "Kyant0",
+                license = "Apache-2.0",
+                url = "https://github.com/Kyant0/AndroidLiquidGlass"
             ),
-            LibraryItem(
-                name = "Miuix Iconography",
-                description = "Native HyperOS system iconography and design language components",
-                url = "https://github.com/MiCode/Miuix"
+            LicenseItem(
+                name = "AndroidLiquidGlassView",
+                developer = "Qmdeve",
+                license = "Apache-2.0",
+                url = "https://github.com/Qmdeve/AndroidLiquidGlassView"
+            ),
+            LicenseItem(
+                name = "miuix-kotlin-multiplatform",
+                developer = "YuKongA",
+                license = "Apache-2.0",
+                url = "https://github.com/YuKongA/miuix-kotlin-multiplatform"
+            ),
+            LicenseItem(
+                name = "Android HiddenApiBypass",
+                developer = "LSPosed",
+                license = "Apache-2.0",
+                url = "https://github.com/LSPosed/AndroidHiddenApiBypass"
+            ),
+            LicenseItem(
+                name = "Compose Multiplatform",
+                developer = "JetBrains",
+                license = "Apache-2.0",
+                url = "https://github.com/JetBrains/compose-multiplatform"
             )
         )
     }
 
-    SectionHeader("Open Source Libraries", colors)
+    SectionHeader("Open Source Licenses", colors)
     GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
-        libraries.forEachIndexed { index, lib ->
+        licenses.forEachIndexed { index, item ->
             if (index > 0) {
                 RowDivider(colors.separator, insetStart = 16.dp)
             }
-            LibraryCardRow(
-                name = lib.name,
-                description = lib.description,
-                url = lib.url,
-                colors = colors
-            )
+            LicenseCardRow(item = item, colors = colors)
         }
     }
 }
 
 @Composable
-private fun LibraryCardRow(
-    name: String,
-    description: String,
-    url: String,
+private fun LicenseCardRow(
+    item: LicenseItem,
     colors: HyperBounceColors
 ) {
     val uriHandler = LocalUriHandler.current
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
-    val bgAlpha by animateFloatAsState(if (isPressed) 0.12f else 0.0f, label = "libPress")
+    val bgAlpha by animateFloatAsState(if (isPressed) 0.12f else 0.0f, label = "licensePress")
 
     Row(
         modifier = Modifier
@@ -278,31 +365,95 @@ private fun LibraryCardRow(
                 indication = null,
                 onClick = {
                     try {
-                        uriHandler.openUri(url)
+                        uriHandler.openUri(item.url)
                     } catch (_: Exception) {}
                 }
             )
-            .padding(horizontal = 16.dp, vertical = 14.dp),
+            .padding(horizontal = 16.dp, vertical = 13.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         Column(Modifier.weight(1f)) {
             BasicText(
-                name,
-                style = HyperBounceType.headline.copy(
+                item.name,
+                style = HyperBounceType.body.copy(
                     color = colors.label,
-                    fontWeight = FontWeight.SemiBold
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 15.5.sp
                 )
             )
-            Spacer(Modifier.height(3.dp))
+            Spacer(Modifier.height(2.dp))
             BasicText(
-                description,
+                "${item.developer} • ${item.license}",
                 style = HyperBounceType.footnote.copy(
                     color = colors.secondaryLabel,
-                    lineHeight = 16.sp
+                    fontSize = 13.sp
                 )
             )
         }
+        ChevronIcon(
+            color = colors.tertiaryLabel,
+            size = 12.dp,
+            strokeWidth = 2.dp,
+            pointingLeft = false
+        )
+    }
+}
+
+@Composable
+private fun DonationSection(colors: HyperBounceColors, backdrop: Backdrop) {
+    val context = LocalContext.current
+    SectionHeader("Donate", colors)
+    GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
+        DonationButtonRow(
+            label = "Donate (Indian users)",
+            colors = colors,
+            onClick = {
+                Toast.makeText(context, "UPI / Indian donation options coming soon!", Toast.LENGTH_SHORT).show()
+            }
+        )
+        RowDivider(colors.separator, insetStart = 16.dp)
+        DonationButtonRow(
+            label = "Donate (International users)",
+            colors = colors,
+            onClick = {
+                Toast.makeText(context, "PayPal / International donation options coming soon!", Toast.LENGTH_SHORT).show()
+            }
+        )
+    }
+}
+
+@Composable
+private fun DonationButtonRow(
+    label: String,
+    colors: HyperBounceColors,
+    onClick: () -> Unit
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val bgAlpha by animateFloatAsState(if (isPressed) 0.12f else 0.0f, label = "donatePress")
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(colors.label.copy(alpha = bgAlpha))
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick
+            )
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        BasicText(
+            label,
+            style = HyperBounceType.body.copy(
+                color = colors.label,
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 15.5.sp
+            )
+        )
         ChevronIcon(
             color = colors.tertiaryLabel,
             size = 12.dp,
