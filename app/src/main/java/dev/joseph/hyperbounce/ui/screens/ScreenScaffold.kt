@@ -240,15 +240,15 @@ fun ScreenScaffold(
                         },
                         label = {
                             Canvas(Modifier.size(20.dp)) {
-                                val y = size.height / 2f
+                                val x = size.width / 2f
                                 val r = size.minDimension * 0.075f
-                                val x1 = size.width * 0.25f
-                                val x2 = size.width * 0.50f
-                                val x3 = size.width * 0.75f
+                                val y1 = size.height * 0.25f
+                                val y2 = size.height * 0.50f
+                                val y3 = size.height * 0.75f
                                 val dotColor = menuContentColor
-                                drawCircle(dotColor, r, Offset(x1, y))
-                                drawCircle(dotColor, r, Offset(x2, y))
-                                drawCircle(dotColor, r, Offset(x3, y))
+                                drawCircle(dotColor, r, Offset(x, y1))
+                                drawCircle(dotColor, r, Offset(x, y2))
+                                drawCircle(dotColor, r, Offset(x, y3))
                             }
                         }
                     ) { globalTouch, closeMenuFromRow, hoveredIndex, setHovered, showDialog ->

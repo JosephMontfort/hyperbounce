@@ -18,6 +18,7 @@ sealed interface Destination {
     data object TogglePhysics : Destination
     data object SliderAppearance : Destination
     data object SliderPhysics : Destination
+    data object LockscreenStuffs : Destination
     data object LockScreenSheet : Destination
     data object NotificationCenterSheet : Destination
     data object Keypad : Destination
@@ -29,6 +30,7 @@ sealed interface Destination {
     data object KeypadGlassTuning : Destination
     data object KeypadButtonsLayout : Destination
     data object KeypadPadLayout : Destination
+    data object SystemLauncherStuffs : Destination
     data object ScreenUnlock : Destination
     data object ScreenUnlockRadialKinetics : Destination
     data object ScreenUnlockRadialDock : Destination

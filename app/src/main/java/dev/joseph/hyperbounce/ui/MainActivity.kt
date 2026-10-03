@@ -39,9 +39,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
+import dev.joseph.hyperbounce.R
 import dev.joseph.hyperbounce.ui.components.SlidersImageVector
 import dev.joseph.hyperbounce.ui.glass.LiquidBottomTab
 import dev.joseph.hyperbounce.ui.glass.LiquidBottomTabs
@@ -58,6 +60,8 @@ import dev.joseph.hyperbounce.ui.screens.KeypadDelaysScreen
 import dev.joseph.hyperbounce.ui.screens.KeypadGlassTuningScreen
 import dev.joseph.hyperbounce.ui.screens.KeypadIosBloomPhysicsScreen
 import dev.joseph.hyperbounce.ui.screens.KeypadPadLayoutScreen
+import dev.joseph.hyperbounce.ui.screens.LockscreenStuffsScreen
+import dev.joseph.hyperbounce.ui.screens.SystemLauncherStuffsScreen
 import dev.joseph.hyperbounce.ui.screens.KeypadPhysicsScreen
 import dev.joseph.hyperbounce.ui.screens.KeypadReleasePhysicsScreen
 import dev.joseph.hyperbounce.ui.screens.KeypadScreen
@@ -105,7 +109,7 @@ private fun HyperBounceApp(repository: SettingsRepository) {
     // Tuning (page 0) and Settings (page 1) are true swipeable pager pages, not pushed
     // stack destinations — swiping between them, and the floating tab bar below, are both
     // driven by this one pagerState so they can never fall out of sync.
-    val pagerState = rememberPagerState(initialPage = 0) { 2 }
+    val pagerState = rememberPagerState(initialPage = 0) { 3 }
     val pagerScope = rememberCoroutineScope()
 
     // AppDetail/Engine/About are genuine drill-down subpages, layered on top of the pager
@@ -183,11 +187,17 @@ private fun HyperBounceApp(repository: SettingsRepository) {
                                 onNavigate = push
                             )
 
-                            else -> SettingsScreen(
+                            1 -> SettingsScreen(
                                 repository = repository,
                                 colors = colors,
                                 backdrop = backdrop,
                                 onNavigate = push
+                            )
+
+                            else -> AboutScreen(
+                                colors = colors,
+                                backdrop = backdrop,
+                                onBack = null
                             )
                         }
                     }
@@ -260,6 +270,14 @@ private fun HyperBounceApp(repository: SettingsRepository) {
                             colors = colors,
                             backdrop = backdrop,
                             onBack = pop
+                        )
+
+                        Destination.LockscreenStuffs -> LockscreenStuffsScreen(
+                            repository = repository,
+                            colors = colors,
+                            backdrop = backdrop,
+                            onBack = pop,
+                            onNavigate = push
                         )
 
                         Destination.LockScreenSheet -> LockScreenSheetScreen(
@@ -339,6 +357,14 @@ private fun HyperBounceApp(repository: SettingsRepository) {
                             colors = colors,
                             backdrop = backdrop,
                             onBack = pop
+                        )
+
+                        Destination.SystemLauncherStuffs -> SystemLauncherStuffsScreen(
+                            repository = repository,
+                            colors = colors,
+                            backdrop = backdrop,
+                            onBack = pop,
+                            onNavigate = push
                         )
 
                         Destination.ScreenUnlock -> ScreenUnlockScreen(
@@ -464,22 +490,41 @@ private fun HyperBounceApp(repository: SettingsRepository) {
                 enter = slideInVertically(spring(dampingRatio = 0.8f, stiffness = 380f)) { it / 2 } + fadeIn(),
                 exit = slideOutVertically(spring(dampingRatio = 0.8f, stiffness = 380f)) { it / 2 } + fadeOut()
             ) {
-                Box(Modifier.width(196.dp)) {
+                Box(Modifier.width(264.dp)) {
                     val tabItemColor = if (androidx.compose.foundation.isSystemInDarkTheme()) Color.White else Color.Black
                     LiquidBottomTabs(
                         selectedTabIndex = { pagerState.currentPage },
                         onTabSelected = selectTab,
                         backdrop = navBackdrop,
-                        tabsCount = 2,
+                        tabsCount = 3,
                         modifier = Modifier.padding(bottom = 24.dp)
                     ) {
                         LiquidBottomTab(onClick = { selectTab(0) }) {
-                            TabIcon(SlidersImageVector, color = tabItemColor)
-                            BasicText("Tuning", style = HyperBounceType.caption.copy(color = tabItemColor))
+                            Image(
+                                painter = painterResource(R.drawable.ic_nav_home),
+                                contentDescription = null,
+                                modifier = Modifier.size(20.dp),
+                                colorFilter = ColorFilter.tint(tabItemColor)
+                            )
+                            BasicText("Home", style = HyperBounceType.caption.copy(color = tabItemColor))
                         }
                         LiquidBottomTab(onClick = { selectTab(1) }) {
-                            TabIcon(Icons.Filled.Settings, color = tabItemColor)
+                            Image(
+                                painter = painterResource(R.drawable.ic_nav_settings),
+                                contentDescription = null,
+                                modifier = Modifier.size(20.dp),
+                                colorFilter = ColorFilter.tint(tabItemColor)
+                            )
                             BasicText("Settings", style = HyperBounceType.caption.copy(color = tabItemColor))
+                        }
+                        LiquidBottomTab(onClick = { selectTab(2) }) {
+                            Image(
+                                painter = painterResource(R.drawable.ic_nav_about),
+                                contentDescription = null,
+                                modifier = Modifier.size(20.dp),
+                                colorFilter = ColorFilter.tint(tabItemColor)
+                            )
+                            BasicText("About", style = HyperBounceType.caption.copy(color = tabItemColor))
                         }
                     }
                 }

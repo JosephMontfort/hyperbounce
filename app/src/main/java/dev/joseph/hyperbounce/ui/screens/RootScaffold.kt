@@ -140,7 +140,7 @@ fun RootScaffold(
 
     fun copyDebugInfo() {
         val text = buildString {
-            appendLine("HyperBounce 1.0.0 (UI Phase 1)")
+            appendLine("HyperiOS 1.0.0")
             appendLine("Module: ${if (repository.moduleEnabled) "On" else "Off"}")
             appendLine("Toggle engine: ${repository.toggleEngine.label}")
             appendLine("Slider engine: ${repository.sliderEngine.label}")
@@ -174,7 +174,9 @@ fun RootScaffold(
                     }
                 ) {
                     BasicText(title, style = HyperBounceType.largeTitle.copy(color = colors.label))
-                    BasicText(subtitle, style = HyperBounceType.subhead.copy(color = colors.secondaryLabel))
+                    if (subtitle.isNotEmpty()) {
+                        BasicText(subtitle, style = HyperBounceType.subhead.copy(color = colors.secondaryLabel))
+                    }
                 }
                 Spacer(Modifier.size(44.dp)) // reserved footprint; the real menu is drawn as an overlay below
             }
@@ -311,15 +313,15 @@ fun RootScaffold(
                     Canvas(
                         modifier = Modifier.size(22.dp)
                     ) {
-                        val y = size.height / 2f
+                        val x = size.width / 2f
                         val r = size.minDimension * 0.075f
-                        val x1 = size.width * 0.25f
-                        val x2 = size.width * 0.50f
-                        val x3 = size.width * 0.75f
+                        val y1 = size.height * 0.25f
+                        val y2 = size.height * 0.50f
+                        val y3 = size.height * 0.75f
                         val dotColor = menuContentColor
-                        drawCircle(dotColor, r, Offset(x1, y))
-                        drawCircle(dotColor, r, Offset(x2, y))
-                        drawCircle(dotColor, r, Offset(x3, y))
+                        drawCircle(dotColor, r, Offset(x, y1))
+                        drawCircle(dotColor, r, Offset(x, y2))
+                        drawCircle(dotColor, r, Offset(x, y3))
                     }
                 }
             ) { globalTouch, closeMenuFromRow, hoveredIndex, setHovered, showDialog ->
@@ -392,7 +394,7 @@ fun RootScaffold(
                             enabled = !isSubmenu
                         )
                         MenuRow(
-                            title = "About HyperBounce",
+                            title = "About HyperiOS",
                             contentColor = menuContentColor,
                             secondaryColor = menuSecondaryColor,
                             isHovered = hoveredIndex == 2 && !isSubmenu,
