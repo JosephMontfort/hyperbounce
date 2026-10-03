@@ -170,7 +170,7 @@ fun LiquidBottomTabs(
                 initialScale = 1f,
                 pressedScale = 78f / 56f,
                 onDragStarted = {
-                    currentDragValue = dampedDragAnimation.value
+                    currentDragValue = value
                 },
                 onDragStopped = {
                     val targetIndex = currentDragValue.fastRoundToInt().fastCoerceIn(0, tabsCount - 1)
