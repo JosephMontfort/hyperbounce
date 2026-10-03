@@ -53,7 +53,7 @@ fun MenuRow(
     onHoverChange: (Boolean) -> Unit,
     globalTouchPosition: Offset,
     onClick: () -> Unit,
-    icon: @Composable () -> Unit,
+    icon: (@Composable () -> Unit)? = null,
     description: String? = null,
     trailingIcon: (@Composable () -> Unit)? = null,
     enabled: Boolean = true
@@ -80,7 +80,9 @@ fun MenuRow(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        Box(modifier = Modifier.size(24.dp), contentAlignment = Alignment.Center) { icon() }
+        if (icon != null) {
+            Box(modifier = Modifier.size(24.dp), contentAlignment = Alignment.Center) { icon() }
+        }
         Column(
             modifier = Modifier.weight(1f, fill = false),
             verticalArrangement = Arrangement.spacedBy(2.dp)

@@ -103,33 +103,21 @@ fun ControlCenterScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(
+                    Column(
                         Modifier
                             .weight(1f)
-                            .padding(end = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                            .padding(end = 8.dp)
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .size(28.dp)
-                                .background(colors.accentPurple, RoundedCornerShape(8.dp)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            SlidersIcon(color = Color.White, size = 15.dp)
-                        }
-                        Spacer(Modifier.width(12.dp))
-                        Column(Modifier.weight(1f)) {
-                            BasicText(
-                                "Animation Engine",
-                                style = HyperBounceType.body.copy(color = colors.label)
-                            )
-                            Spacer(Modifier.height(2.dp))
-                            val detectedText = if (DevicePipelineDetector.isNativeLowEnd()) "Default: Low-End" else "Default: High-End"
-                            BasicText(
-                                "Control center & shade motion ($detectedText)",
-                                style = HyperBounceType.subhead.copy(color = colors.secondaryLabel)
-                            )
-                        }
+                        BasicText(
+                            "Animation Engine",
+                            style = HyperBounceType.body.copy(color = colors.label)
+                        )
+                        Spacer(Modifier.height(2.dp))
+                        val detectedText = if (DevicePipelineDetector.isNativeLowEnd()) "Default: Low-End" else "Default: High-End"
+                        BasicText(
+                            "Control center & shade motion ($detectedText)",
+                            style = HyperBounceType.subhead.copy(color = colors.secondaryLabel)
+                        )
                     }
                     DropdownPicker(
                         options = listOf("High-End", "Low-End"),

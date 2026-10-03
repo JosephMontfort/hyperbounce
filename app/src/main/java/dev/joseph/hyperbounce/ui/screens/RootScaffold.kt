@@ -333,14 +333,6 @@ fun RootScaffold(
                                 )
                             )
                         },
-                        icon = {
-                            StockMonochromeAppIcon(
-                                packageName = "com.android.systemui",
-                                tint = menuContentColor,
-                                modifier = Modifier.size(16.dp),
-                                fallback = { SlidersIcon(color = menuContentColor, size = 15.dp, strokeWidth = 1.8.dp) }
-                            )
-                        },
                         enabled = true
                     )
                     MenuRow(
@@ -362,14 +354,6 @@ fun RootScaffold(
                                         RootUtils.restartLauncher(context)
                                     }
                                 )
-                            )
-                        },
-                        icon = {
-                            StockMonochromeAppIcon(
-                                packageName = "com.miui.home",
-                                tint = menuContentColor,
-                                modifier = Modifier.size(16.dp),
-                                fallback = { AppGridIcon(color = menuContentColor, size = 15.dp) }
                             )
                         },
                         enabled = true
@@ -395,7 +379,6 @@ fun RootScaffold(
                                 )
                             )
                         },
-                        icon = { ResetArrowIcon(color = menuContentColor, size = 15.dp, strokeWidth = 1.8.dp) },
                         enabled = true
                     )
                 }
