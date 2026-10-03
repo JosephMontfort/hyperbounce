@@ -59,6 +59,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.FileProvider
@@ -699,9 +700,10 @@ private fun StepConfirmationContent(
                                     .clip(CircleShape)
                                     .background(colors.accentBlue)
                                     .clickable {
+                                        val cleanAudioName = item.title.filter { it.isLetterOrDigit() }.ifBlank { "CustomRingtone" }
                                         dialogHost.showTextInput(
                                             title = "Rename Ringtone",
-                                            message = "Customize ringtone title for this pack. Target audio: ${RingtoneModuleBuilder.sanitizeFileName(item.title)}.ogg",
+                                            message = "Customize ringtone title for this pack. Target audio: ${cleanAudioName}.ogg",
                                             initialValue = item.title,
                                             confirmText = "Done",
                                             confirmColor = colors.accentBlue,
