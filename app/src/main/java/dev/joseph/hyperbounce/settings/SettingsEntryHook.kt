@@ -6,9 +6,9 @@ import android.content.Intent
 import android.os.Bundle
 import android.os.Process
 import android.util.Log
+import android.content.SharedPreferences
 import io.github.libxposed.api.XposedInterface
 import io.github.libxposed.api.XposedModule
-import io.github.libxposed.api.XposedPreferences
 import java.lang.reflect.Method
 
 /**
@@ -20,7 +20,7 @@ object SettingsEntryHook {
     private const val TAG = "HyperBounce_SettingsEntry"
     private const val HEADER_ID = 666L
 
-    fun init(module: XposedModule, classLoader: ClassLoader, prefs: XposedPreferences?) {
+    fun init(module: XposedModule, classLoader: ClassLoader, prefs: SharedPreferences?) {
         try {
             val miuiSettingsClass = Class.forName("com.android.settings.MiuiSettings", false, classLoader)
             val headerClass = Class.forName("com.android.settingslib.miuisettings.preference.PreferenceActivity\$Header", false, classLoader)
