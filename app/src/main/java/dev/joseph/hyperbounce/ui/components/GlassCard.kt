@@ -27,33 +27,29 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.kyant.backdrop.Backdrop
 
-import androidx.compose.foundation.border
-
 @Composable
 fun GlassCard(
     backdrop: Backdrop,
     modifier: Modifier = Modifier,
-    cornerRadius: Dp = 18.dp,
+    cornerRadius: Dp = 10.dp,
     content: @Composable ColumnScope.() -> Unit
 ) {
     val isDark = isSystemInDarkTheme()
     val shape = RoundedCornerShape(cornerRadius)
     val cardColor = if (isDark) Color(0xFF1C1C1E) else Color(0xFFFFFFFF)
-    val borderColor = if (isDark) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.06f)
     
     Column(
         modifier
             .fillMaxWidth()
-            .clip(shape)
             .background(cardColor, shape)
-            .border(1.dp, borderColor, shape),
+            .clip(shape),
         content = content
     )
 }
 
 /** A faint 1px inset divider between rows inside a [GlassCard]. */
 @Composable
-fun RowDivider(color: Color, insetStart: Dp = 18.dp) {
+fun RowDivider(color: Color, insetStart: Dp = 56.dp) {
     Box(
         Modifier
             .fillMaxWidth()
@@ -67,4 +63,3 @@ fun RowDivider(color: Color, insetStart: Dp = 18.dp) {
         )
     }
 }
-

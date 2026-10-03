@@ -44,9 +44,11 @@ fun SettingsScreen(
                 title = "HyperBounce Enabled",
                 subtitle = if (repository.moduleEnabled) "All liquid glass effects are active" else "Effects paused everywhere",
                 colors = colors,
+                iconTint = colors.accentGreen.copy(alpha = 0.85f),
                 backdrop = backdrop,
                 checked = repository.moduleEnabled,
-                onCheckedChange = repository::setModuleEnabled
+                onCheckedChange = repository::setModuleEnabled,
+                icon = { PowerIcon(color = Color.White, size = 15.dp, strokeWidth = 1.8.dp) }
             )
         }
 
@@ -56,9 +58,11 @@ fun SettingsScreen(
                 title = "Liquid Glass Effects",
                 subtitle = if (glass.enabled) "Real blur & refraction everywhere" else "Flat translucent surfaces",
                 colors = colors,
+                iconTint = colors.accentBlue.copy(alpha = 0.85f),
                 backdrop = backdrop,
                 checked = glass.enabled,
-                onCheckedChange = repository.globalGlass::setEnabled
+                onCheckedChange = repository.globalGlass::setEnabled,
+                icon = { SlidersIcon(color = Color.White, size = 14.dp) }
             )
             RowDivider(colors.separator)
             SettingsSliderRow(
@@ -73,7 +77,7 @@ fun SettingsScreen(
                 valueLabel = { "${it.roundToInt()}dp" },
                 enabled = glass.enabled
             )
-            RowDivider(colors.separator)
+            RowDivider(colors.separator, insetStart = 16.dp)
             SettingsSliderRow(
                 title = "Refraction Height",
                 subtitle = "Optical boundary height for light refraction",
@@ -86,7 +90,7 @@ fun SettingsScreen(
                 valueLabel = { "${it.roundToInt()}dp" },
                 enabled = glass.enabled
             )
-            RowDivider(colors.separator)
+            RowDivider(colors.separator, insetStart = 16.dp)
             SettingsSliderRow(
                 title = "Refraction Amount",
                 subtitle = "Strength of edge light bending and distortion",
@@ -104,18 +108,22 @@ fun SettingsScreen(
                 title = "Chromatic Aberration",
                 subtitle = "RGB spectral dispersion along refracted edges",
                 colors = colors,
+                iconTint = colors.accentOrange.copy(alpha = 0.85f),
                 backdrop = backdrop,
                 checked = glass.chromaticAberration,
-                onCheckedChange = repository.globalGlass::setChromaticAberration
+                onCheckedChange = repository.globalGlass::setChromaticAberration,
+                icon = { SlidersIcon(color = Color.White, size = 14.dp) }
             )
             RowDivider(colors.separator)
             SettingsToggleRow(
                 title = "Haptic Feedback",
                 subtitle = "Felt when dragging over the menu",
                 colors = colors,
+                iconTint = colors.accentGreen.copy(alpha = 0.85f),
                 backdrop = backdrop,
                 checked = glass.hapticsEnabled,
-                onCheckedChange = repository.globalGlass::setHapticsEnabled
+                onCheckedChange = repository.globalGlass::setHapticsEnabled,
+                icon = { PowerIcon(color = Color.White, size = 14.dp) }
             )
         }
 
@@ -125,7 +133,9 @@ fun SettingsScreen(
                 title = "Dialog Morph Physics",
                 subtitle = "Trajectories, mass, springs & curves",
                 colors = colors,
-                onClick = { onNavigate(Destination.MorphPhysics) }
+                iconTint = colors.accentOrange.copy(alpha = 0.85f),
+                onClick = { onNavigate(Destination.MorphPhysics) },
+                icon = { SlidersIcon(color = Color.White, size = 14.dp) }
             )
         }
 
@@ -138,7 +148,9 @@ fun SettingsScreen(
                 title = "Safe Mode & Crash Recovery",
                 subtitle = if (isSafeEngaged) "Safe Mode ACTIVE (Bypass enabled)" else "Auto crash watchdog & emergency recovery",
                 colors = colors,
-                onClick = { onNavigate(Destination.SafeMode) }
+                iconTint = if (isSafeEngaged) colors.accentRed else colors.accentGreen,
+                onClick = { onNavigate(Destination.SafeMode) },
+                icon = { PowerIcon(color = Color.White, size = 14.dp) }
             )
         }
 
@@ -148,7 +160,9 @@ fun SettingsScreen(
                 title = "About HyperBounce",
                 subtitle = "Version, credits",
                 colors = colors,
-                onClick = { onNavigate(Destination.About) }
+                iconTint = colors.accentBlue.copy(alpha = 0.85f),
+                onClick = { onNavigate(Destination.About) },
+                icon = { InfoIcon(color = Color.White, size = 14.dp, strokeWidth = 1.6.dp) }
             )
         }
     }

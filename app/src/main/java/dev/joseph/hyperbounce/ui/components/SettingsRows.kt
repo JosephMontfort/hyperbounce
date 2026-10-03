@@ -92,82 +92,57 @@ private fun IconChip(tint: Color, content: @Composable () -> Unit) {
     }
 }
 
-/** A tappable row that navigates to a detail screen, with an optional leading icon and trailing chevron. */
+/** A tappable row that navigates to a detail screen, with a leading icon and trailing chevron. */
 @Composable
 fun SettingsNavRow(
     title: String,
     colors: HyperBounceColors,
-    iconTint: Color = Color.Transparent,
+    iconTint: Color,
     onClick: () -> Unit,
     subtitle: String? = null,
-    icon: (@Composable () -> Unit)? = null
+    icon: @Composable () -> Unit
 ) {
-    val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
-    val bgAlpha by animateFloatAsState(if (isPressed) 0.08f else 0.0f)
-    val scale by animateFloatAsState(
-        targetValue = if (isPressed) 0.985f else 1f,
-        animationSpec = spring(dampingRatio = 0.8f, stiffness = 420f),
-        label = "navRowScale"
-    )
-
     Row(
         Modifier
-            .graphicsLayer {
-                scaleX = scale
-                scaleY = scale
-            }
-            .background(colors.label.copy(alpha = bgAlpha))
             .clickable(
-                interactionSource = interactionSource,
+                interactionSource = remember { MutableInteractionSource() },
                 indication = null,
                 onClick = onClick
             )
             .fillMaxWidth()
-            .padding(horizontal = 18.dp, vertical = if (subtitle != null) 15.dp else 16.dp),
+            .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(14.dp)
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        if (icon != null) {
-            IconChip(iconTint) { icon() }
-        }
+        IconChip(iconTint) { icon() }
         Column(Modifier.weight(1f)) {
-            BasicText(title, style = HyperBounceType.body.copy(color = colors.label, fontWeight = FontWeight.Medium))
+            BasicText(title, style = HyperBounceType.body.copy(color = colors.label))
             if (subtitle != null) {
-                BasicText(subtitle, modifier = Modifier.padding(top = 2.dp), style = HyperBounceType.footnote.copy(color = colors.secondaryLabel))
+                BasicText(subtitle, style = HyperBounceType.footnote.copy(color = colors.secondaryLabel))
             }
         }
         ChevronIcon(color = colors.tertiaryLabel, size = 11.dp, strokeWidth = 1.8.dp, pointingLeft = false)
     }
 }
 
-/** A tappable action row with an optional leading icon, title/subtitle, and no trailing chevron. */
+/** A tappable action row with a leading icon, title/subtitle, and no trailing chevron. */
 @Composable
 fun SettingsClickableRow(
     title: String,
     colors: HyperBounceColors,
-    iconTint: Color = Color.Transparent,
+    iconTint: Color,
     onClick: () -> Unit,
     subtitle: String? = null,
     titleColor: Color? = null,
     trailing: (@Composable () -> Unit)? = null,
-    icon: (@Composable () -> Unit)? = null
+    icon: @Composable () -> Unit
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
-    val bgAlpha by animateFloatAsState(if (isPressed) 0.08f else 0.0f)
-    val scale by animateFloatAsState(
-        targetValue = if (isPressed) 0.985f else 1f,
-        animationSpec = spring(dampingRatio = 0.8f, stiffness = 420f),
-        label = "clickRowScale"
-    )
+    val bgAlpha by animateFloatAsState(if (isPressed) 0.15f else 0.0f)
 
     Row(
         Modifier
-            .graphicsLayer {
-                scaleX = scale
-                scaleY = scale
-            }
             .background(colors.label.copy(alpha = bgAlpha))
             .clickable(
                 interactionSource = interactionSource,
@@ -175,17 +150,15 @@ fun SettingsClickableRow(
                 onClick = onClick
             )
             .fillMaxWidth()
-            .padding(horizontal = 18.dp, vertical = if (subtitle != null) 15.dp else 16.dp),
+            .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(14.dp)
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        if (icon != null) {
-            IconChip(iconTint) { icon() }
-        }
+        IconChip(iconTint) { icon() }
         Column(Modifier.weight(1f)) {
-            BasicText(title, style = HyperBounceType.body.copy(color = titleColor ?: colors.label, fontWeight = FontWeight.Medium))
+            BasicText(title, style = HyperBounceType.body.copy(color = titleColor ?: colors.label))
             if (subtitle != null) {
-                BasicText(subtitle, modifier = Modifier.padding(top = 2.dp), style = HyperBounceType.footnote.copy(color = colors.secondaryLabel))
+                BasicText(subtitle, style = HyperBounceType.footnote.copy(color = colors.secondaryLabel))
             }
         }
         if (trailing != null) {
@@ -194,35 +167,33 @@ fun SettingsClickableRow(
     }
 }
 
-/** A row with an optional leading icon, title/subtitle, and a trailing [LiquidToggle]. */
+/** A row with a leading icon, title/subtitle, and a trailing [LiquidToggle]. */
 @Composable
 fun SettingsToggleRow(
     title: String,
     colors: HyperBounceColors,
-    iconTint: Color = Color.Transparent,
+    iconTint: Color,
     backdrop: Backdrop,
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
     subtitle: String? = null,
     enabled: Boolean = true,
-    icon: (@Composable () -> Unit)? = null
+    icon: @Composable () -> Unit
 ) {
     val displayAlpha = if (enabled) 1f else 0.35f
     Row(
         Modifier
             .fillMaxWidth()
-            .padding(horizontal = 18.dp, vertical = if (subtitle != null) 13.dp else 14.dp)
+            .padding(horizontal = 16.dp, vertical = 10.dp)
             .graphicsLayer { alpha = displayAlpha },
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(14.dp)
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        if (icon != null) {
-            IconChip(iconTint) { icon() }
-        }
+        IconChip(iconTint) { icon() }
         Column(Modifier.weight(1f)) {
-            BasicText(title, style = HyperBounceType.body.copy(color = colors.label, fontWeight = FontWeight.Medium))
+            BasicText(title, style = HyperBounceType.body.copy(color = colors.label))
             if (subtitle != null) {
-                BasicText(subtitle, modifier = Modifier.padding(top = 2.dp), style = HyperBounceType.footnote.copy(color = colors.secondaryLabel))
+                BasicText(subtitle, style = HyperBounceType.footnote.copy(color = colors.secondaryLabel))
             }
         }
         val isDark = androidx.compose.foundation.isSystemInDarkTheme()
@@ -260,7 +231,7 @@ fun SettingsSliderRow(
     Column(
         Modifier
             .fillMaxWidth()
-            .padding(horizontal = 18.dp, vertical = 14.dp)
+            .padding(horizontal = 16.dp, vertical = 12.dp)
     ) {
         Row(
             Modifier.fillMaxWidth(),

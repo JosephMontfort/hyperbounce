@@ -61,9 +61,11 @@ fun ScreenUnlockScreen(
                     title = "Enable Unlock Kinetics",
                     subtitle = "Custom spring physics on MIUI Launcher when unlocking",
                     colors = colors,
+                    iconTint = colors.accentPurple,
                     backdrop = backdrop,
                     checked = unlock.enabled,
-                    onCheckedChange = unlock::setEnabled
+                    onCheckedChange = unlock::setEnabled,
+                    icon = { LockIcon(color = Color.White, size = 15.dp) }
                 )
             }
         }
@@ -140,14 +142,18 @@ fun ScreenUnlockScreen(
                         title = "Radial Spring Kinetics",
                         subtitle = "Center damping, edge delay & 3D perspective",
                         colors = colors,
-                        onClick = { onNavigate(Destination.ScreenUnlockRadialKinetics) }
+                        iconTint = colors.accentBlue,
+                        onClick = { onNavigate(Destination.ScreenUnlockRadialKinetics) },
+                        icon = { SlidersIcon(color = Color.White, size = 15.dp) }
                     )
                     RowDivider(colors.separator)
                     SettingsNavRow(
                         title = "Radial Dock Settling",
                         subtitle = "Dock icons bounce & arrival settling",
                         colors = colors,
-                        onClick = { onNavigate(Destination.ScreenUnlockRadialDock) }
+                        iconTint = colors.accentPurple,
+                        onClick = { onNavigate(Destination.ScreenUnlockRadialDock) },
+                        icon = { SlidersIcon(color = Color.White, size = 15.dp) }
                     )
                 }
                 SectionFooter(
@@ -163,35 +169,45 @@ fun ScreenUnlockScreen(
                         title = "Global Kinetics & Velocity",
                         subtitle = "Duration scale, velocity influence & resting damping",
                         colors = colors,
-                        onClick = { onNavigate(Destination.ScreenUnlockCascadeGlobals) }
+                        iconTint = colors.accentBlue,
+                        onClick = { onNavigate(Destination.ScreenUnlockCascadeGlobals) },
+                        icon = { SlidersIcon(color = Color.White, size = 15.dp) }
                     )
                     RowDivider(colors.separator)
                     SettingsNavRow(
                         title = "Kinetic Dock Isolation",
                         subtitle = "Dock damping, arrival response & 3D depth",
                         colors = colors,
-                        onClick = { onNavigate(Destination.ScreenUnlockCascadeDock) }
+                        iconTint = colors.accentPurple,
+                        onClick = { onNavigate(Destination.ScreenUnlockCascadeDock) },
+                        icon = { SlidersIcon(color = Color.White, size = 15.dp) }
                     )
                     RowDivider(colors.separator)
                     SettingsNavRow(
                         title = "Row 3D Perspective (Z-Depth)",
                         subtitle = "Row-by-row Z-axis camera elevation",
                         colors = colors,
-                        onClick = { onNavigate(Destination.ScreenUnlockCascadeZDepth) }
+                        iconTint = colors.accentOrange,
+                        onClick = { onNavigate(Destination.ScreenUnlockCascadeZDepth) },
+                        icon = { SlidersIcon(color = Color.White, size = 15.dp) }
                     )
                     RowDivider(colors.separator)
                     SettingsNavRow(
                         title = "Row Velocity Bounce",
                         subtitle = "Center vs outer dynamic overshoot ratios",
                         colors = colors,
-                        onClick = { onNavigate(Destination.ScreenUnlockCascadeBounce) }
+                        iconTint = colors.accentGreen,
+                        onClick = { onNavigate(Destination.ScreenUnlockCascadeBounce) },
+                        icon = { SlidersIcon(color = Color.White, size = 15.dp) }
                     )
                     RowDivider(colors.separator)
                     SettingsNavRow(
                         title = "Row Settling Dynamics",
                         subtitle = "Center vs outer dynamic deceleration timing",
                         colors = colors,
-                        onClick = { onNavigate(Destination.ScreenUnlockCascadeSettle) }
+                        iconTint = colors.accentBlue,
+                        onClick = { onNavigate(Destination.ScreenUnlockCascadeSettle) },
+                        icon = { SlidersIcon(color = Color.White, size = 15.dp) }
                     )
                 }
                 SectionFooter(

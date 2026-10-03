@@ -45,9 +45,11 @@ fun LockScreenSheetScreen(
                     title = "Lock Screen Liquid Glass Sheet",
                     subtitle = if (sheet.enabled) "Liquid Glass 2.0 lens refraction & dispersion active" else "Disabled (Stock)",
                     colors = colors,
+                    iconTint = colors.accentBlue,
                     backdrop = backdrop,
                     checked = sheet.enabled,
-                    onCheckedChange = sheet::setEnabled
+                    onCheckedChange = sheet::setEnabled,
+                    icon = { LockIcon(color = Color.White, size = 15.dp) }
                 )
             }
         }

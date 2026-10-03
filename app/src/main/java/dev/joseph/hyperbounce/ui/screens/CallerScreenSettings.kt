@@ -50,9 +50,11 @@ fun CallerScreenSettings(
                     title = "Enable iOS Caller Screen",
                     subtitle = "Dual sliders for full-screen incoming calls",
                     colors = colors,
+                    iconTint = colors.accentGreen,
                     backdrop = backdrop,
                     checked = caller.enabled,
-                    onCheckedChange = caller::setEnabled
+                    onCheckedChange = caller::setEnabled,
+                    icon = { PhoneIcon(color = Color.White, size = 15.dp) }
                 )
             }
         }
@@ -72,7 +74,7 @@ fun CallerScreenSettings(
                     valueLabel = { "${it.roundToInt()}dp" },
                     enabled = caller.enabled
                 )
-                RowDivider(colors.separator)
+                RowDivider(colors.separator, insetStart = 16.dp)
                 SettingsSliderRow(
                     title = "Vertical Position Offset",
                     subtitle = "Upward height offset from the bottom of the screen",
@@ -95,9 +97,11 @@ fun CallerScreenSettings(
                     title = "Swipe Gestures in Dialer",
                     subtitle = "Swipe right to call, swipe left to delete, call history",
                     colors = colors,
+                    iconTint = colors.accentGreen,
                     backdrop = backdrop,
                     checked = dialer.enabled,
-                    onCheckedChange = dialer::setEnabled
+                    onCheckedChange = dialer::setEnabled,
+                    icon = { PhoneIcon(color = Color.White, size = 15.dp) }
                 )
             }
         }
