@@ -27,6 +27,11 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -79,6 +84,16 @@ fun ColorPickerDialog(
         hexInput = String.format("%06X", 0xFFFFFF and colorInt)
     }
 
+    val isDark = isSystemInDarkTheme()
+    val cardBg = if (isDark) Color(0xFF1E1E20) else Color(0xFFFFFFFF)
+    val cancelBtnBg = if (isDark) Color(0xFF2C2C2E) else Color(0xFFE5E5EA)
+
+    val animProgress by animateFloatAsState(
+        targetValue = 1f,
+        animationSpec = spring(dampingRatio = 0.85f, stiffness = 380f),
+        label = "colorPickerDialogAnim"
+    )
+
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)
@@ -86,7 +101,7 @@ fun ColorPickerDialog(
         Box(
             Modifier
                 .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.6f))
+                .background(Color.Black.copy(alpha = 0.45f * animProgress))
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,
@@ -94,22 +109,26 @@ fun ColorPickerDialog(
                 ),
             contentAlignment = Alignment.Center
         ) {
-            GlassCard(
-                backdrop = backdrop,
+            Box(
                 modifier = Modifier
-                    .padding(24.dp)
-                    .widthIn(max = 340.dp)
-                    .fillMaxWidth()
+                    .fillMaxWidth(0.88f)
+                    .widthIn(max = 360.dp)
+                    .graphicsLayer {
+                        alpha = animProgress
+                        scaleX = 0.85f + 0.15f * animProgress
+                        scaleY = 0.85f + 0.15f * animProgress
+                    }
+                    .clip(RoundedCornerShape(32.dp))
+                    .background(cardBg)
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
                         onClick = {}
                     )
+                    .padding(24.dp)
             ) {
                 Column(
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(20.dp),
+                    Modifier.fillMaxWidth(),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
@@ -332,26 +351,36 @@ fun ColorPickerDialog(
 
                     // Action buttons
                     Row(
-                        Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(top = 4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
                         Box(
                             Modifier
                                 .weight(1f)
-                                .height(44.dp)
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(Color.White.copy(alpha = 0.1f))
+                                .height(50.dp)
+                                .clip(CircleShape)
+                                .background(cancelBtnBg)
                                 .clickable(onClick = onDismiss),
                             contentAlignment = Alignment.Center
                         ) {
-                            BasicText("Cancel", style = HyperBounceType.body.copy(color = colors.secondaryLabel))
+                            BasicText(
+                                "Cancel",
+                                style = TextStyle(
+                                    color = colors.label,
+                                    fontSize = 15.5.sp,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            )
                         }
 
                         Box(
                             Modifier
                                 .weight(1f)
-                                .height(44.dp)
-                                .clip(RoundedCornerShape(12.dp))
+                                .height(50.dp)
+                                .clip(CircleShape)
                                 .background(currentColor)
                                 .clickable {
                                     val finalArgb = (0xFF000000L or (currentColorInt.toLong() and 0xFFFFFFFFL))
@@ -363,8 +392,9 @@ fun ColorPickerDialog(
                             val textColor = if (value > 0.5f && saturation < 0.5f) Color.Black else Color.White
                             BasicText(
                                 "Apply",
-                                style = HyperBounceType.body.copy(
+                                style = TextStyle(
                                     color = textColor,
+                                    fontSize = 15.5.sp,
                                     fontWeight = FontWeight.SemiBold
                                 )
                             )

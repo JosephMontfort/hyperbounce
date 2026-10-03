@@ -63,6 +63,18 @@ sealed class GlassDialogRequest {
         val onCancel: (() -> Unit)? = null
     ) : GlassDialogRequest()
 
+    class TextInput(
+        val title: String,
+        val message: String? = null,
+        val initialValue: String = "",
+        val placeholder: String = "",
+        val confirmText: String = "Save",
+        val cancelText: String = "Cancel",
+        val confirmColor: Color? = null,
+        val onConfirm: (String) -> Unit,
+        val onCancel: (() -> Unit)? = null
+    ) : GlassDialogRequest()
+
     class Custom(
         val title: String,
         val content: @Composable (dismiss: () -> Unit) -> Unit
@@ -108,6 +120,30 @@ class GlassDialogHostState {
         activeRequest = GlassDialogRequest.Confirmation(
             title = title,
             message = message,
+            confirmText = confirmText,
+            cancelText = cancelText,
+            confirmColor = confirmColor,
+            onConfirm = onConfirm,
+            onCancel = onCancel
+        )
+    }
+
+    fun showTextInput(
+        title: String,
+        message: String? = null,
+        initialValue: String = "",
+        placeholder: String = "",
+        confirmText: String = "Save",
+        cancelText: String = "Cancel",
+        confirmColor: Color? = null,
+        onConfirm: (String) -> Unit,
+        onCancel: (() -> Unit)? = null
+    ) {
+        activeRequest = GlassDialogRequest.TextInput(
+            title = title,
+            message = message,
+            initialValue = initialValue,
+            placeholder = placeholder,
             confirmText = confirmText,
             cancelText = cancelText,
             confirmColor = confirmColor,
@@ -199,6 +235,8 @@ fun GlassDialogHost(
 
                 fun requestClose() {
                     if (req is GlassDialogRequest.Confirmation) {
+                        req.onCancel?.invoke()
+                    } else if (req is GlassDialogRequest.TextInput) {
                         req.onCancel?.invoke()
                     }
                     hostState.dismiss()
@@ -411,6 +449,112 @@ fun GlassDialogHost(
                                                 text = req.confirmText,
                                                 style = TextStyle(
                                                     color = Color.White,
+                                                    fontSize = 15.5.sp,
+                                                    fontWeight = FontWeight.SemiBold
+                                                )
+                                            )
+                                        }
+                                    }
+                                }
+                            is GlassDialogRequest.TextInput -> {
+                                var textValue by remember(req) { mutableStateOf(req.initialValue) }
+
+                                fun requestApply() {
+                                    val trimmed = textValue.trim()
+                                    if (trimmed.isNotBlank()) {
+                                        req.onConfirm(trimmed)
+                                    }
+                                    hostState.dismiss()
+                                }
+
+                                Column(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                                ) {
+                                    BasicText(
+                                        text = req.title,
+                                        style = HyperBounceType.headline.copy(
+                                            color = colors.label,
+                                            fontSize = 20.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    )
+
+                                    if (!req.message.isNullOrBlank()) {
+                                        BasicText(
+                                            text = req.message,
+                                            style = HyperBounceType.footnote.copy(
+                                                color = colors.secondaryLabel,
+                                                fontSize = 14.5.sp,
+                                                lineHeight = 21.sp
+                                            )
+                                        )
+                                    }
+
+                                    // Input box
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clip(RoundedCornerShape(14.dp))
+                                            .background(inputBg)
+                                            .padding(horizontal = 16.dp, vertical = 14.dp)
+                                    ) {
+                                        BasicTextField(
+                                            value = textValue,
+                                            onValueChange = { textValue = it },
+                                            textStyle = HyperBounceType.body.copy(
+                                                color = colors.label,
+                                                fontSize = 16.sp,
+                                                fontWeight = FontWeight.SemiBold
+                                            ),
+                                            singleLine = true,
+                                            cursorBrush = SolidColor(accentColor),
+                                            modifier = Modifier.fillMaxWidth()
+                                        )
+                                    }
+
+                                    // Non-stretchable capsule buttons matching Confirmation dialog
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(top = 8.dp),
+                                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .height(50.dp)
+                                                .clip(CircleShape)
+                                                .background(cancelBtnBg)
+                                                .clickable { requestClose() },
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            BasicText(
+                                                text = req.cancelText,
+                                                style = TextStyle(
+                                                    color = colors.label,
+                                                    fontSize = 15.5.sp,
+                                                    fontWeight = FontWeight.Medium
+                                                )
+                                            )
+                                        }
+
+                                        val btnConfirmColor = req.confirmColor ?: accentColor
+                                        val isEnabled = textValue.trim().isNotBlank()
+                                        Box(
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .height(50.dp)
+                                                .clip(CircleShape)
+                                                .background(if (isEnabled) btnConfirmColor else btnConfirmColor.copy(alpha = 0.4f))
+                                                .clickable(enabled = isEnabled) { requestApply() },
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            BasicText(
+                                                text = req.confirmText,
+                                                style = TextStyle(
+                                                    color = if (isEnabled) Color.White else Color.White.copy(alpha = 0.5f),
                                                     fontSize = 15.5.sp,
                                                     fontWeight = FontWeight.SemiBold
                                                 )

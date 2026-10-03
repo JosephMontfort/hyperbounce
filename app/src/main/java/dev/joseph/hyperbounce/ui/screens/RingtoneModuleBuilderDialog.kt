@@ -11,6 +11,8 @@ import android.provider.Settings
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
@@ -18,7 +20,9 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -50,7 +54,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -59,12 +66,10 @@ import com.kyant.backdrop.Backdrop
 import dev.joseph.hyperbounce.haptics.ringtone.HapticPresetStorage
 import dev.joseph.hyperbounce.haptics.ringtone.RingtoneModuleBuilder
 import dev.joseph.hyperbounce.haptics.ringtone.SavedHapticPreset
-import androidx.compose.ui.graphics.graphicsLayer
 import dev.joseph.hyperbounce.ui.components.CheckmarkIcon
 import dev.joseph.hyperbounce.ui.components.GlassCard
 import dev.joseph.hyperbounce.ui.components.PencilIcon
 import dev.joseph.hyperbounce.ui.components.RowDivider
-import dev.joseph.hyperbounce.ui.glass.LiquidButton
 import dev.joseph.hyperbounce.ui.theme.HyperBounceColors
 import dev.joseph.hyperbounce.ui.theme.HyperBounceType
 import kotlinx.coroutines.launch
@@ -86,7 +91,32 @@ fun RingtoneModuleBuilderDialog(
     initialSelectedPresetId: String? = null,
     onDismiss: () -> Unit
 ) {
-    if (!isOpen) return
+    var isClosing by remember { mutableStateOf(false) }
+    var displayedOpen by remember { mutableStateOf(false) }
+
+    LaunchedEffect(isOpen) {
+        if (isOpen) {
+            displayedOpen = true
+            isClosing = false
+        } else if (displayedOpen) {
+            isClosing = true
+        }
+    }
+
+    val isVisible = displayedOpen && !isClosing
+    val animProgress by animateFloatAsState(
+        targetValue = if (isVisible) 1f else 0f,
+        animationSpec = spring(dampingRatio = 0.85f, stiffness = 380f),
+        label = "moduleDialogAnimProgress",
+        finishedListener = { p ->
+            if (p == 0f && isClosing) {
+                displayedOpen = false
+                isClosing = false
+            }
+        }
+    )
+
+    if (!displayedOpen && animProgress <= 0.001f) return
 
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -125,31 +155,37 @@ fun RingtoneModuleBuilderDialog(
         }
     }
 
+    val isDark = isSystemInDarkTheme()
+    val cardBg = if (isDark) Color(0xFF1E1E20) else Color(0xFFFFFFFF)
+
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.72f))
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null
-            ) {
-                if (!isBuilding) onDismiss()
+            .background(Color.Black.copy(alpha = 0.45f * animProgress))
+            .pointerInput(Unit) {
+                detectTapGestures {
+                    if (!isBuilding) onDismiss()
+                }
             },
         contentAlignment = Alignment.Center
     ) {
-        GlassCard(
-            backdrop = backdrop,
+        Box(
             modifier = Modifier
-                .fillMaxWidth(0.94f)
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null
-                ) {}
+                .fillMaxWidth(0.92f)
+                .graphicsLayer {
+                    alpha = animProgress
+                    scaleX = 0.85f + 0.15f * animProgress
+                    scaleY = 0.85f + 0.15f * animProgress
+                }
+                .clip(RoundedCornerShape(32.dp))
+                .background(cardBg)
+                .pointerInput(Unit) {
+                    detectTapGestures { /* consume taps inside */ }
+                }
+                .padding(22.dp)
         ) {
             Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(20.dp)
+                modifier = Modifier.fillMaxWidth()
             ) {
                 Crossfade(targetState = step, label = "ModuleStepCrossfade") { currentStep ->
                     when (currentStep) {
@@ -321,16 +357,20 @@ private fun StepSelectionContent(
             }
 
             Spacer(Modifier.height(14.dp))
-            LiquidButton(
-                onClick = onCancel,
-                backdrop = backdrop,
-                tint = colors.accentBlue,
-                modifier = Modifier.fillMaxWidth()
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(50.dp)
+                    .clip(CircleShape)
+                    .background(colors.accentBlue)
+                    .clickable(onClick = onCancel),
+                contentAlignment = Alignment.Center
             ) {
                 BasicText(
                     text = "Close",
-                    style = HyperBounceType.body.copy(
+                    style = TextStyle(
                         color = Color.White,
+                        fontSize = 15.5.sp,
                         fontWeight = FontWeight.SemiBold
                     )
                 )
@@ -499,38 +539,52 @@ private fun StepSelectionContent(
             RowDivider(colors.separator)
             Spacer(Modifier.height(12.dp))
 
+            val isDark = isSystemInDarkTheme()
+            val cancelBtnBg = if (isDark) Color(0xFF2C2C2E) else Color(0xFFE5E5EA)
+
             // Action Buttons
             Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                LiquidButton(
-                    onClick = onCancel,
-                    backdrop = backdrop,
-                    tint = colors.separator.copy(alpha = 0.5f),
-                    modifier = Modifier.weight(1f)
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(50.dp)
+                        .clip(CircleShape)
+                        .background(cancelBtnBg)
+                        .clickable(onClick = onCancel),
+                    contentAlignment = Alignment.Center
                 ) {
                     BasicText(
                         text = "Cancel",
-                        style = HyperBounceType.body.copy(
+                        style = TextStyle(
                             color = colors.label,
+                            fontSize = 15.5.sp,
                             fontWeight = FontWeight.Medium
                         )
                     )
                 }
 
                 val hasSelection = selectedIds.isNotEmpty()
-                LiquidButton(
-                    onClick = { if (hasSelection) onNext() },
-                    backdrop = backdrop,
-                    tint = if (hasSelection) colors.accentBlue else colors.separator.copy(alpha = 0.3f),
-                    modifier = Modifier.weight(1.3f)
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(50.dp)
+                        .clip(CircleShape)
+                        .background(if (hasSelection) colors.accentBlue else colors.accentBlue.copy(alpha = 0.4f))
+                        .clickable(enabled = hasSelection) { onNext() },
+                    contentAlignment = Alignment.Center
                 ) {
                     BasicText(
                         text = "Review Pack (${selectedIds.size})",
-                        style = HyperBounceType.body.copy(
-                            color = if (hasSelection) Color.White else colors.secondaryLabel,
-                            fontWeight = FontWeight.Bold
+                        style = TextStyle(
+                            color = if (hasSelection) Color.White else Color.White.copy(alpha = 0.5f),
+                            fontSize = 15.5.sp,
+                            fontWeight = FontWeight.SemiBold
                         )
                     )
                 }
@@ -641,16 +695,18 @@ private fun StepConfirmationContent(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                             modifier = Modifier.graphicsLayer { clip = false }
                         ) {
-                            LiquidButton(
-                                onClick = {
-                                    editingItem = item
-                                    editTitleInput = item.title
-                                },
-                                backdrop = backdrop,
-                                tint = colors.accentBlue,
-                                size = 32.dp
+                            Box(
+                                modifier = Modifier
+                                    .size(34.dp)
+                                    .clip(CircleShape)
+                                    .background(colors.accentBlue)
+                                    .clickable {
+                                        editingItem = item
+                                        editTitleInput = item.title
+                                    },
+                                contentAlignment = Alignment.Center
                             ) {
-                                PencilIcon(color = Color.White, size = 14.dp)
+                                PencilIcon(color = Color.White, size = 15.dp)
                             }
                         }
                     }
@@ -785,37 +841,51 @@ private fun StepConfirmationContent(
         RowDivider(colors.separator)
         Spacer(Modifier.height(12.dp))
 
+        val isDark = isSystemInDarkTheme()
+        val cancelBtnBg = if (isDark) Color(0xFF2C2C2E) else Color(0xFFE5E5EA)
+
         // Action Buttons
         Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            LiquidButton(
-                onClick = onBack,
-                backdrop = backdrop,
-                tint = colors.separator.copy(alpha = 0.5f),
-                modifier = Modifier.weight(1f)
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .height(50.dp)
+                    .clip(CircleShape)
+                    .background(cancelBtnBg)
+                    .clickable(onClick = onBack),
+                contentAlignment = Alignment.Center
             ) {
                 BasicText(
                     text = "Back",
-                    style = HyperBounceType.body.copy(
+                    style = TextStyle(
                         color = colors.label,
+                        fontSize = 15.5.sp,
                         fontWeight = FontWeight.Medium
                     )
                 )
             }
 
-            LiquidButton(
-                onClick = { if (!isBuilding) onConfirm() },
-                backdrop = backdrop,
-                tint = colors.accentPink,
-                modifier = Modifier.weight(1.4f)
+            Box(
+                modifier = Modifier
+                    .weight(1.2f)
+                    .height(50.dp)
+                    .clip(CircleShape)
+                    .background(if (isBuilding) colors.accentPink.copy(alpha = 0.6f) else colors.accentPink)
+                    .clickable(enabled = !isBuilding) { onConfirm() },
+                contentAlignment = Alignment.Center
             ) {
                 BasicText(
                     text = if (isBuilding) "Generating Pack..." else "Confirm & Build (${items.size})",
-                    style = HyperBounceType.body.copy(
+                    style = TextStyle(
                         color = Color.White,
-                        fontWeight = FontWeight.Bold
+                        fontSize = 15.5.sp,
+                        fontWeight = FontWeight.SemiBold
                     )
                 )
             }
@@ -829,33 +899,33 @@ private fun StepConfirmationContent(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.75f))
+                .background(Color.Black.copy(alpha = 0.5f))
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null
                 ) { editingItem = null },
             contentAlignment = Alignment.Center
         ) {
-            GlassCard(
-                backdrop = backdrop,
+            Box(
                 modifier = Modifier
-                    .fillMaxWidth(0.92f)
+                    .fillMaxWidth(0.90f)
+                    .clip(RoundedCornerShape(32.dp))
+                    .background(cardBg)
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null
                     ) {}
+                    .padding(22.dp)
             ) {
                 Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(18.dp)
+                    modifier = Modifier.fillMaxWidth()
                 ) {
                     BasicText(
                         text = "Rename Ringtone",
                         style = HyperBounceType.headline.copy(
                             color = colors.label,
                             fontWeight = FontWeight.Bold,
-                            fontSize = 17.sp
+                            fontSize = 18.sp
                         )
                     )
                     Spacer(Modifier.height(4.dp))
@@ -869,13 +939,13 @@ private fun StepConfirmationContent(
 
                     Spacer(Modifier.height(14.dp))
 
+                    val inputBg = if (isDark) Color(0xFF2C2C2E) else Color(0xFFE5E5EA)
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(colors.separator.copy(alpha = 0.12f))
-                            .border(1.dp, colors.accentBlue.copy(alpha = 0.45f), RoundedCornerShape(10.dp))
-                            .padding(horizontal = 14.dp, vertical = 12.dp)
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(inputBg)
+                            .padding(horizontal = 16.dp, vertical = 14.dp)
                     ) {
                         BasicTextField(
                             value = editTitleInput,
@@ -884,14 +954,14 @@ private fun StepConfirmationContent(
                             textStyle = HyperBounceType.body.copy(
                                 color = colors.label,
                                 fontWeight = FontWeight.SemiBold,
-                                fontSize = 14.sp
+                                fontSize = 15.sp
                             ),
                             cursorBrush = SolidColor(colors.accentBlue),
                             modifier = Modifier.fillMaxWidth()
                         )
                     }
 
-                    Spacer(Modifier.height(6.dp))
+                    Spacer(Modifier.height(8.dp))
                     BasicText(
                         text = "Target audio file: $cleanPreview.ogg",
                         style = HyperBounceType.caption.copy(
@@ -905,40 +975,47 @@ private fun StepConfirmationContent(
 
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        LiquidButton(
-                            onClick = { editingItem = null },
-                            backdrop = backdrop,
-                            tint = colors.separator.copy(alpha = 0.5f),
-                            modifier = Modifier.weight(1f)
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(50.dp)
+                                .clip(CircleShape)
+                                .background(cancelBtnBg)
+                                .clickable { editingItem = null },
+                            contentAlignment = Alignment.Center
                         ) {
                             BasicText(
                                 text = "Cancel",
-                                style = HyperBounceType.body.copy(
+                                style = TextStyle(
                                     color = colors.label,
+                                    fontSize = 15.5.sp,
                                     fontWeight = FontWeight.Medium
                                 )
                             )
                         }
 
                         val canSave = editTitleInput.isNotBlank()
-                        LiquidButton(
-                            onClick = {
-                                if (canSave) {
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(50.dp)
+                                .clip(CircleShape)
+                                .background(if (canSave) colors.accentBlue else colors.accentBlue.copy(alpha = 0.4f))
+                                .clickable(enabled = canSave) {
                                     onRenameItem(targetItem.presetId, editTitleInput.trim())
                                     editingItem = null
-                                }
-                            },
-                            backdrop = backdrop,
-                            tint = if (canSave) colors.accentBlue else colors.separator.copy(alpha = 0.3f),
-                            modifier = Modifier.weight(1f)
+                                },
+                            contentAlignment = Alignment.Center
                         ) {
                             BasicText(
                                 text = "Done",
-                                style = HyperBounceType.body.copy(
-                                    color = if (canSave) Color.White else colors.secondaryLabel,
-                                    fontWeight = FontWeight.Bold
+                                style = TextStyle(
+                                    color = if (canSave) Color.White else Color.White.copy(alpha = 0.5f),
+                                    fontSize = 15.5.sp,
+                                    fontWeight = FontWeight.SemiBold
                                 )
                             )
                         }
@@ -1128,17 +1205,21 @@ private fun StepSuccessContent(
         }
 
         Spacer(Modifier.height(16.dp))
-        LiquidButton(
-            onClick = onDone,
-            backdrop = backdrop,
-            tint = colors.accentGreen,
-            modifier = Modifier.fillMaxWidth()
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(50.dp)
+                .clip(CircleShape)
+                .background(colors.accentGreen)
+                .clickable(onClick = onDone),
+            contentAlignment = Alignment.Center
         ) {
             BasicText(
                 text = "Done",
-                style = HyperBounceType.body.copy(
+                style = TextStyle(
                     color = Color.White,
-                    fontWeight = FontWeight.Bold
+                    fontSize = 15.5.sp,
+                    fontWeight = FontWeight.SemiBold
                 )
             )
         }

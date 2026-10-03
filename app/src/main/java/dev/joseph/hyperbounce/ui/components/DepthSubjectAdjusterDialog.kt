@@ -17,6 +17,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -35,15 +37,16 @@ import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.kyant.backdrop.Backdrop
 import com.kyant.shapes.Capsule
 import dev.joseph.hyperbounce.lockscreen.glass.LockScreenWallpaperHelper
 import dev.joseph.hyperbounce.notification.glass.CustomWallpaperHelper
-import dev.joseph.hyperbounce.ui.glass.LiquidButton
 import dev.joseph.hyperbounce.ui.glass.LiquidToggle
 import dev.joseph.hyperbounce.ui.theme.HyperBounceColors
 import dev.joseph.hyperbounce.ui.theme.HyperBounceType
@@ -304,40 +307,49 @@ fun DepthSubjectAdjusterDialog(
                         }
                     }
 
-                    // Bottom Action Overlay with LiquidButton
+                    // Bottom Action Overlay with non-stretchable capsule buttons
                     Row(
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
                             .navigationBarsPadding()
                             .padding(horizontal = 24.dp, vertical = 24.dp)
                             .fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(16.dp)
+                        horizontalArrangement = Arrangement.spacedBy(14.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        LiquidButton(
-                            onClick = onDismiss,
-                            backdrop = backdrop,
-                            surfaceColor = Color.White.copy(alpha = 0.15f),
-                            modifier = Modifier.weight(1f)
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(50.dp)
+                                .clip(CircleShape)
+                                .background(Color.White.copy(alpha = 0.18f))
+                                .clickable(onClick = onDismiss),
+                            contentAlignment = Alignment.Center
                         ) {
                             BasicText(
                                 "Cancel",
-                                style = HyperBounceType.body.copy(
+                                style = TextStyle(
                                     color = Color.White,
-                                    fontWeight = FontWeight.Normal
+                                    fontSize = 15.5.sp,
+                                    fontWeight = FontWeight.Medium
                                 )
                             )
                         }
 
-                        LiquidButton(
-                            onClick = { onConfirmAction?.invoke() },
-                            backdrop = backdrop,
-                            tint = colors.accentBlue,
-                            modifier = Modifier.weight(1f)
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(50.dp)
+                                .clip(CircleShape)
+                                .background(colors.accentBlue)
+                                .clickable { onConfirmAction?.invoke() },
+                            contentAlignment = Alignment.Center
                         ) {
                             BasicText(
                                 "Set Subject",
-                                style = HyperBounceType.body.copy(
+                                style = TextStyle(
                                     color = Color.White,
+                                    fontSize = 15.5.sp,
                                     fontWeight = FontWeight.SemiBold
                                 )
                             )
