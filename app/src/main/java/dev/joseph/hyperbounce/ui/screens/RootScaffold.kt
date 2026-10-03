@@ -336,7 +336,7 @@ fun RootScaffold(
                         enabled = true
                     )
                     MenuRow(
-                        title = "Restart Launcher",
+                        title = "Restart System Launcher",
                         contentColor = menuContentColor,
                         secondaryColor = menuSecondaryColor,
                         isHovered = hoveredIndex == 1,
@@ -346,7 +346,7 @@ fun RootScaffold(
                             setHovered(null)
                             showDialog(
                                 dev.joseph.hyperbounce.ui.glass.MenuDialogData(
-                                    title = "Restart Launcher?",
+                                    title = "Restart System Launcher?",
                                     message = "This will terminate and restart com.miui.home.",
                                     confirmText = "Restart",
                                     confirmColor = colors.accentPurple,

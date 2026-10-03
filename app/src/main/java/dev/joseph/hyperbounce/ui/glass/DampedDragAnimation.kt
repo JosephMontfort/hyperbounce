@@ -117,8 +117,7 @@ class DampedDragAnimation(
     fun updateValue(value: Float) {
         val targetValue = value.coerceIn(valueRange)
         animationScope.launch {
-            valueAnimation.snapTo(targetValue)
-            updateVelocity()
+            launch { valueAnimation.animateTo(targetValue, valueAnimationSpec) { updateVelocity() } }
         }
     }
 

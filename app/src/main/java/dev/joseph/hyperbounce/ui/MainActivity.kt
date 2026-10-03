@@ -165,16 +165,17 @@ private fun HyperiOSApp(repository: SettingsRepository) {
                 val screenWidth = constraints.maxWidth.toFloat()
                 val dragOffset = remember { Animatable(0f) }
                 var isPopping by remember { mutableStateOf(false) }
+                var activeAnimationJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
 
                 val push: (Destination) -> Unit = { destination ->
-                    // If a pop is currently in progress, cancel and finalize removing the exiting screen
+                    activeAnimationJob?.cancel()
                     if (isPopping || dragOffset.value > 0f) {
                         isPopping = false
                         if (backStack.isNotEmpty()) {
                             backStack.removeAt(backStack.lastIndex)
                         }
                     }
-                    coroutineScope.launch {
+                    activeAnimationJob = coroutineScope.launch {
                         dragOffset.snapTo(screenWidth)
                         backStack.add(destination)
                         dragOffset.animateTo(0f, spring(dampingRatio = 0.88f, stiffness = 380f))
@@ -184,7 +185,7 @@ private fun HyperiOSApp(repository: SettingsRepository) {
                 val pop: () -> Unit = {
                     if (backStack.isNotEmpty() && !isPopping) {
                         isPopping = true
-                        coroutineScope.launch {
+                        activeAnimationJob = coroutineScope.launch {
                             try {
                                 dragOffset.animateTo(screenWidth, spring(dampingRatio = 0.88f, stiffness = 420f))
                                 if (backStack.isNotEmpty()) {
@@ -209,8 +210,23 @@ private fun HyperiOSApp(repository: SettingsRepository) {
                         HyperBounceBackground(colors, Modifier.fillMaxSize())
                     }
 
-                    if (backStack.isEmpty()) {
-                        // Root Pager
+                    // 0. The Root Pager - ALWAYS MOUNTED at this stable composition slot!
+                    // By remaining mounted permanently, its scroll state, pager state, and layout
+                    // positions are 100% preserved during navigation and interactive back gestures.
+                    Box(
+                        Modifier
+                            .fillMaxSize()
+                            .graphicsLayer {
+                                if (backStack.isEmpty()) {
+                                    translationX = 0f
+                                } else if (backStack.size == 1) {
+                                    val progress = (dragOffset.value / screenWidth.coerceAtLeast(1f)).coerceIn(0f, 1f)
+                                    translationX = -screenWidth * 0.22f * (1f - progress)
+                                } else {
+                                    translationX = -screenWidth * 0.22f
+                                }
+                            }
+                    ) {
                         ScreenLayer(
                             destination = null,
                             repository = repository,
@@ -220,30 +236,35 @@ private fun HyperiOSApp(repository: SettingsRepository) {
                             onBack = pop,
                             onNavigate = push
                         )
-                    } else {
-                        // Interactive swipe-back container (Keimi architecture)
+                    }
+
+                    // Interactive subpage layer container (when drilled into 1 or more subpages)
+                    if (backStack.isNotEmpty()) {
                         val parentDest = if (backStack.size > 1) backStack[backStack.size - 2] else null
                         val currentDest = backStack.last()
 
                         Box(Modifier.fillMaxSize()) {
-                            // 1. Parent layer underneath with parallax
-                            Box(
-                                Modifier
-                                    .fillMaxSize()
-                                    .graphicsLayer {
-                                        val progress = (dragOffset.value / screenWidth.coerceAtLeast(1f)).coerceIn(0f, 1f)
-                                        translationX = -screenWidth * 0.22f * (1f - progress)
+                            // 1. Parent subpage underneath with parallax (when backStack.size >= 2)
+                            if (parentDest != null) {
+                                Box(
+                                    Modifier
+                                        .fillMaxSize()
+                                        .graphicsLayer {
+                                            val progress = (dragOffset.value / screenWidth.coerceAtLeast(1f)).coerceIn(0f, 1f)
+                                            translationX = -screenWidth * 0.22f * (1f - progress)
+                                        }
+                                ) {
+                                    androidx.compose.runtime.key(parentDest) {
+                                        DestinationContent(
+                                            destination = parentDest,
+                                            repository = repository,
+                                            colors = colors,
+                                            backdrop = backdrop,
+                                            onBack = pop,
+                                            onNavigate = push
+                                        )
                                     }
-                            ) {
-                                ScreenLayer(
-                                    destination = parentDest,
-                                    repository = repository,
-                                    colors = colors,
-                                    backdrop = backdrop,
-                                    pagerState = pagerState,
-                                    onBack = pop,
-                                    onNavigate = push
-                                )
+                                }
                             }
 
                             // 2. Dimming scrim over parent
@@ -257,7 +278,7 @@ private fun HyperiOSApp(repository: SettingsRepository) {
                                     .background(Color.Black)
                             )
 
-                            // 3. Top subpage following finger drag
+                            // 3. Top active subpage following finger drag
                             Box(
                                 Modifier
                                     .fillMaxSize()
@@ -269,6 +290,20 @@ private fun HyperiOSApp(repository: SettingsRepository) {
                                     .pointerInput(currentDest) {
                                         awaitEachGesture {
                                             val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+
+                                            // Interruptible: if a previous pop animation is running, cancel and finalize immediately
+                                            // so there is zero cooldown between swipe gestures
+                                            if (activeAnimationJob?.isActive == true || isPopping) {
+                                                activeAnimationJob?.cancel()
+                                                isPopping = false
+                                                if (dragOffset.value > screenWidth * 0.35f && backStack.isNotEmpty()) {
+                                                    backStack.removeAt(backStack.lastIndex)
+                                                }
+                                                coroutineScope.launch {
+                                                    dragOffset.snapTo(0f)
+                                                }
+                                            }
+
                                             var totalDx = 0f
                                             var totalDy = 0f
                                             var localDragging = false
@@ -316,9 +351,21 @@ private fun HyperiOSApp(repository: SettingsRepository) {
                                             if (localDragging) {
                                                 val threshold = screenWidth * 0.32f
                                                 if (dragOffset.value > threshold) {
-                                                    pop()
+                                                    // Directly execute pop animation without cooldown blocking
+                                                    activeAnimationJob = coroutineScope.launch {
+                                                        isPopping = true
+                                                        try {
+                                                            dragOffset.animateTo(screenWidth, spring(dampingRatio = 0.88f, stiffness = 420f))
+                                                            if (backStack.isNotEmpty()) {
+                                                                backStack.removeAt(backStack.lastIndex)
+                                                            }
+                                                            dragOffset.snapTo(0f)
+                                                        } finally {
+                                                            isPopping = false
+                                                        }
+                                                    }
                                                 } else {
-                                                    coroutineScope.launch {
+                                                    activeAnimationJob = coroutineScope.launch {
                                                         dragOffset.animateTo(
                                                             0f,
                                                             spring(dampingRatio = 0.78f, stiffness = 440f)
@@ -329,14 +376,16 @@ private fun HyperiOSApp(repository: SettingsRepository) {
                                         }
                                     }
                             ) {
-                                DestinationContent(
-                                    destination = currentDest,
-                                    repository = repository,
-                                    colors = colors,
-                                    backdrop = backdrop,
-                                    onBack = pop,
-                                    onNavigate = push
-                                )
+                                androidx.compose.runtime.key(currentDest) {
+                                    DestinationContent(
+                                        destination = currentDest,
+                                        repository = repository,
+                                        colors = colors,
+                                        backdrop = backdrop,
+                                        onBack = pop,
+                                        onNavigate = push
+                                    )
+                                }
                             }
                         }
                     }
