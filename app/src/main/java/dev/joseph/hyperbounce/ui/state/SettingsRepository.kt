@@ -92,6 +92,65 @@ class SettingsRepository(context: Context) {
     var moduleEnabled by prefsBooleanState("module_enabled", true)
         private set
 
+    var appTheme by prefsEnumState("app_theme", AppTheme.FollowSystem)
+        private set
+
+    @JvmName("setAppThemeExplicit")
+    fun setAppTheme(theme: AppTheme) {
+        appTheme = theme
+    }
+
+    var componentStyle by prefsEnumState("component_style", ComponentStyle.LiquidGlass)
+        private set
+
+    @JvmName("setComponentStyleExplicit")
+    fun setComponentStyle(style: ComponentStyle) {
+        componentStyle = style
+    }
+
+    var settingsAppEntryEnabled by prefsBooleanState("settings_app_entry_enabled", false)
+        private set
+
+    @JvmName("setSettingsAppEntryEnabledExplicit")
+    fun setSettingsAppEntryEnabled(enabled: Boolean) {
+        settingsAppEntryEnabled = enabled
+    }
+
+    fun exportSettingsToJson(): String {
+        val json = org.json.JSONObject()
+        val all = prefs.all
+        for ((k, v) in all) {
+            json.put(k, v)
+        }
+        return json.toString(2)
+    }
+
+    fun importSettingsFromJson(jsonStr: String): Boolean {
+        return try {
+            val json = org.json.JSONObject(jsonStr)
+            val editor = prefs.edit()
+            val keys = json.keys()
+            while (keys.hasNext()) {
+                val key = keys.next()
+                when (val value = json.get(key)) {
+                    is Boolean -> editor.putBoolean(key, value)
+                    is Int -> editor.putInt(key, value)
+                    is Long -> editor.putLong(key, value)
+                    is Double -> editor.putFloat(key, value.toFloat())
+                    is String -> editor.putString(key, value)
+                }
+            }
+            editor.apply()
+            pushAllLocalToRemote()
+            appTheme = AppTheme.valueOf(prefs.getString("app_theme", AppTheme.FollowSystem.name) ?: AppTheme.FollowSystem.name)
+            componentStyle = ComponentStyle.valueOf(prefs.getString("component_style", ComponentStyle.LiquidGlass.name) ?: ComponentStyle.LiquidGlass.name)
+            settingsAppEntryEnabled = prefs.getBoolean("settings_app_entry_enabled", false)
+            true
+        } catch (_: Throwable) {
+            false
+        }
+    }
+
     val instagram = AppSettingsHolder(NavApp.Instagram)
     val whatsapp = AppSettingsHolder(NavApp.WhatsApp)
     val youtube = AppSettingsHolder(NavApp.YouTube)
@@ -1332,6 +1391,7 @@ class SettingsRepository(context: Context) {
         var globalSafeMode by prefsBooleanState("prefs_key_global_safe_mode", defaults.globalSafeMode); private set
         var systemUiSafeMode by prefsBooleanState("prefs_key_systemui_safe_mode_enable", defaults.systemUiSafeMode); private set
         var launcherSafeMode by prefsBooleanState("prefs_key_home_safe_mode_enable", defaults.launcherSafeMode); private set
+        var settingsSafeMode by prefsBooleanState("prefs_key_system_settings_safe_mode_enable", defaults.settingsSafeMode); private set
         var instagramSafeMode by prefsBooleanState("prefs_key_instagram_safe_mode_enable", defaults.instagramSafeMode); private set
         var whatsappSafeMode by prefsBooleanState("prefs_key_whatsapp_safe_mode_enable", defaults.whatsappSafeMode); private set
         var youtubeSafeMode by prefsBooleanState("prefs_key_youtube_safe_mode_enable", defaults.youtubeSafeMode); private set
@@ -1374,6 +1434,16 @@ class SettingsRepository(context: Context) {
             }
         }
 
+        @JvmName("setSettingsSafeModePref")
+        fun setSettingsSafeMode(v: Boolean) {
+            settingsSafeMode = v
+            if (v) {
+                dev.joseph.hyperbounce.safemode.SafeModeHandler.updateCrashProp("settings")
+            } else {
+                dev.joseph.hyperbounce.safemode.SafeModeHandler.removeCrashProp("settings")
+            }
+        }
+
         @JvmName("setInstagramSafeModePref")
         fun setInstagramSafeMode(v: Boolean) {
             instagramSafeMode = v
@@ -1408,6 +1478,7 @@ class SettingsRepository(context: Context) {
             setGlobalSafeMode(false)
             setSystemUiSafeMode(false)
             setLauncherSafeMode(false)
+            setSettingsSafeMode(false)
             setInstagramSafeMode(false)
             setWhatsappSafeMode(false)
             setYoutubeSafeMode(false)

@@ -70,6 +70,70 @@ import dev.joseph.hyperbounce.ui.theme.HyperBounceColors
 import dev.joseph.hyperbounce.ui.theme.HyperBounceType
 import kotlinx.coroutines.launch
 
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.ui.input.pointer.util.VelocityTracker
+import androidx.compose.ui.unit.Dp
+import kotlin.math.abs
+
+private fun Modifier.swipeToGoBack(
+    edgeWidth: Dp = 48.dp,
+    threshold: Dp = 80.dp,
+    onBack: () -> Unit
+): Modifier = pointerInput(onBack) {
+    val touchSlop = viewConfiguration.touchSlop
+    val edgePx = edgeWidth.toPx()
+    val thresholdPx = threshold.toPx()
+    val velocityTracker = VelocityTracker()
+
+    awaitEachGesture {
+        val down = awaitFirstDown(requireUnconsumed = false)
+        if (down.position.x > edgePx) return@awaitEachGesture
+
+        var totalDx = 0f
+        var totalDy = 0f
+        var isHorizontalGesture = false
+        var isAbandoned = false
+
+        velocityTracker.resetTracking()
+        velocityTracker.addPosition(down.uptimeMillis, down.position)
+
+        while (true) {
+            val event = awaitPointerEvent()
+            val change = event.changes.firstOrNull { it.id == down.id } ?: break
+
+            if (!change.pressed) {
+                if (isHorizontalGesture) {
+                    val velocity = velocityTracker.calculateVelocity()
+                    if (totalDx >= thresholdPx || (totalDx > touchSlop && velocity.x >= 800f)) {
+                        onBack()
+                    }
+                }
+                break
+            }
+
+            velocityTracker.addPosition(change.uptimeMillis, change.position)
+            val dx = change.position.x - change.previousPosition.x
+            val dy = change.position.y - change.previousPosition.y
+
+            if (!isHorizontalGesture && !isAbandoned) {
+                totalDx += dx
+                totalDy += dy
+
+                if (abs(totalDy) > touchSlop && abs(totalDy) > abs(totalDx)) {
+                    isAbandoned = true
+                } else if (totalDx > touchSlop && abs(totalDx) > abs(totalDy)) {
+                    isHorizontalGesture = true
+                    change.consume()
+                }
+            } else if (isHorizontalGesture) {
+                totalDx += dx
+                change.consume()
+            }
+        }
+    }
+}
+
 @Composable
 fun ScreenScaffold(
     title: String,
@@ -108,7 +172,11 @@ fun ScreenScaffold(
         }
     }
 
-    Box(Modifier.fillMaxSize()) {
+    Box(
+        Modifier
+            .fillMaxSize()
+            .swipeToGoBack(onBack = onBack)
+    ) {
         DropdownOverlayHost {
             LazyColumn(
                 modifier = Modifier

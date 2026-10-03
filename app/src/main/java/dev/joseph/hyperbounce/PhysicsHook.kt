@@ -128,6 +128,9 @@ class PhysicsHook : XposedModule() {
 
                 param.packageName == "com.android.settings" ||
                 param.packageName == "com.android.thememanager" -> {
+                    if (param.packageName == "com.android.settings") {
+                        dev.joseph.hyperbounce.settings.SettingsEntryHook.init(this, param.classLoader, prefs)
+                    }
                     dev.joseph.hyperbounce.haptics.ringtone.XiaomiRingtoneHapticHook.init(this, param.classLoader)
                 }
 

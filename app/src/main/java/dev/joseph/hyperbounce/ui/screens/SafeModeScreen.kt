@@ -1,11 +1,16 @@
 package dev.joseph.hyperbounce.ui.screens
 
+import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -15,26 +20,45 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.kyant.backdrop.Backdrop
+import dev.joseph.hyperbounce.R
 import dev.joseph.hyperbounce.ui.components.GlassCard
-import dev.joseph.hyperbounce.ui.components.PowerIcon
 import dev.joseph.hyperbounce.ui.components.RowDivider
 import dev.joseph.hyperbounce.ui.components.SectionFooter
 import dev.joseph.hyperbounce.ui.components.SectionHeader
 import dev.joseph.hyperbounce.ui.components.SettingsToggleRow
-import dev.joseph.hyperbounce.ui.components.SlidersIcon
 import dev.joseph.hyperbounce.ui.state.SettingsRepository
 import dev.joseph.hyperbounce.ui.theme.HyperBounceColors
 import dev.joseph.hyperbounce.ui.theme.HyperBounceType
+
+private fun loadAppIcon(context: Context, packageName: String): ImageBitmap? {
+    return try {
+        val drawable = context.packageManager.getApplicationIcon(packageName)
+        val w = drawable.intrinsicWidth.coerceAtLeast(96)
+        val h = drawable.intrinsicHeight.coerceAtLeast(96)
+        val bitmap = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+        drawable.setBounds(0, 0, w, h)
+        drawable.draw(canvas)
+        bitmap.asImageBitmap()
+    } catch (_: Throwable) {
+        null
+    }
+}
 
 @Composable
 fun SafeModeScreen(
@@ -43,14 +67,19 @@ fun SafeModeScreen(
     backdrop: Backdrop,
     onBack: () -> Unit
 ) {
+    val context = LocalContext.current
     val safe = repository.safeMode
     val activeAliases = safe.getCrashingAliases()
     val isAnyActive = safe.globalSafeMode || safe.systemUiSafeMode || safe.launcherSafeMode ||
-            safe.instagramSafeMode || safe.whatsappSafeMode || safe.youtubeSafeMode || activeAliases.isNotEmpty()
+            safe.settingsSafeMode || activeAliases.isNotEmpty()
+
+    val sysUiIcon = remember { loadAppIcon(context, "com.android.systemui") }
+    val launcherIcon = remember { loadAppIcon(context, "com.miui.home") }
+    val settingsIcon = remember { loadAppIcon(context, "com.android.settings") }
 
     ScreenScaffold(
-        title = "Safe Mode & Recovery",
-        subtitle = "Crash watchdog and hook bypass",
+        title = "Safe Mode",
+        subtitle = "Crash recovery and hook bypass",
         colors = colors,
         backdrop = backdrop,
         onBack = onBack
@@ -103,7 +132,7 @@ fun SafeModeScreen(
                             contentAlignment = Alignment.Center
                         ) {
                             BasicText(
-                                text = "Reset Crash Flags & Disable Safe Mode",
+                                text = "Reset Crash Flags & Restore Normal Operation",
                                 style = HyperBounceType.headline.copy(color = Color.White, fontSize = 14.sp)
                             )
                         }
@@ -112,80 +141,136 @@ fun SafeModeScreen(
             }
         }
 
+        // --- Per-Subsystem Safe Mode Toggles (HyperCeiler Architecture) ---
+        item {
+            SectionHeader("Subsystem Bypass Toggles", colors)
+            GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
+                // 1. System UI
+                SettingsToggleRow(
+                    title = "System UI",
+                    subtitle = "com.android.systemui",
+                    colors = colors,
+                    backdrop = backdrop,
+                    checked = safe.systemUiSafeMode || activeAliases.contains("systemui"),
+                    onCheckedChange = safe::setSystemUiSafeMode,
+                    icon = {
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(RoundedCornerShape(10.dp)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (sysUiIcon != null) {
+                                Image(
+                                    bitmap = sysUiIcon,
+                                    contentDescription = "System UI",
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                            } else {
+                                Image(
+                                    painter = painterResource(R.drawable.ic_feature_notification),
+                                    contentDescription = "System UI",
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                            }
+                        }
+                    }
+                )
+
+                RowDivider(colors.separator)
+
+                // 2. HyperOS Launcher
+                SettingsToggleRow(
+                    title = "HyperOS Launcher",
+                    subtitle = "com.miui.home",
+                    colors = colors,
+                    backdrop = backdrop,
+                    checked = safe.launcherSafeMode || activeAliases.contains("home"),
+                    onCheckedChange = safe::setLauncherSafeMode,
+                    icon = {
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(RoundedCornerShape(10.dp)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (launcherIcon != null) {
+                                Image(
+                                    bitmap = launcherIcon,
+                                    contentDescription = "HyperOS Launcher",
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                            } else {
+                                Image(
+                                    painter = painterResource(R.drawable.ic_feature_launcher),
+                                    contentDescription = "HyperOS Launcher",
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                            }
+                        }
+                    }
+                )
+
+                RowDivider(colors.separator)
+
+                // 3. System Settings
+                SettingsToggleRow(
+                    title = "System Settings",
+                    subtitle = "com.android.settings",
+                    colors = colors,
+                    backdrop = backdrop,
+                    checked = safe.settingsSafeMode || activeAliases.contains("settings"),
+                    onCheckedChange = safe::setSettingsSafeMode,
+                    icon = {
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(RoundedCornerShape(10.dp)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (settingsIcon != null) {
+                                Image(
+                                    bitmap = settingsIcon,
+                                    contentDescription = "System Settings",
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                            } else {
+                                Image(
+                                    painter = painterResource(R.drawable.ic_nav_settings),
+                                    contentDescription = "System Settings",
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                            }
+                        }
+                    }
+                )
+            }
+            SectionFooter("Enable bypass for any subsystem to prevent hooks from running inside that process.", colors)
+        }
+
         // --- Master Kill Switch ---
         item {
             SectionHeader("Master Kill Switch", colors)
             GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
                 SettingsToggleRow(
                     title = "Global Safe Mode",
-                    subtitle = if (safe.globalSafeMode) "All LSPosed hooks bypassed system-wide" else "Normal operation",
+                    subtitle = if (safe.globalSafeMode || activeAliases.contains("all")) "All hooks bypassed system-wide" else "Normal operation",
                     colors = colors,
                     backdrop = backdrop,
-                    checked = safe.globalSafeMode,
+                    checked = safe.globalSafeMode || activeAliases.contains("all"),
                     onCheckedChange = safe::setGlobalSafeMode
                 )
             }
-            SectionFooter("Bypasses all hooks across SystemUI, Launcher, and third-party apps instantly.", colors)
+            SectionFooter("Bypasses all hooks across System UI, Launcher, Settings, and all apps immediately.", colors)
         }
 
-        // --- Per-Subsystem Safe Mode Toggles ---
-        item {
-            SectionHeader("Subsystem Bypass Toggles", colors)
-            GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
-                SettingsToggleRow(
-                    title = "System UI Safe Mode",
-                    subtitle = if (safe.systemUiSafeMode || activeAliases.contains("systemui")) "SystemUI hooks DISABLED" else "Lockscreen sheet, PIN keys, Control Center active",
-                    colors = colors,
-                    backdrop = backdrop,
-                    checked = safe.systemUiSafeMode || activeAliases.contains("systemui"),
-                    onCheckedChange = safe::setSystemUiSafeMode
-                )
-                RowDivider(colors.separator)
-                SettingsToggleRow(
-                    title = "HyperOS Launcher Safe Mode",
-                    subtitle = if (safe.launcherSafeMode || activeAliases.contains("home")) "Launcher hooks DISABLED" else "Unlock grid kinetics & app open/close active",
-                    colors = colors,
-                    backdrop = backdrop,
-                    checked = safe.launcherSafeMode || activeAliases.contains("home"),
-                    onCheckedChange = safe::setLauncherSafeMode
-                )
-                RowDivider(colors.separator)
-                SettingsToggleRow(
-                    title = "Instagram Safe Mode",
-                    subtitle = if (safe.instagramSafeMode || activeAliases.contains("instagram")) "Instagram nav hook DISABLED" else "Liquid floating nav bar active",
-                    colors = colors,
-                    backdrop = backdrop,
-                    checked = safe.instagramSafeMode || activeAliases.contains("instagram"),
-                    onCheckedChange = safe::setInstagramSafeMode
-                )
-                RowDivider(colors.separator)
-                SettingsToggleRow(
-                    title = "WhatsApp Safe Mode",
-                    subtitle = if (safe.whatsappSafeMode || activeAliases.contains("whatsapp")) "WhatsApp nav hook DISABLED" else "Liquid floating nav bar active",
-                    colors = colors,
-                    backdrop = backdrop,
-                    checked = safe.whatsappSafeMode || activeAliases.contains("whatsapp"),
-                    onCheckedChange = safe::setWhatsappSafeMode
-                )
-                RowDivider(colors.separator)
-                SettingsToggleRow(
-                    title = "YouTube Safe Mode",
-                    subtitle = if (safe.youtubeSafeMode || activeAliases.contains("youtube")) "YouTube nav hook DISABLED" else "Liquid floating nav bar active",
-                    colors = colors,
-                    backdrop = backdrop,
-                    checked = safe.youtubeSafeMode || activeAliases.contains("youtube"),
-                    onCheckedChange = safe::setYoutubeSafeMode
-                )
-            }
-        }
-
-        // --- Emergency Recovery Instructions ---
+        // --- Emergency Shell Rescue ---
         item {
             SectionHeader("Emergency Shell Rescue", colors)
             GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
                 Column(Modifier.padding(16.dp)) {
                     BasicText(
-                        text = "If SystemUI or Launcher ever crashes repeatedly, you can clear safe mode or manually engage it via Termux or ADB shell:",
+                        text = "If System UI or Launcher crashes repeatedly, you can clear safe mode or manually engage it via Termux or ADB shell:",
                         style = HyperBounceType.subhead.copy(
                             color = colors.secondaryLabel,
                             fontSize = 12.sp,

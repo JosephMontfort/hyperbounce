@@ -9,51 +9,36 @@
         android:fillColor="#FF9500"
         android:pathData="M-0.001,11.952C-0.001,7.768 -0.001,5.677 0.813,4.079C1.529,2.673 2.672,1.53 4.078,0.814C5.676,0 7.767,0 11.951,0H16.047C20.231,0 22.322,0 23.92,0.814C25.326,1.53 26.469,2.673 27.185,4.079C27.999,5.677 27.999,7.768 27.999,11.952V16.048C27.999,20.232 27.999,22.323 27.185,23.921C26.469,25.327 25.326,26.47 23.92,27.186C22.322,28 20.231,28 16.047,28H11.951C7.767,28 5.676,28 4.078,27.186C2.672,26.47 1.529,25.327 0.813,23.921C-0.001,22.323 -0.001,20.232 -0.001,16.048V11.952Z"/>
 
-    <!-- TOGGLE SWITCH (Top Half) inspired by user's Liquid Glass reference -->
-    <!-- Green active track capsule -->
+    <!-- TOGGLE SWITCH (Top Half) - Translucent white glass vibe, no green, narrower than slider -->
+    <!-- Toggle track capsule (Width 12: X=8 to 20, Height 6: Y=6.5 to 12.5) -->
     <path
-        android:fillColor="#30D158"
-        android:pathData="M8.5,6H19.5C21.16,6 22.5,7.34 22.5,9C22.5,10.66 21.16,12 19.5,12H8.5C6.84,12 5.5,10.66 5.5,9C5.5,7.34 6.84,6 8.5,6Z"/>
+        android:fillColor="#4DFFFFFF"
+        android:pathData="M11,6.5H17C18.66,6.5 20,7.84 20,9.5C20,11.16 18.66,12.5 17,12.5H11C9.34,12.5 8,11.16 8,9.5C8,7.84 9.34,6.5 11,6.5Z"/>
 
-    <!-- Liquid glass sliding thumb capsule on the right -->
+    <!-- Toggle thumb pill on active right side (Solid White, clean without stray lines) -->
     <path
         android:fillColor="#FFFFFF"
-        android:pathData="M16.5,6.5H19.5C20.88,6.5 22,7.62 22,9C22,10.38 20.88,11.5 19.5,11.5H16.5C15.12,11.5 14,10.38 14,9C14,7.62 15.12,6.5 16.5,6.5Z"/>
+        android:pathData="M15,7H17C18.38,7 19.5,8.12 19.5,9.5C19.5,10.88 18.38,12 17,12H15C13.62,12 12.5,10.88 12.5,9.5C12.5,8.12 13.62,7 15,7Z"/>
 
-    <!-- Specular highlight refraction line on thumb -->
-    <path
-        android:fillColor="#00000000"
-        android:strokeColor="#B330D158"
-        android:strokeWidth="0.8"
-        android:strokeLineCap="round"
-        android:pathData="M16,7.5H20"/>
-
-    <!-- SLIDER (Bottom Half) inspired by user's Liquid Slider reference -->
-    <!-- Active track (White / Blue) -->
+    <!-- SLIDER (Bottom Half) - Width 15: X=6.5 to 21.5 -->
+    <!-- Active track (Solid White) -->
     <path
         android:fillColor="#00000000"
         android:strokeColor="#FFFFFF"
         android:strokeWidth="2.2"
         android:strokeLineCap="round"
-        android:pathData="M6.5,19H14.5"/>
+        android:pathData="M6.5,19.5H13.5"/>
 
     <!-- Inactive track (Translucent white) -->
     <path
         android:fillColor="#00000000"
-        android:strokeColor="#55FFFFFF"
+        android:strokeColor="#4DFFFFFF"
         android:strokeWidth="2.2"
         android:strokeLineCap="round"
-        android:pathData="M14.5,19H21.5"/>
+        android:pathData="M13.5,19.5H21.5"/>
 
-    <!-- Liquid glass slider thumb pill with refraction bezel -->
+    <!-- Slider thumb pill (Solid White, centered at X=13.5, clean) -->
     <path
         android:fillColor="#FFFFFF"
-        android:pathData="M14.5,16.5H17.5C18.88,16.5 20,17.62 20,19C20,20.38 18.88,21.5 17.5,21.5H14.5C13.12,21.5 12,20.38 12,19C12,17.62 13.12,16.5 14.5,16.5Z"/>
-
-    <!-- Slider thumb inner liquid highlight ring -->
-    <path
-        android:fillColor="#00000000"
-        android:strokeColor="#FF9500"
-        android:strokeWidth="0.8"
-        android:pathData="M14.5,18H17.5C18.05,18 18.5,18.45 18.5,19C18.5,19.55 18.05,20 17.5,20H14.5C13.95,20 13.5,19.55 13.5,19C13.5,18.45 13.95,18 14.5,18Z"/>
+        android:pathData="M13,17H15C16.38,17 17.5,18.12 17.5,19.5C17.5,20.88 16.38,22 15,22H13C11.62,22 10.5,20.88 10.5,19.5C10.5,18.12 11.62,17 13,17Z"/>
 </vector>

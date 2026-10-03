@@ -19,6 +19,17 @@ package dev.joseph.hyperbounce.ui.state
 
 enum class ThemeMode { System, Light, Dark }
 
+enum class AppTheme(val label: String) {
+    FollowSystem("Follow System"),
+    Light("Light"),
+    Dark("Dark")
+}
+
+enum class ComponentStyle(val label: String) {
+    LiquidGlass("Liquid Glass"),
+    MIUIX("MIUIX")
+}
+
 enum class AccentPreset(val label: String, val argb: Long?) {
     Auto("Automatic", null),
     Blue("Blue", 0xFF0088FFL),
@@ -338,6 +349,7 @@ data class SafeModeSettings(
     val globalSafeMode: Boolean = false,
     val systemUiSafeMode: Boolean = false,
     val launcherSafeMode: Boolean = false,
+    val settingsSafeMode: Boolean = false,
     val instagramSafeMode: Boolean = false,
     val whatsappSafeMode: Boolean = false,
     val youtubeSafeMode: Boolean = false,

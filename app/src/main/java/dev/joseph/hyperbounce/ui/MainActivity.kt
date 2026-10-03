@@ -105,7 +105,7 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 private fun HyperBounceApp(repository: SettingsRepository) {
-    val colors = hyperBounceColors()
+    val colors = hyperBounceColors(repository.appTheme)
     val backdrop = rememberLayerBackdrop()
     val navBackdrop = rememberLayerBackdrop()
 

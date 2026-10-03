@@ -55,6 +55,7 @@ object CrashScope {
         "com.android.systemui" to "systemui",
         "miui.systemui.plugin" to "systemui",
         "com.miui.home" to "home",
+        "com.android.settings" to "settings",
         "com.instagram.android" to "instagram",
         "com.whatsapp" to "whatsapp",
         "com.google.android.youtube" to "youtube",
@@ -65,6 +66,7 @@ object CrashScope {
     private val aliasToPackageMap = mapOf(
         "systemui" to "com.android.systemui",
         "home" to "com.miui.home",
+        "settings" to "com.android.settings",
         "instagram" to "com.instagram.android",
         "whatsapp" to "com.whatsapp",
         "youtube" to "com.google.android.youtube",

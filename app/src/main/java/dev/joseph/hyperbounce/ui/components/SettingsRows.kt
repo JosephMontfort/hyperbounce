@@ -114,7 +114,7 @@ fun SettingsNavRow(
             IconChip(iconTint ?: Color.Transparent) { icon() }
         }
         Column(Modifier.weight(1f)) {
-            BasicText(title, style = HyperBounceType.body.copy(color = colors.label))
+            BasicText(title, style = HyperBounceType.headline.copy(color = colors.label, fontWeight = FontWeight.SemiBold))
             if (subtitle != null) {
                 BasicText(subtitle, style = HyperBounceType.footnote.copy(color = colors.secondaryLabel))
             }
@@ -156,7 +156,7 @@ fun SettingsClickableRow(
             IconChip(iconTint ?: Color.Transparent) { icon() }
         }
         Column(Modifier.weight(1f)) {
-            BasicText(title, style = HyperBounceType.body.copy(color = titleColor ?: colors.label))
+            BasicText(title, style = HyperBounceType.headline.copy(color = titleColor ?: colors.label, fontWeight = FontWeight.SemiBold))
             if (subtitle != null) {
                 BasicText(subtitle, style = HyperBounceType.footnote.copy(color = colors.secondaryLabel))
             }
@@ -193,7 +193,7 @@ fun SettingsToggleRow(
             IconChip(iconTint ?: Color.Transparent) { icon() }
         }
         Column(Modifier.weight(1f)) {
-            BasicText(title, style = HyperBounceType.body.copy(color = colors.label))
+            BasicText(title, style = HyperBounceType.headline.copy(color = colors.label, fontWeight = FontWeight.SemiBold))
             if (subtitle != null) {
                 BasicText(subtitle, style = HyperBounceType.footnote.copy(color = colors.secondaryLabel))
             }
@@ -206,6 +206,48 @@ fun SettingsToggleRow(
             selected = { checked },
             onSelect = { if (enabled) onCheckedChange(it) },
             backdrop = localBackdrop
+        )
+    }
+}
+
+/** A row with an optional leading icon, title/subtitle, and a trailing [DropdownPicker]. */
+@Composable
+fun SettingsDropdownRow(
+    title: String,
+    options: List<String>,
+    selectedIndex: Int,
+    onSelect: (Int) -> Unit,
+    colors: HyperBounceColors,
+    backdrop: Backdrop,
+    modifier: Modifier = Modifier,
+    subtitle: String? = null,
+    iconTint: Color? = null,
+    icon: (@Composable () -> Unit)? = null
+) {
+    Row(
+        modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        if (icon != null) {
+            IconChip(iconTint ?: Color.Transparent) { icon() }
+        }
+        Column(Modifier.weight(1f)) {
+            BasicText(
+                title,
+                style = HyperBounceType.headline.copy(color = colors.label, fontWeight = FontWeight.SemiBold)
+            )
+            if (subtitle != null) {
+                BasicText(subtitle, style = HyperBounceType.footnote.copy(color = colors.secondaryLabel))
+            }
+        }
+        DropdownPicker(
+            options = options,
+            selectedIndex = selectedIndex,
+            onSelect = onSelect,
+            backdrop = backdrop
         )
     }
 }
@@ -247,7 +289,7 @@ fun SettingsSliderRow(
             ) {
                 BasicText(
                     title,
-                    style = HyperBounceType.body.copy(color = colors.label.copy(alpha = displayAlpha))
+                    style = HyperBounceType.headline.copy(color = colors.label.copy(alpha = displayAlpha), fontWeight = FontWeight.SemiBold)
                 )
                 if (subtitle != null) {
                     BasicText(

@@ -166,9 +166,11 @@ object SafeModeHandler {
         applySafeModeProp(emptySet())
         deletePersistentFlag("hb_safemode_systemui.flag")
         deletePersistentFlag("hb_safemode_home.flag")
+        deletePersistentFlag("hb_safemode_settings.flag")
         deletePersistentFlag("hb_safemode_all.flag")
         deletePersistentFlag("hb_pids_systemui.txt")
         deletePersistentFlag("hb_pids_home.txt")
+        deletePersistentFlag("hb_pids_settings.txt")
     }
 
     private fun applySafeModeProp(aliases: Set<String>) {

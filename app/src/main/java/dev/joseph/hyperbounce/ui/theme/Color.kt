@@ -72,5 +72,11 @@ private val DarkColors = HyperBounceColors(
 )
 
 @Composable
-fun hyperBounceColors(): HyperBounceColors =
-    if (isSystemInDarkTheme()) DarkColors else LightColors
+fun hyperBounceColors(theme: dev.joseph.hyperbounce.ui.state.AppTheme = dev.joseph.hyperbounce.ui.state.AppTheme.FollowSystem): HyperBounceColors {
+    val isDark = when (theme) {
+        dev.joseph.hyperbounce.ui.state.AppTheme.FollowSystem -> isSystemInDarkTheme()
+        dev.joseph.hyperbounce.ui.state.AppTheme.Light -> false
+        dev.joseph.hyperbounce.ui.state.AppTheme.Dark -> true
+    }
+    return if (isDark) DarkColors else LightColors
+}
