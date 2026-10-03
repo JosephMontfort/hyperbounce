@@ -90,7 +90,7 @@ fun CircularGlassBackButton(
                 shape = CircleShape
                 clip = true
             }
-            .background(if (androidx.compose.foundation.isSystemInDarkTheme()) Color(0xFF1C1C1E) else Color(0xFFFFFFFF))
+            .background(if (dev.joseph.hyperbounce.ui.theme.LocalIsDarkTheme.current) Color(0xFF1C1C1E) else Color(0xFFFFFFFF))
             .border(0.5.dp, Color.Gray.copy(alpha = 0.3f), CircleShape)
             .clickable(
                 interactionSource = null,
@@ -102,7 +102,7 @@ fun CircularGlassBackButton(
             .then(interactiveHighlight.gestureModifier),
         contentAlignment = Alignment.Center
     ) {
-        val iconColor = if (androidx.compose.foundation.isSystemInDarkTheme()) Color.White else Color.Black
+        val iconColor = if (dev.joseph.hyperbounce.ui.theme.LocalIsDarkTheme.current) Color.White else Color.Black
         ChevronIcon(color = iconColor, size = 13.dp, strokeWidth = 2.4.dp, pointingLeft = true)
     }
 }

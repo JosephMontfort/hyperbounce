@@ -459,7 +459,7 @@ object IosCallerScreenHook {
 
         // 4. ConfigProvider content:// (the pre-rendered 914x2034 blurwallpaper)
         try {
-            val uri = Uri.parse("content://dev.joseph.hyperbounce.provider/incall_stock_background.png")
+            val uri = Uri.parse("content://dev.hyperios.app.provider/incall_stock_background.png")
             activity.contentResolver.openInputStream(uri)?.use { stream ->
                 val bmp = BitmapFactory.decodeStream(stream)
                 if (bmp != null) {
@@ -536,7 +536,7 @@ object IosCallerScreenHook {
     private fun syncWallpaperToProvider(context: Context, bitmap: Bitmap) {
         Thread {
             try {
-                val uri = Uri.parse("content://dev.joseph.hyperbounce.provider/incall_stock_background.png")
+                val uri = Uri.parse("content://dev.hyperios.app.provider/incall_stock_background.png")
                 context.contentResolver.openOutputStream(uri)?.use { out ->
                     bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
                 }

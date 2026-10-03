@@ -60,7 +60,7 @@ fun HyperLightSearchBar(
     var isFocused by remember { mutableStateOf(false) }
     val focusRequester = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
-    val isDark = isSystemInDarkTheme()
+    val isDark = dev.joseph.hyperbounce.ui.theme.LocalIsDarkTheme.current
 
     val isActive = isFocused || query.isNotEmpty()
 

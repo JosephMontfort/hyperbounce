@@ -9,7 +9,7 @@ android {
     compileSdk = 37
 
     defaultConfig {
-        applicationId = "dev.joseph.hyperbounce"
+        applicationId = "dev.hyperios.app"
         // Merge note: floating-nav branch declared minSdk 33, liquid-toggles branch
         // declared minSdk 31. We keep the higher (more conservative) bound so neither
         // feature set ends up installable on an OS level its own branch never declared

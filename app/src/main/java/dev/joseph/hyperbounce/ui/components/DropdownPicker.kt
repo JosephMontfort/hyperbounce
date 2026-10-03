@@ -45,7 +45,7 @@ fun DropdownPicker(
     backdrop: Backdrop,
     modifier: Modifier = Modifier
 ) {
-    val isDark = isSystemInDarkTheme()
+    val isDark = dev.joseph.hyperbounce.ui.theme.LocalIsDarkTheme.current
     val overlayHost = LocalDropdownOverlayHost.current
     val ownerId = remember { Any() }
 
@@ -111,7 +111,7 @@ private fun DropdownPanel(
     anchorSize: IntSize,
     onSelect: (Int) -> Unit
 ) {
-    val isDark = isSystemInDarkTheme()
+    val isDark = dev.joseph.hyperbounce.ui.theme.LocalIsDarkTheme.current
     
     var contentWidth by remember { mutableStateOf(0f) }
 

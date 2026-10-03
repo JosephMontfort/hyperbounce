@@ -261,7 +261,7 @@ object ControlCenterConfigHolder {
             if (TextUtils.isEmpty(jsonStr)) {
                 try {
                     val res = ctx.contentResolver.call(
-                        Uri.parse("content://dev.joseph.hyperbounce.provider"),
+                        Uri.parse("content://dev.hyperios.app.provider"),
                         "getCCLayout", null, null
                     )
                     if (res != null) {
@@ -540,7 +540,7 @@ object ControlCenterConfigHolder {
             // 2. ContentProvider
             try {
                 targetCtx.contentResolver.call(
-                    Uri.parse("content://dev.joseph.hyperbounce.provider"),
+                    Uri.parse("content://dev.hyperios.app.provider"),
                     "saveCCLayout", jsonStr, null
                 )
             } catch (t: Throwable) {}
@@ -582,7 +582,7 @@ object ControlCenterConfigHolder {
             } catch (t: Throwable) {}
             try {
                 ctx.contentResolver.call(
-                    Uri.parse("content://dev.joseph.hyperbounce.provider"),
+                    Uri.parse("content://dev.hyperios.app.provider"),
                     "resetCCLayout", null, null
                 )
             } catch (t: Throwable) {}
@@ -629,7 +629,7 @@ object ControlCenterConfigHolder {
         if (ctx == null) return false
         return try {
             val res = ctx.contentResolver.call(
-                Uri.parse("content://dev.joseph.hyperbounce.provider"),
+                Uri.parse("content://dev.hyperios.app.provider"),
                 "isSafeMode", null, null
             )
             val isSafe = res?.getBoolean("safeMode", false) ?: false
@@ -647,7 +647,7 @@ object ControlCenterConfigHolder {
         if (ctx == null) return
         try {
             ctx.contentResolver.call(
-                Uri.parse("content://dev.joseph.hyperbounce.provider"),
+                Uri.parse("content://dev.hyperios.app.provider"),
                 "setSafeMode", "true", null
             )
         } catch (t: Throwable) {}

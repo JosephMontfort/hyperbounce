@@ -34,7 +34,7 @@ fun GlassCard(
     cornerRadius: Dp = 10.dp,
     content: @Composable ColumnScope.() -> Unit
 ) {
-    val isDark = isSystemInDarkTheme()
+    val isDark = dev.joseph.hyperbounce.ui.theme.LocalIsDarkTheme.current
     val shape = RoundedCornerShape(cornerRadius)
     val cardColor = if (isDark) Color(0xFF1C1C1E) else Color(0xFFFFFFFF)
     

@@ -71,6 +71,8 @@ private val DarkColors = HyperBounceColors(
     glassSurfaceTint = Color(0xFF1C1C1E)
 )
 
+val LocalIsDarkTheme = androidx.compose.runtime.compositionLocalOf { false }
+
 @Composable
 fun hyperBounceColors(theme: dev.joseph.hyperbounce.ui.state.AppTheme = dev.joseph.hyperbounce.ui.state.AppTheme.FollowSystem): HyperBounceColors {
     val isDark = when (theme) {
@@ -80,3 +82,10 @@ fun hyperBounceColors(theme: dev.joseph.hyperbounce.ui.state.AppTheme = dev.jose
     }
     return if (isDark) DarkColors else LightColors
 }
+
+typealias HyperiOSColors = HyperBounceColors
+
+@Composable
+fun hyperiOSColors(theme: dev.joseph.hyperbounce.ui.state.AppTheme = dev.joseph.hyperbounce.ui.state.AppTheme.FollowSystem): HyperBounceColors =
+    hyperBounceColors(theme)
+

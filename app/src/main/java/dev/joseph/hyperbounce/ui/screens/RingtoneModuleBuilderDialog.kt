@@ -1121,7 +1121,7 @@ private fun StepSuccessContent(
                 )
                 InstructionBullet(colors, "1. Open Magisk, KernelSU, or APatch manager")
                 InstructionBullet(colors, "2. Modules tab -> Install from storage")
-                InstructionBullet(colors, "3. Pick HyperBounce_Haptic_Ringtones_Module.zip in Download")
+                InstructionBullet(colors, "3. Pick HyperiOS_Haptic_Ringtones_Module.zip in Download")
                 InstructionBullet(colors, "4. Reboot device")
                 InstructionBullet(colors, "5. Select in Settings > Sound > Ringtone")
             }

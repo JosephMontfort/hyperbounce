@@ -926,7 +926,7 @@ object DialerRecentsHook {
 
         // 1. ConfigProvider content:// (pre-rendered 914x2034 Xiaomi system blurwallpaper)
         try {
-            val uri = Uri.parse("content://dev.joseph.hyperbounce.provider/incall_stock_background.png")
+            val uri = Uri.parse("content://dev.hyperios.app.provider/incall_stock_background.png")
             context.contentResolver.openInputStream(uri)?.use { stream ->
                 val bmp = BitmapFactory.decodeStream(stream)
                 if (bmp != null) {

@@ -25,5 +25,15 @@
         <item>miui.systemui.plugin</item>
         <item>com.miui.home</item>
         <item>com.android.systemui</item>
+        <item>com.android.deskclock</item>
+        <item>com.xiaomi.mirror</item>
+        <item>com.miui.misound</item>
+        <item>com.milink.service</item>
+        <item>com.android.mms</item>
+        <item>com.android.soundrecorder</item>
+        <item>com.xiaomi.misettings</item>
+        <item>system_server</item>
+        <item>com.android.thememanager</item>
+        <item>com.xiaomi.incallui</item>
     </string-array>
 </resources>

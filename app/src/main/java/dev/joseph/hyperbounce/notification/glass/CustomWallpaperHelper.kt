@@ -61,7 +61,7 @@ object CustomWallpaperHelper {
 
         // Fetch from ConfigProvider across processes (SystemUI access)
         try {
-            val uri = Uri.parse("content://dev.joseph.hyperbounce.provider/$FILENAME")
+            val uri = Uri.parse("content://dev.hyperios.app.provider/$FILENAME")
             appContext.contentResolver.openFileDescriptor(uri, "r")?.use { pfd ->
                 val opts = BitmapFactory.Options().apply { inPreferredConfig = Bitmap.Config.ARGB_8888 }
                 val bmp = BitmapFactory.decodeFileDescriptor(pfd.fileDescriptor, null, opts)
@@ -85,7 +85,7 @@ object CustomWallpaperHelper {
         }
         try {
             val res = appContext.contentResolver.call(
-                Uri.parse("content://dev.joseph.hyperbounce.provider"),
+                Uri.parse("content://dev.hyperios.app.provider"),
                 "hasCustomWallpaper", null, null
             )
             val hasCustom = res?.getBoolean("hasCustom", false) ?: false
@@ -132,7 +132,7 @@ object CustomWallpaperHelper {
         } catch (_: Throwable) {}
         try {
             appContext.contentResolver.call(
-                Uri.parse("content://dev.joseph.hyperbounce.provider"),
+                Uri.parse("content://dev.hyperios.app.provider"),
                 "clearCustomWallpaper", null, null
             )
         } catch (_: Throwable) {}

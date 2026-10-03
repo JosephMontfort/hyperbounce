@@ -95,7 +95,7 @@ object DepthWallpaperHelper {
 
         // 3. Fetch from ConfigProvider across processes (for SystemUI)
         try {
-            val uri = Uri.parse("content://dev.joseph.hyperbounce.provider/$CUSTOM_FILENAME")
+            val uri = Uri.parse("content://dev.hyperios.app.provider/$CUSTOM_FILENAME")
             appContext.contentResolver.openFileDescriptor(uri, "r")?.use { pfd ->
                 val opts = BitmapFactory.Options().apply { inPreferredConfig = Bitmap.Config.ARGB_8888 }
                 val providerBmp = BitmapFactory.decodeFileDescriptor(pfd.fileDescriptor, null, opts)
@@ -149,7 +149,7 @@ object DepthWallpaperHelper {
         }
         try {
             val res = appContext.contentResolver.call(
-                Uri.parse("content://dev.joseph.hyperbounce.provider"),
+                Uri.parse("content://dev.hyperios.app.provider"),
                 "hasCustomDepthSubject", null, null
             )
             return res?.getBoolean("hasCustom", false) ?: false
@@ -256,7 +256,7 @@ object DepthWallpaperHelper {
 
                 try {
                     appContext.contentResolver.call(
-                        Uri.parse("content://dev.joseph.hyperbounce.provider"),
+                        Uri.parse("content://dev.hyperios.app.provider"),
                         "clearCustomDepthSubject", null, null
                     )
                 } catch (_: Throwable) {}

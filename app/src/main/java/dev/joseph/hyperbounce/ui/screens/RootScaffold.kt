@@ -101,6 +101,7 @@ fun RootScaffold(
     colors: HyperBounceColors,
     backdrop: Backdrop,
     repository: SettingsRepository,
+    showTopAction: Boolean = true,
     onAbout: () -> Unit,
     content: @Composable ColumnScope.() -> Unit
 ) {
@@ -224,302 +225,178 @@ fun RootScaffold(
         }
 
         // Top-right expandable glass menu overlay (full-screen overlay with edge-to-edge dimming)
-        val menuContentColor = if (isSystemInDarkTheme()) Color.White else Color.Black
+        val menuContentColor = if (dev.joseph.hyperbounce.ui.theme.LocalIsDarkTheme.current) Color.White else Color.Black
         val menuSecondaryColor = menuContentColor.copy(alpha = 0.7f)
         
-        ExpandableGlassMenu(
-            animatableProgress = menuProgress,
-            animationPreset = MenuAnimationPreset.Bouncy,
-            alignment = MenuAlignment.TopTrailing,
-            backdrop = rememberCombinedBackdrop(backdrop, contentBackdrop),
-            isGlassEnabled = true,
-            isHapticsEnabled = glass.hapticsEnabled,
-            cornerRadius = 22.dp,
-            blurRadius = glass.blurDp,
-            refractionHeight = glass.refractionHeightDp,
-            refractionAmount = glass.refractionAmountDp,
-            chromaticAberration = glass.chromaticAberration,
-            horizontalOffset = 0f,
-            verticalOffset = 10f,
-            modifier = Modifier.fillMaxSize().zIndex(10f),
-            contentPadding = PaddingValues(top = 8.dp, end = 20.dp),
-            labelSize = Size(44f, 44f),
-            onDialogProgressChange = { dialogProgress = it },
+        if (showTopAction) {
+            ExpandableGlassMenu(
+                animatableProgress = menuProgress,
+                animationPreset = MenuAnimationPreset.Bouncy,
+                alignment = MenuAlignment.TopTrailing,
+                backdrop = rememberCombinedBackdrop(backdrop, contentBackdrop),
+                isGlassEnabled = true,
+                isHapticsEnabled = glass.hapticsEnabled,
+                cornerRadius = 22.dp,
+                blurRadius = glass.blurDp,
+                refractionHeight = glass.refractionHeightDp,
+                refractionAmount = glass.refractionAmountDp,
+                chromaticAberration = glass.chromaticAberration,
+                horizontalOffset = 0f,
+                verticalOffset = 10f,
+                modifier = Modifier.fillMaxSize().zIndex(10f),
+                contentPadding = PaddingValues(top = 8.dp, end = 20.dp),
+                labelSize = Size(44f, 44f),
+                onDialogProgressChange = { dialogProgress = it },
                 onRowSelected = { index, showDialog ->
-                    if (menuPage == MenuPage.Main) {
-                        when (index) {
-                            0 -> {
-                                menuPage = MenuPage.RestartScopedApps
-                                false // Open submenu, keep menu open for fluid morph!
-                            }
-                            1 -> {
-                                copyDebugInfo()
-                                true // Close menu
-                            }
-                            2 -> {
-                                onAbout()
-                                true // Close menu
-                            }
-                            else -> true
+                    when (index) {
+                        0 -> {
+                            showDialog(
+                                dev.joseph.hyperbounce.ui.glass.MenuDialogData(
+                                    title = "Restart System UI?",
+                                    message = "This will terminate and restart com.android.systemui.",
+                                    confirmText = "Restart",
+                                    confirmColor = colors.accentBlue,
+                                    onConfirm = {
+                                        RootUtils.restartSystemUI(context)
+                                    }
+                                )
+                            )
+                            false
                         }
-                    } else {
-                        when (index) {
-                            0 -> {
-                                menuPage = MenuPage.Main
-                                false // Morph back to main menu, keep open!
-                            }
-                            1 -> {
-                                showDialog(
-                                    dev.joseph.hyperbounce.ui.glass.MenuDialogData(
-                                        title = "Restart System UI?",
-                                        message = "This will terminate and restart com.android.systemui.",
-                                        confirmText = "Restart",
-                                        confirmColor = colors.accentBlue,
-                                        onConfirm = {
-                                            RootUtils.restartSystemUI(context)
-                                        }
-                                    )
+                        1 -> {
+                            showDialog(
+                                dev.joseph.hyperbounce.ui.glass.MenuDialogData(
+                                    title = "Restart Launcher?",
+                                    message = "This will terminate and restart com.miui.home.",
+                                    confirmText = "Restart",
+                                    confirmColor = colors.accentPurple,
+                                    onConfirm = {
+                                        RootUtils.restartLauncher(context)
+                                    }
                                 )
-                                false // Morph into confirmation dialog
-                            }
-                            2 -> {
-                                showDialog(
-                                    dev.joseph.hyperbounce.ui.glass.MenuDialogData(
-                                        title = "Restart Launcher?",
-                                        message = "This will terminate and restart com.miui.home.",
-                                        confirmText = "Restart",
-                                        confirmColor = colors.accentPurple,
-                                        onConfirm = {
-                                            RootUtils.restartLauncher(context)
-                                        }
-                                    )
-                                )
-                                false // Morph into confirmation dialog
-                            }
-                            3 -> {
-                                showDialog(
-                                    dev.joseph.hyperbounce.ui.glass.MenuDialogData(
-                                        title = "Reboot Device?",
-                                        message = "This will perform a soft reboot of your device using root permissions. Any unsaved progress in active apps will be lost.",
-                                        confirmText = "Reboot",
-                                        confirmColor = Color(0xFFFF453A),
-                                        onConfirm = {
-                                            RootUtils.rebootDevice(context)
-                                        }
-                                    )
-                                )
-                                false // Morph into confirmation dialog
-                            }
-                            else -> true
+                            )
+                            false
                         }
+                        2 -> {
+                            showDialog(
+                                dev.joseph.hyperbounce.ui.glass.MenuDialogData(
+                                    title = "Reboot Device?",
+                                    message = "This will perform a reboot of your device using root permissions. Any unsaved progress in active apps will be lost.",
+                                    confirmText = "Reboot",
+                                    confirmColor = Color(0xFFFF453A),
+                                    onConfirm = {
+                                        RootUtils.rebootDevice(context)
+                                    }
+                                )
+                            )
+                            false
+                        }
+                        else -> true
                     }
                 },
                 label = {
-                    Canvas(
-                        modifier = Modifier.size(22.dp)
-                    ) {
-                        val x = size.width / 2f
-                        val r = size.minDimension * 0.075f
-                        val y1 = size.height * 0.25f
-                        val y2 = size.height * 0.50f
-                        val y3 = size.height * 0.75f
-                        val dotColor = menuContentColor
-                        drawCircle(dotColor, r, Offset(x, y1))
-                        drawCircle(dotColor, r, Offset(x, y2))
-                        drawCircle(dotColor, r, Offset(x, y3))
-                    }
+                    ResetArrowIcon(color = menuContentColor, size = 18.dp, strokeWidth = 2.dp)
                 }
             ) { globalTouch, closeMenuFromRow, hoveredIndex, setHovered, showDialog ->
-                androidx.compose.runtime.LaunchedEffect(menuPage) {
-                    setHovered(null)
-                }
-
-                var mainPageWidth by remember { mutableStateOf(0f) }
-                var mainPageHeight by remember { mutableStateOf(0f) }
-                var subPageWidth by remember { mutableStateOf(0f) }
-                var subPageHeight by remember { mutableStateOf(0f) }
-
-                Box(
-                    modifier = Modifier
-                        .layout { measurable, constraints ->
-                            val placeable = measurable.measure(constraints)
-                            val targetW = if (isSubmenu) subPageWidth else mainPageWidth
-                            val targetH = if (isSubmenu) subPageHeight else mainPageHeight
-                            val finalW = if (targetW > 0f) targetW.toInt() else placeable.width
-                            val finalH = if (targetH > 0f) targetH.toInt() else placeable.height
-                            layout(finalW, finalH) {
-                                placeable.placeRelative(0, 0)
-                            }
-                        }
+                Column(
+                    modifier = Modifier.padding(vertical = 4.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    // Main Menu Page
-                    Column(
-                        modifier = Modifier
-                            .zIndex(if (!isSubmenu) 2f else 0f)
-                            .onSizeChanged { size ->
-                                if (size.width > 0 && size.height > 0) {
-                                    mainPageWidth = size.width.toFloat()
-                                    mainPageHeight = size.height.toFloat()
-                                }
-                            }
-                            .graphicsLayer {
-                                val p = pageTransition
-                                alpha = (1f - p * 2.2f).coerceIn(0f, 1f)
-                                translationX = -p * 32.dp.toPx()
-                            },
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        MenuRow(
-                            title = "Restart Scoped Apps",
-                            contentColor = menuContentColor,
-                            secondaryColor = menuSecondaryColor,
-                            isHovered = hoveredIndex == 0 && !isSubmenu,
-                            onHoverChange = { hovering -> if (!isSubmenu) { if (hovering) setHovered(0) else if (hoveredIndex == 0) setHovered(null) } },
-                            globalTouchPosition = if (!isSubmenu) globalTouch else Offset.Unspecified,
-                            onClick = {
-                                setHovered(null)
-                                menuPage = MenuPage.RestartScopedApps
-                            },
-                            icon = { ResetArrowIcon(color = menuContentColor, size = 15.dp, strokeWidth = 1.8.dp) },
-                            trailingIcon = { ChevronIcon(pointingLeft = false, size = 10.dp, strokeWidth = 2.dp, color = menuSecondaryColor) },
-                            enabled = !isSubmenu
-                        )
-                        MenuRow(
-                            title = "Copy Diagnostic Info",
-                            contentColor = menuContentColor,
-                            secondaryColor = menuSecondaryColor,
-                            isHovered = hoveredIndex == 1 && !isSubmenu,
-                            onHoverChange = { hovering -> if (!isSubmenu) { if (hovering) setHovered(1) else if (hoveredIndex == 1) setHovered(null) } },
-                            globalTouchPosition = if (!isSubmenu) globalTouch else Offset.Unspecified,
-                            onClick = {
-                                closeMenuFromRow()
-                                copyDebugInfo()
-                            },
-                            icon = { CopyIcon(color = menuContentColor, size = 14.dp, strokeWidth = 1.6.dp) },
-                            enabled = !isSubmenu
-                        )
-                        MenuRow(
-                            title = "About HyperiOS",
-                            contentColor = menuContentColor,
-                            secondaryColor = menuSecondaryColor,
-                            isHovered = hoveredIndex == 2 && !isSubmenu,
-                            onHoverChange = { hovering -> if (!isSubmenu) { if (hovering) setHovered(2) else if (hoveredIndex == 2) setHovered(null) } },
-                            globalTouchPosition = if (!isSubmenu) globalTouch else Offset.Unspecified,
-                            onClick = {
-                                closeMenuFromRow()
-                                onAbout()
-                            },
-                            icon = { InfoIcon(color = menuContentColor, size = 14.dp, strokeWidth = 1.6.dp) },
-                            enabled = !isSubmenu
-                        )
-                    }
-
-                    // Submenu Page ("Restart Scoped Apps")
-                    Column(
-                        modifier = Modifier
-                            .zIndex(if (isSubmenu) 2f else 0f)
-                            .onSizeChanged { size ->
-                                if (size.width > 0 && size.height > 0) {
-                                    subPageWidth = size.width.toFloat()
-                                    subPageHeight = size.height.toFloat()
-                                }
-                            }
-                            .graphicsLayer {
-                                val p = pageTransition
-                                alpha = ((p - 0.45f) * 2.2f).coerceIn(0f, 1f)
-                                translationX = (1f - p) * 32.dp.toPx()
-                            },
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        MenuRow(
-                            title = "Back",
-                            contentColor = menuContentColor,
-                            secondaryColor = menuSecondaryColor,
-                            isHovered = hoveredIndex == 0 && isSubmenu,
-                            onHoverChange = { hovering -> if (isSubmenu) { if (hovering) setHovered(0) else if (hoveredIndex == 0) setHovered(null) } },
-                            globalTouchPosition = if (isSubmenu) globalTouch else Offset.Unspecified,
-                            onClick = {
-                                setHovered(null)
-                                menuPage = MenuPage.Main
-                            },
-                            icon = { ChevronIcon(pointingLeft = true, size = 13.dp, strokeWidth = 2.2.dp, color = menuContentColor) },
-                            enabled = isSubmenu
-                        )
-                        MenuRow(
-                            title = "System UI",
-                            contentColor = menuContentColor,
-                            secondaryColor = menuSecondaryColor,
-                            isHovered = hoveredIndex == 1 && isSubmenu,
-                            onHoverChange = { hovering -> if (isSubmenu) { if (hovering) setHovered(1) else if (hoveredIndex == 1) setHovered(null) } },
-                            globalTouchPosition = if (isSubmenu) globalTouch else Offset.Unspecified,
-                            onClick = {
-                                setHovered(null)
-                                showDialog(
-                                    dev.joseph.hyperbounce.ui.glass.MenuDialogData(
-                                        title = "Restart System UI?",
-                                        message = "This will terminate and restart com.android.systemui.",
-                                        confirmText = "Restart",
-                                        confirmColor = colors.accentBlue,
-                                        onConfirm = {
-                                            RootUtils.restartSystemUI(context)
-                                        }
-                                    )
+                    MenuRow(
+                        title = "Restart System UI",
+                        contentColor = menuContentColor,
+                        secondaryColor = menuSecondaryColor,
+                        isHovered = hoveredIndex == 0,
+                        onHoverChange = { hovering -> if (hovering) setHovered(0) else if (hoveredIndex == 0) setHovered(null) },
+                        globalTouchPosition = globalTouch,
+                        onClick = {
+                            setHovered(null)
+                            showDialog(
+                                dev.joseph.hyperbounce.ui.glass.MenuDialogData(
+                                    title = "Restart System UI?",
+                                    message = "This will terminate and restart com.android.systemui.",
+                                    confirmText = "Restart",
+                                    confirmColor = colors.accentBlue,
+                                    onConfirm = {
+                                        RootUtils.restartSystemUI(context)
+                                    }
                                 )
-                            },
-                            icon = { SlidersIcon(color = menuContentColor, size = 15.dp, strokeWidth = 1.8.dp) },
-                            enabled = isSubmenu
-                        )
-                        MenuRow(
-                            title = "System Launcher",
-                            contentColor = menuContentColor,
-                            secondaryColor = menuSecondaryColor,
-                            isHovered = hoveredIndex == 2 && isSubmenu,
-                            onHoverChange = { hovering -> if (isSubmenu) { if (hovering) setHovered(2) else if (hoveredIndex == 2) setHovered(null) } },
-                            globalTouchPosition = if (isSubmenu) globalTouch else Offset.Unspecified,
-                            onClick = {
-                                setHovered(null)
-                                showDialog(
-                                    dev.joseph.hyperbounce.ui.glass.MenuDialogData(
-                                        title = "Restart Launcher?",
-                                        message = "This will terminate and restart com.miui.home.",
-                                        confirmText = "Restart",
-                                        confirmColor = colors.accentPurple,
-                                        onConfirm = {
-                                            RootUtils.restartLauncher(context)
-                                        }
-                                    )
+                            )
+                        },
+                        icon = { SlidersIcon(color = menuContentColor, size = 15.dp, strokeWidth = 1.8.dp) },
+                        enabled = true
+                    )
+                    MenuRow(
+                        title = "Restart Launcher",
+                        contentColor = menuContentColor,
+                        secondaryColor = menuSecondaryColor,
+                        isHovered = hoveredIndex == 1,
+                        onHoverChange = { hovering -> if (hovering) setHovered(1) else if (hoveredIndex == 1) setHovered(null) },
+                        globalTouchPosition = globalTouch,
+                        onClick = {
+                            setHovered(null)
+                            showDialog(
+                                dev.joseph.hyperbounce.ui.glass.MenuDialogData(
+                                    title = "Restart Launcher?",
+                                    message = "This will terminate and restart com.miui.home.",
+                                    confirmText = "Restart",
+                                    confirmColor = colors.accentPurple,
+                                    onConfirm = {
+                                        RootUtils.restartLauncher(context)
+                                    }
                                 )
-                            },
-                            icon = { AppGridIcon(color = menuContentColor, size = 15.dp) },
-                            enabled = isSubmenu
-                        )
-                        MenuRow(
-                            title = "System Reboot",
-                            contentColor = menuContentColor,
-                            secondaryColor = menuSecondaryColor,
-                            isHovered = hoveredIndex == 3 && isSubmenu,
-                            onHoverChange = { hovering -> if (isSubmenu) { if (hovering) setHovered(3) else if (hoveredIndex == 3) setHovered(null) } },
-                            globalTouchPosition = if (isSubmenu) globalTouch else Offset.Unspecified,
-                            onClick = {
-                                setHovered(null)
-                                showDialog(
-                                    dev.joseph.hyperbounce.ui.glass.MenuDialogData(
-                                        title = "Reboot Device?",
-                                        message = "This will perform a soft reboot of your device using root permissions. Any unsaved progress in active apps will be lost.",
-                                        confirmText = "Reboot",
-                                        confirmColor = Color(0xFFFF453A),
-                                        onConfirm = {
-                                            RootUtils.rebootDevice(context)
-                                        }
-                                    )
+                            )
+                        },
+                        icon = { AppGridIcon(color = menuContentColor, size = 15.dp) },
+                        enabled = true
+                    )
+                    MenuRow(
+                        title = "System Reboot",
+                        contentColor = menuContentColor,
+                        secondaryColor = menuSecondaryColor,
+                        isHovered = hoveredIndex == 2,
+                        onHoverChange = { hovering -> if (hovering) setHovered(2) else if (hoveredIndex == 2) setHovered(null) },
+                        globalTouchPosition = globalTouch,
+                        onClick = {
+                            setHovered(null)
+                            showDialog(
+                                dev.joseph.hyperbounce.ui.glass.MenuDialogData(
+                                    title = "Reboot Device?",
+                                    message = "This will perform a reboot of your device using root permissions. Any unsaved progress in active apps will be lost.",
+                                    confirmText = "Reboot",
+                                    confirmColor = Color(0xFFFF453A),
+                                    onConfirm = {
+                                        RootUtils.rebootDevice(context)
+                                    }
                                 )
-                            },
-                            icon = { PowerIcon(color = menuContentColor, size = 14.dp, strokeWidth = 1.8.dp) },
-                            enabled = isSubmenu
-                        )
-                    }
+                            )
+                        },
+                        icon = { PowerIcon(color = menuContentColor, size = 14.dp, strokeWidth = 1.8.dp) },
+                        enabled = true
+                    )
                 }
+
+                /*
+                 * PRESERVED BACKEND CODE: Multi-page submenu transition & morphing system
+                 * Originally used when the top action opened a main menu with subpage navigation
+                 * ("Restart Scoped Apps" -> Submenu with Back, System UI, System Launcher, System Reboot).
+                 * Kept fully intact for future expandable hierarchical menus.
+                 *
+                 * Code pattern:
+                 * Box(
+                 *     modifier = Modifier.layout { measurable, constraints ->
+                 *         val placeable = measurable.measure(constraints)
+                 *         val targetW = if (isSubmenu) subPageWidth else mainPageWidth
+                 *         val targetH = if (isSubmenu) subPageHeight else mainPageHeight
+                 *         layout(targetW.toInt(), targetH.toInt()) { placeable.placeRelative(0, 0) }
+                 *     }
+                 * ) {
+                 *     Column(Modifier.graphicsLayer { translationX = -pageTransition * 32.dp.toPx() }) { ... }
+                 *     Column(Modifier.graphicsLayer { translationX = (1f - pageTransition) * 32.dp.toPx() }) { ... }
+                 * }
+                 */
             }
+        }
         }
     }
 }

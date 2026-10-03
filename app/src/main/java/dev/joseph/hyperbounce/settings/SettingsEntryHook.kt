@@ -19,6 +19,8 @@ import java.lang.reflect.Method
 object SettingsEntryHook {
     private const val TAG = "HyperBounce_SettingsEntry"
     private const val HEADER_ID = 666L
+    @Volatile
+    private var isLoaderAdded = false
 
     fun init(module: XposedModule, classLoader: ClassLoader, prefs: SharedPreferences?) {
         try {
@@ -79,23 +81,60 @@ object SettingsEntryHook {
                             headerClass.getField("title").set(header, "HyperiOS")
                         } catch (_: Throwable) {}
 
+                        // Inject module resources into Settings so it can resolve our app icon and drawables
+                        var appIconDrawable: android.graphics.drawable.Drawable? = null
+                        var iconRes = 0
+                        try {
+                            val pkgName = "dev.hyperios.app"
+                            val appInfo = try {
+                                context.packageManager.getApplicationInfo(pkgName, 0)
+                            } catch (_: Throwable) {
+                                context.packageManager.getApplicationInfo("dev.joseph.hyperbounce", 0)
+                            }
+                            iconRes = appInfo.icon
+                            appIconDrawable = context.packageManager.getApplicationIcon(appInfo)
+
+                            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R && !isLoaderAdded) {
+                                try {
+                                    val apkFile = java.io.File(appInfo.sourceDir)
+                                    val pfd = android.os.ParcelFileDescriptor.open(apkFile, android.os.ParcelFileDescriptor.MODE_READ_ONLY)
+                                    val provider = android.content.res.loader.ResourcesProvider.loadFromApk(pfd)
+                                    val loader = android.content.res.loader.ResourcesLoader()
+                                    loader.addProvider(provider)
+                                    context.resources.addLoaders(loader)
+                                    activity.resources.addLoaders(loader)
+                                    pfd.close()
+                                    isLoaderAdded = true
+                                } catch (e: Throwable) {
+                                    Log.w(TAG, "Failed to add ResourcesLoader: ${e.message}")
+                                }
+                            }
+                        } catch (t: Throwable) {
+                            Log.w(TAG, "Failed resolving module info: ${t.message}")
+                        }
+
                         // Set Icon
                         try {
-                            var iconRes = 0
-                            try {
-                                iconRes = context.packageManager.getApplicationInfo("dev.joseph.hyperbounce", 0).icon
-                            } catch (_: Throwable) {}
-                            if (iconRes == 0) {
-                                iconRes = context.resources.getIdentifier("ic_my_device", "drawable", context.packageName)
+                            if (iconRes != 0) {
+                                headerClass.getField("iconRes").setInt(header, iconRes)
+                            } else {
+                                val fallbackRes = context.resources.getIdentifier("ic_my_device", "drawable", context.packageName)
+                                headerClass.getField("iconRes").setInt(header, fallbackRes)
                             }
-                            headerClass.getField("iconRes").setInt(header, iconRes)
                         } catch (_: Throwable) {}
+
+                        // Also set 'icon' Drawable field if available on Header
+                        if (appIconDrawable != null) {
+                            try {
+                                headerClass.getField("icon").set(header, appIconDrawable)
+                            } catch (_: Throwable) {}
+                        }
 
                         // Set Intent
                         try {
                             val intent = Intent().apply {
                                 putExtra("isDisplayHomeAsUpEnabled", true)
-                                setClassName("dev.joseph.hyperbounce", "dev.joseph.hyperbounce.ui.MainActivity")
+                                setClassName("dev.hyperios.app", "dev.hyperios.app.ui.MainActivity")
                             }
                             headerClass.getField("intent").set(header, intent)
                         } catch (_: Throwable) {}

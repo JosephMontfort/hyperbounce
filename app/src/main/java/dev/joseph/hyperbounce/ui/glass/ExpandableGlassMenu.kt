@@ -462,7 +462,7 @@ fun GlassEffectContainer(
     content: @Composable () -> Unit
 ) {
     val density = LocalDensity.current
-    val isLightTheme = !isSystemInDarkTheme()
+    val isLightTheme = !dev.joseph.hyperbounce.ui.theme.LocalIsDarkTheme.current
 
     val morphSettings = dev.joseph.hyperbounce.ui.glass.LocalMorphPhysics.current
     val circleCollapseRatio = morphSettings.circleCollapseRatio

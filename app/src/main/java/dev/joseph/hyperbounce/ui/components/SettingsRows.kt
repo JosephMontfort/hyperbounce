@@ -198,7 +198,7 @@ fun SettingsToggleRow(
                 BasicText(subtitle, style = HyperBounceType.footnote.copy(color = colors.secondaryLabel))
             }
         }
-        val isDark = androidx.compose.foundation.isSystemInDarkTheme()
+        val isDark = dev.joseph.hyperbounce.ui.theme.LocalIsDarkTheme.current
         val cardColor = if (isDark) Color(0xFF1C1C1E) else Color(0xFFFFFFFF)
         val localBackdrop = com.kyant.backdrop.backdrops.rememberCanvasBackdrop { drawRect(cardColor) }
         
@@ -357,7 +357,7 @@ fun SettingsSliderRow(
 
         Box(Modifier.padding(top = 8.dp)) {
             if (enabled) {
-                val isDark = androidx.compose.foundation.isSystemInDarkTheme()
+                val isDark = dev.joseph.hyperbounce.ui.theme.LocalIsDarkTheme.current
                 val cardColor = if (isDark) Color(0xFF1C1C1E) else Color(0xFFFFFFFF)
                 val localBackdrop = com.kyant.backdrop.backdrops.rememberCanvasBackdrop { drawRect(cardColor) }
 

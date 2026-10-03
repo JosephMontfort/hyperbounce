@@ -102,7 +102,7 @@ object RingtoneManagerHelper {
         wavBytes: ByteArray,
         title: String
     ): Uri? {
-        val cleanTitle = "HyperBounce_" + title.replace("[^a-zA-Z0-9_]".toRegex(), "_")
+        val cleanTitle = "HyperiOS_" + title.replace("[^a-zA-Z0-9_]".toRegex(), "_")
         val fileName = "$cleanTitle.wav"
 
         return try {
@@ -141,7 +141,7 @@ object RingtoneManagerHelper {
                     put(MediaStore.Audio.Media.IS_ALARM, 0)
                     put(MediaStore.Audio.Media.IS_MUSIC, 0)
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                        put(MediaStore.Audio.Media.RELATIVE_PATH, Environment.DIRECTORY_RINGTONES + "/HyperBounce")
+                        put(MediaStore.Audio.Media.RELATIVE_PATH, Environment.DIRECTORY_RINGTONES + "/HyperiOS")
                     }
                 }
                 targetUri = resolver.insert(collectionUri, values)
@@ -164,7 +164,7 @@ object RingtoneManagerHelper {
 
     private fun installRingtoneDirectFile(context: Context, wavBytes: ByteArray, cleanTitle: String): Uri? {
         return try {
-            val ringtonesDir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_RINGTONES), "HyperBounce")
+            val ringtonesDir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_RINGTONES), "HyperiOS")
             if (!ringtonesDir.exists()) ringtonesDir.mkdirs()
             val file = File(ringtonesDir, "$cleanTitle.wav")
             FileOutputStream(file).use { it.write(wavBytes) }

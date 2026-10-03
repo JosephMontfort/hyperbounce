@@ -18,7 +18,7 @@ import java.util.zip.ZipOutputStream
 object RingtoneModuleBuilder {
 
     private const val TAG = "RingtoneModuleBuilder"
-    const val MODULE_NAME = "HyperBounce_Haptic_Ringtones_Module.zip"
+    const val MODULE_NAME = "HyperiOS_Haptic_Ringtones_Module.zip"
 
     data class RingtonePackageItem(
         val presetId: String,
@@ -185,11 +185,11 @@ object RingtoneModuleBuilder {
 
                 // 2. module.prop
                 val modulePropContent = buildString {
-                    appendLine("id=hyperbounce_custom_ringtones")
-                    appendLine("name=HyperBounce Custom Haptic Ringtones")
+                    appendLine("id=hyperios_custom_ringtones")
+                    appendLine("name=HyperiOS Custom Haptic Ringtones")
                     appendLine("version=v1.1")
                     appendLine("versionCode=101")
-                    appendLine("author=JosephMontfort & HyperBounce")
+                    appendLine("author=JosephMontfort & HyperiOS")
                     appendLine("description=Custom ringtones with precision tactile haptics mapped to hardware linear resonant actuator. Bundles ${packageItems.size} custom ringtone(s).")
                 }
                 zos.putNextEntry(ZipEntry("module.prop"))
@@ -201,7 +201,7 @@ object RingtoneModuleBuilder {
                     appendLine("#!/system/bin/sh")
                     appendLine("SKIPUNZIP=0")
                     appendLine("ui_print \"****************************************\"")
-                    appendLine("ui_print \"* HyperBounce Custom Haptic Ringtones  *\"")
+                    appendLine("ui_print \"* HyperiOS Custom Haptic Ringtones     *\"")
                     appendLine("ui_print \"* Native Hardware LRA Integration      *\"")
                     appendLine("ui_print \"****************************************\"")
                     appendLine("ui_print \"- Installing ${packageItems.size} custom ringtone(s):\"")

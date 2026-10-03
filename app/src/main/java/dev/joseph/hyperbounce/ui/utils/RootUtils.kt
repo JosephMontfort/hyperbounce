@@ -11,7 +11,7 @@ object RootUtils {
     fun restartSystemUI(context: Context) {
         runCommand(
             context = context,
-            command = "killall com.android.systemui || pkill -f com.android.systemui",
+            command = "killall -9 com.android.systemui || pkill -9 -f com.android.systemui",
             label = "System UI"
         )
     }
@@ -19,7 +19,7 @@ object RootUtils {
     fun restartLauncher(context: Context) {
         runCommand(
             context = context,
-            command = "killall com.miui.home || pkill -f com.miui.home",
+            command = "killall -9 com.miui.home || pkill -9 -f com.miui.home",
             label = "System Launcher"
         )
     }
@@ -27,7 +27,7 @@ object RootUtils {
     fun rebootDevice(context: Context) {
         runCommand(
             context = context,
-            command = "reboot || /system/bin/reboot",
+            command = "svc power reboot || reboot || /system/bin/reboot",
             label = "Device"
         )
     }

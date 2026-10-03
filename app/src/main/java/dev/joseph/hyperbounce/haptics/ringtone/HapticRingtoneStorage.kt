@@ -59,7 +59,7 @@ object HapticRingtoneStorage {
             val text = file.readText()
             val json = JSONObject(text)
 
-            val title = json.optString("title", "HyperBounce Ringtone")
+            val title = json.optString("title", "HyperiOS Ringtone")
             val durationMs = json.optLong("durationMs", 30000L)
             val modeName = json.optString("intensityMode", HapticIntensityMode.Punchy.name)
             val intensityMode = try {

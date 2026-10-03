@@ -204,7 +204,7 @@ fun ControlCenterScreen(
                                     cc.setLandscapeRightMaxRows(3)
                                     context.sendBroadcast(Intent("dev.joseph.hyperbounce.RESET_CC_LAYOUT"))
                                     context.contentResolver.call(
-                                        Uri.parse("content://dev.joseph.hyperbounce.provider"),
+                                        Uri.parse("content://dev.hyperios.app.provider"),
                                         "resetCCLayout", null, null
                                     )
                                     Toast.makeText(context, "Control Center layout reset to stock!", Toast.LENGTH_SHORT).show()

@@ -257,7 +257,7 @@ fun ScreenScaffold(
             // Dedicated top-right pinned expandable glass menu overlay (full-screen overlay with edge-to-edge dimming)
             if (onResetPage != null || onRestartApp != null) {
                 val glass = LocalGlassSettings.current
-                val isDark = isSystemInDarkTheme()
+                val isDark = dev.joseph.hyperbounce.ui.theme.LocalIsDarkTheme.current
                 val menuContentColor = if (isDark) Color.White else Color.Black
                 val menuSecondaryColor = menuContentColor.copy(alpha = 0.7f)
 
