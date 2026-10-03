@@ -973,19 +973,20 @@ fun HapticStudioScreen(
                 Spacer(Modifier.height(36.dp))
             }
         }
+    }
 
-        // Magisk / KernelSU Ringtone Module Packaging Modal
-        RingtoneModuleBuilderDialog(
-            isOpen = isModuleDialogOpen,
-            savedPresets = savedPresets,
-            colors = colors,
-            backdrop = backdrop,
-            initialSelectedPresetId = moduleDialogTargetPresetId,
-            onDismiss = {
-                isModuleDialogOpen = false
-                moduleDialogTargetPresetId = null
-            }
-        )
+    // Magisk / KernelSU Ringtone Module Packaging Modal
+    RingtoneModuleBuilderDialog(
+        isOpen = isModuleDialogOpen,
+        savedPresets = savedPresets,
+        colors = colors,
+        backdrop = backdrop,
+        initialSelectedPresetId = moduleDialogTargetPresetId,
+        onDismiss = {
+            isModuleDialogOpen = false
+            moduleDialogTargetPresetId = null
+        }
+    )
     }
 }
 
