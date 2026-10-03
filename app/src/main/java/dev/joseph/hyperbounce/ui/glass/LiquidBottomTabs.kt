@@ -36,6 +36,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -156,6 +157,9 @@ fun LiquidBottomTabs(
         var lastHapticIndex by remember(selectedTabIndex) {
             mutableIntStateOf(selectedTabIndex())
         }
+        var currentDragValue by remember(selectedTabIndex) {
+            mutableFloatStateOf(selectedTabIndex().toFloat())
+        }
         val currentHapticsEnabled by rememberUpdatedState(glass.hapticsEnabled)
         val dampedDragAnimation = remember(animationScope) {
             DampedDragAnimation(
@@ -165,9 +169,12 @@ fun LiquidBottomTabs(
                 visibilityThreshold = 0.001f,
                 initialScale = 1f,
                 pressedScale = 78f / 56f,
-                onDragStarted = {},
+                onDragStarted = {
+                    currentDragValue = dampedDragAnimation.value
+                },
                 onDragStopped = {
-                    val targetIndex = targetValue.fastRoundToInt().fastCoerceIn(0, tabsCount - 1)
+                    val targetIndex = currentDragValue.fastRoundToInt().fastCoerceIn(0, tabsCount - 1)
+                    currentDragValue = targetIndex.toFloat()
                     animateToValue(targetIndex.toFloat())
                     onTabSelected(targetIndex)
                     animationScope.launch {
@@ -178,11 +185,12 @@ fun LiquidBottomTabs(
                     }
                 },
                 onDrag = { _, dragAmount ->
-                    val newVal = (targetValue + dragAmount.x / tabWidth * if (isLtr) 1f else -1f)
+                    val deltaFraction = dragAmount.x / tabWidth * (if (isLtr) 1f else -1f)
+                    currentDragValue = (currentDragValue + deltaFraction)
                         .fastCoerceIn(0f, (tabsCount - 1).toFloat())
-                    updateValue(newVal)
+                    updateValue(currentDragValue)
                     
-                    val newIndex = newVal.fastRoundToInt()
+                    val newIndex = currentDragValue.fastRoundToInt()
                     if (newIndex != lastHapticIndex) {
                         lastHapticIndex = newIndex
                         if (currentHapticsEnabled) {
@@ -199,6 +207,7 @@ fun LiquidBottomTabs(
         LaunchedEffect(selectedTabIndex) {
             snapshotFlow { selectedTabIndex() }
                 .collectLatest { index ->
+                    currentDragValue = index.toFloat()
                     dampedDragAnimation.animateToValue(index.toFloat())
                 }
         }

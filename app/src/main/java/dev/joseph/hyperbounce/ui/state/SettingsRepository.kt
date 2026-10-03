@@ -125,26 +125,49 @@ class SettingsRepository(context: Context) {
         return json.toString(2)
     }
 
+    private val reloadablePrefs = mutableListOf<ReloadablePref>()
+
     fun importSettingsFromJson(jsonStr: String): Boolean {
         return try {
             val json = org.json.JSONObject(jsonStr)
             val editor = prefs.edit()
             val keys = json.keys()
+            val delegateMap = reloadablePrefs.associateBy { it.key }
             while (keys.hasNext()) {
                 val key = keys.next()
-                when (val value = json.get(key)) {
-                    is Boolean -> editor.putBoolean(key, value)
-                    is Int -> editor.putInt(key, value)
-                    is Long -> editor.putLong(key, value)
-                    is Double -> editor.putFloat(key, value.toFloat())
-                    is String -> editor.putString(key, value)
+                val value = json.get(key)
+                val delegate = delegateMap[key]
+                if (delegate != null) {
+                    delegate.writeJsonValue(editor, value)
+                } else {
+                    when (val cur = prefs.all[key]) {
+                        is Boolean -> editor.putBoolean(key, if (value is Boolean) value else value.toString().toBoolean())
+                        is Float -> editor.putFloat(key, (value as? Number)?.toFloat() ?: (value.toString().toFloatOrNull() ?: 0f))
+                        is Int -> editor.putInt(key, (value as? Number)?.toInt() ?: (value.toString().toIntOrNull() ?: 0))
+                        is Long -> editor.putLong(key, (value as? Number)?.toLong() ?: (value.toString().toLongOrNull() ?: 0L))
+                        is String -> editor.putString(key, value.toString())
+                        else -> {
+                            if (key.startsWith("unlock_r") && (key.endsWith("_z") || key.endsWith("_bounce") || key.endsWith("_settle"))) {
+                                editor.putFloat(key, (value as? Number)?.toFloat() ?: (value.toString().toFloatOrNull() ?: 0f))
+                            } else {
+                                when (value) {
+                                    is Boolean -> editor.putBoolean(key, value)
+                                    is Double -> editor.putFloat(key, value.toFloat())
+                                    is Int -> editor.putInt(key, value)
+                                    is Long -> editor.putLong(key, value)
+                                    is String -> editor.putString(key, value)
+                                }
+                            }
+                        }
+                    }
                 }
             }
             editor.apply()
             pushAllLocalToRemote()
-            appTheme = AppTheme.valueOf(prefs.getString("app_theme", AppTheme.FollowSystem.name) ?: AppTheme.FollowSystem.name)
-            componentStyle = ComponentStyle.valueOf(prefs.getString("component_style", ComponentStyle.LiquidGlass.name) ?: ComponentStyle.LiquidGlass.name)
-            settingsAppEntryEnabled = prefs.getBoolean("settings_app_entry_enabled", false)
+            for (delegate in reloadablePrefs) {
+                delegate.reload()
+            }
+            screenUnlock.reloadDynamicRows()
             true
         } catch (_: Throwable) {
             false
@@ -925,7 +948,7 @@ class SettingsRepository(context: Context) {
         fun getRowZ(row: Int): Float {
             return rowZStates.getOrPut(row) {
                 val defZ = ScreenUnlockDefaults.rowZ(row, gridRows)
-                prefs.getFloat("unlock_r${row}_z", defZ)
+                prefs.safeGetFloat("unlock_r${row}_z", defZ)
             }
         }
         fun setRowZ(row: Int, v: Float) {
@@ -939,7 +962,7 @@ class SettingsRepository(context: Context) {
         fun getRowCenterBounce(row: Int): Float {
             return rowCenterBounceStates.getOrPut(row) {
                 val defBounce = ScreenUnlockDefaults.rowBounce(row, gridRows, false)
-                prefs.getFloat("unlock_r${row}_center_bounce", defBounce)
+                prefs.safeGetFloat("unlock_r${row}_center_bounce", defBounce)
             }
         }
         fun setRowCenterBounce(row: Int, v: Float) {
@@ -953,7 +976,7 @@ class SettingsRepository(context: Context) {
         fun getRowOuterBounce(row: Int): Float {
             return rowOuterBounceStates.getOrPut(row) {
                 val defBounce = ScreenUnlockDefaults.rowBounce(row, gridRows, true)
-                prefs.getFloat("unlock_r${row}_outer_bounce", defBounce)
+                prefs.safeGetFloat("unlock_r${row}_outer_bounce", defBounce)
             }
         }
         fun setRowOuterBounce(row: Int, v: Float) {
@@ -967,7 +990,7 @@ class SettingsRepository(context: Context) {
         fun getRowCenterSettle(row: Int): Float {
             return rowCenterSettleStates.getOrPut(row) {
                 val defSettle = ScreenUnlockDefaults.rowSettle(row, gridRows, false)
-                prefs.getFloat("unlock_r${row}_center_settle", defSettle)
+                prefs.safeGetFloat("unlock_r${row}_center_settle", defSettle)
             }
         }
         fun setRowCenterSettle(row: Int, v: Float) {
@@ -981,7 +1004,7 @@ class SettingsRepository(context: Context) {
         fun getRowOuterSettle(row: Int): Float {
             return rowOuterSettleStates.getOrPut(row) {
                 val defSettle = ScreenUnlockDefaults.rowSettle(row, gridRows, true)
-                prefs.getFloat("unlock_r${row}_outer_settle", defSettle)
+                prefs.safeGetFloat("unlock_r${row}_outer_settle", defSettle)
             }
         }
         fun setRowOuterSettle(row: Int, v: Float) {
@@ -990,6 +1013,14 @@ class SettingsRepository(context: Context) {
             prefs.edit().putFloat(key, v).apply()
             XposedServiceBridge.remotePreferencesOrNull(PREFS_NAME)?.edit()?.putFloat(key, v)?.apply()
             SettingsRepository.sendSettingsChangedBroadcast(key, v)
+        }
+
+        fun reloadDynamicRows() {
+            rowZStates.clear()
+            rowCenterBounceStates.clear()
+            rowOuterBounceStates.clear()
+            rowCenterSettleStates.clear()
+            rowOuterSettleStates.clear()
         }
 
         fun snapshot(): ScreenUnlockSettings = ScreenUnlockSettings(
@@ -1503,30 +1534,108 @@ class SettingsRepository(context: Context) {
     // --- small property-delegate helpers over SharedPreferences --------------------------
 
     private fun prefsBooleanState(key: String, default: Boolean) =
-        PrefBooleanDelegate(prefs, key, default)
+        PrefBooleanDelegate(prefs, key, default).also { reloadablePrefs.add(it) }
 
     private fun prefsIntState(key: String, default: Int) =
-        PrefIntDelegate(prefs, key, default)
+        PrefIntDelegate(prefs, key, default).also { reloadablePrefs.add(it) }
 
     private fun prefsLongState(key: String, default: Long) =
-        PrefLongDelegate(prefs, key, default)
+        PrefLongDelegate(prefs, key, default).also { reloadablePrefs.add(it) }
 
     private fun prefsFloatState(key: String, default: Float) =
-        PrefFloatDelegate(prefs, key, default)
+        PrefFloatDelegate(prefs, key, default).also { reloadablePrefs.add(it) }
 
     private fun prefsStringState(key: String, default: String) =
-        PrefStringDelegate(prefs, key, default)
+        PrefStringDelegate(prefs, key, default).also { reloadablePrefs.add(it) }
 
     private inline fun <reified E : Enum<E>> prefsEnumState(key: String, default: E) =
-        PrefEnumDelegate(prefs, key, default, enumValues<E>())
+        PrefEnumDelegate(prefs, key, default, enumValues<E>()).also { reloadablePrefs.add(it) }
+}
+
+internal sealed interface ReloadablePref {
+    val key: String
+    fun reload()
+    fun writeJsonValue(editor: SharedPreferences.Editor, rawValue: Any)
+}
+
+internal fun SharedPreferences.safeGetFloat(key: String, default: Float): Float {
+    return try {
+        this.getFloat(key, default)
+    } catch (_: ClassCastException) {
+        val raw = try { this.all[key] } catch (_: Throwable) { null }
+        val v = when (raw) {
+            is Number -> raw.toFloat()
+            is String -> raw.toFloatOrNull() ?: default
+            else -> default
+        }
+        try { this.edit().putFloat(key, v).apply() } catch (_: Throwable) {}
+        v
+    }
+}
+
+internal fun SharedPreferences.safeGetInt(key: String, default: Int): Int {
+    return try {
+        this.getInt(key, default)
+    } catch (_: ClassCastException) {
+        val raw = try { this.all[key] } catch (_: Throwable) { null }
+        val v = when (raw) {
+            is Number -> raw.toInt()
+            is String -> raw.toIntOrNull() ?: default
+            else -> default
+        }
+        try { this.edit().putInt(key, v).apply() } catch (_: Throwable) {}
+        v
+    }
+}
+
+internal fun SharedPreferences.safeGetLong(key: String, default: Long): Long {
+    return try {
+        this.getLong(key, default)
+    } catch (_: ClassCastException) {
+        val raw = try { this.all[key] } catch (_: Throwable) { null }
+        val v = when (raw) {
+            is Number -> raw.toLong()
+            is String -> raw.toLongOrNull() ?: default
+            else -> default
+        }
+        try { this.edit().putLong(key, v).apply() } catch (_: Throwable) {}
+        v
+    }
+}
+
+internal fun SharedPreferences.safeGetBoolean(key: String, default: Boolean): Boolean {
+    return try {
+        this.getBoolean(key, default)
+    } catch (_: ClassCastException) {
+        val raw = try { this.all[key] } catch (_: Throwable) { null }
+        val v = when (raw) {
+            is Boolean -> raw
+            is Number -> raw.toInt() != 0
+            is String -> raw.toBoolean()
+            else -> default
+        }
+        try { this.edit().putBoolean(key, v).apply() } catch (_: Throwable) {}
+        v
+    }
+}
+
+internal fun SharedPreferences.safeGetString(key: String, default: String): String {
+    return try {
+        this.getString(key, default) ?: default
+    } catch (_: ClassCastException) {
+        val raw = try { this.all[key] } catch (_: Throwable) { null }
+        val v = raw?.toString() ?: default
+        try { this.edit().putString(key, v).apply() } catch (_: Throwable) {}
+        v
+    }
 }
 
 private class PrefBooleanDelegate(
     private val prefs: SharedPreferences,
-    private val key: String,
-    default: Boolean
-) {
-    private var state by mutableStateOf(prefs.getBoolean(key, default))
+    override val key: String,
+    private val default: Boolean
+) : ReloadablePref {
+    private var state by mutableStateOf(prefs.safeGetBoolean(key, default))
     operator fun getValue(thisRef: Any?, property: KProperty<*>): Boolean = state
     operator fun setValue(thisRef: Any?, property: KProperty<*>, value: Boolean) {
         state = value
@@ -1534,14 +1643,26 @@ private class PrefBooleanDelegate(
         XposedServiceBridge.remotePreferencesOrNull(PREFS_NAME)?.edit()?.putBoolean(key, value)?.apply()
         SettingsRepository.sendSettingsChangedBroadcast(key, value)
     }
+    override fun reload() {
+        state = prefs.safeGetBoolean(key, default)
+    }
+    override fun writeJsonValue(editor: SharedPreferences.Editor, rawValue: Any) {
+        val v = when (rawValue) {
+            is Boolean -> rawValue
+            is Number -> rawValue.toInt() != 0
+            is String -> rawValue.toBoolean()
+            else -> default
+        }
+        editor.putBoolean(key, v)
+    }
 }
 
 private class PrefLongDelegate(
     private val prefs: SharedPreferences,
-    private val key: String,
-    default: Long
-) {
-    private var state by mutableStateOf(prefs.getLong(key, default))
+    override val key: String,
+    private val default: Long
+) : ReloadablePref {
+    private var state by mutableStateOf(prefs.safeGetLong(key, default))
     operator fun getValue(thisRef: Any?, property: KProperty<*>): Long = state
     operator fun setValue(thisRef: Any?, property: KProperty<*>, value: Long) {
         state = value
@@ -1549,14 +1670,25 @@ private class PrefLongDelegate(
         XposedServiceBridge.remotePreferencesOrNull(PREFS_NAME)?.edit()?.putLong(key, value)?.apply()
         SettingsRepository.sendSettingsChangedBroadcast(key, value)
     }
+    override fun reload() {
+        state = prefs.safeGetLong(key, default)
+    }
+    override fun writeJsonValue(editor: SharedPreferences.Editor, rawValue: Any) {
+        val v = when (rawValue) {
+            is Number -> rawValue.toLong()
+            is String -> rawValue.toLongOrNull() ?: default
+            else -> default
+        }
+        editor.putLong(key, v)
+    }
 }
 
 private class PrefIntDelegate(
     private val prefs: SharedPreferences,
-    private val key: String,
-    default: Int
-) {
-    private var state by mutableStateOf(prefs.getInt(key, default))
+    override val key: String,
+    private val default: Int
+) : ReloadablePref {
+    private var state by mutableStateOf(prefs.safeGetInt(key, default))
     operator fun getValue(thisRef: Any?, property: KProperty<*>): Int = state
     operator fun setValue(thisRef: Any?, property: KProperty<*>, value: Int) {
         state = value
@@ -1564,14 +1696,25 @@ private class PrefIntDelegate(
         XposedServiceBridge.remotePreferencesOrNull(PREFS_NAME)?.edit()?.putInt(key, value)?.apply()
         SettingsRepository.sendSettingsChangedBroadcast(key, value)
     }
+    override fun reload() {
+        state = prefs.safeGetInt(key, default)
+    }
+    override fun writeJsonValue(editor: SharedPreferences.Editor, rawValue: Any) {
+        val v = when (rawValue) {
+            is Number -> rawValue.toInt()
+            is String -> rawValue.toIntOrNull() ?: default
+            else -> default
+        }
+        editor.putInt(key, v)
+    }
 }
 
 private class PrefFloatDelegate(
     private val prefs: SharedPreferences,
-    private val key: String,
-    default: Float
-) {
-    private var state by mutableStateOf(prefs.getFloat(key, default))
+    override val key: String,
+    private val default: Float
+) : ReloadablePref {
+    private var state by mutableStateOf(prefs.safeGetFloat(key, default))
     operator fun getValue(thisRef: Any?, property: KProperty<*>): Float = state
     operator fun setValue(thisRef: Any?, property: KProperty<*>, value: Float) {
         state = value
@@ -1579,14 +1722,25 @@ private class PrefFloatDelegate(
         XposedServiceBridge.remotePreferencesOrNull(PREFS_NAME)?.edit()?.putFloat(key, value)?.apply()
         SettingsRepository.sendSettingsChangedBroadcast(key, value)
     }
+    override fun reload() {
+        state = prefs.safeGetFloat(key, default)
+    }
+    override fun writeJsonValue(editor: SharedPreferences.Editor, rawValue: Any) {
+        val v = when (rawValue) {
+            is Number -> rawValue.toFloat()
+            is String -> rawValue.toFloatOrNull() ?: default
+            else -> default
+        }
+        editor.putFloat(key, v)
+    }
 }
 
 private class PrefStringDelegate(
     private val prefs: SharedPreferences,
-    private val key: String,
-    default: String
-) {
-    private var state by mutableStateOf(prefs.getString(key, default) ?: default)
+    override val key: String,
+    private val default: String
+) : ReloadablePref {
+    private var state by mutableStateOf(prefs.safeGetString(key, default))
     operator fun getValue(thisRef: Any?, property: KProperty<*>): String = state
     operator fun setValue(thisRef: Any?, property: KProperty<*>, value: String) {
         state = value
@@ -1594,16 +1748,22 @@ private class PrefStringDelegate(
         XposedServiceBridge.remotePreferencesOrNull(PREFS_NAME)?.edit()?.putString(key, value)?.apply()
         SettingsRepository.sendSettingsChangedBroadcast(key, value)
     }
+    override fun reload() {
+        state = prefs.safeGetString(key, default)
+    }
+    override fun writeJsonValue(editor: SharedPreferences.Editor, rawValue: Any) {
+        editor.putString(key, rawValue.toString())
+    }
 }
 
 private class PrefEnumDelegate<E : Enum<E>>(
     private val prefs: SharedPreferences,
-    private val key: String,
-    default: E,
+    override val key: String,
+    private val default: E,
     private val values: Array<E>
-) {
+) : ReloadablePref {
     private var state by mutableStateOf(
-        prefs.getString(key, default.name)?.let { name -> values.find { it.name == name } } ?: default
+        prefs.safeGetString(key, default.name).let { name -> values.find { it.name == name } } ?: default
     )
 
     operator fun getValue(thisRef: Any?, property: KProperty<*>): E = state
@@ -1612,5 +1772,11 @@ private class PrefEnumDelegate<E : Enum<E>>(
         prefs.edit().putString(key, value.name).apply()
         XposedServiceBridge.remotePreferencesOrNull(PREFS_NAME)?.edit()?.putString(key, value.name)?.apply()
         SettingsRepository.sendSettingsChangedBroadcast(key, value.name)
+    }
+    override fun reload() {
+        state = prefs.safeGetString(key, default.name).let { name -> values.find { it.name == name } } ?: default
+    }
+    override fun writeJsonValue(editor: SharedPreferences.Editor, rawValue: Any) {
+        editor.putString(key, rawValue.toString())
     }
 }

@@ -18,7 +18,11 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -213,13 +217,19 @@ fun RootScaffold(
             )
         }
 
-        // Full-screen scrim to dismiss the menu when tapping outside it
+        // Full-screen scrim to dismiss the menu when tapping or swiping outside it
         if (menuExpanded) {
             Box(
                 Modifier
                     .fillMaxSize()
                     .pointerInput(Unit) {
                         detectTapGestures { closeMenu() }
+                    }
+                    .pointerInput(Unit) {
+                        detectDragGestures(
+                            onDragStart = { closeMenu() },
+                            onDrag = { _, _ -> }
+                        )
                     }
             )
         }
@@ -323,7 +333,14 @@ fun RootScaffold(
                                 )
                             )
                         },
-                        icon = { SlidersIcon(color = menuContentColor, size = 15.dp, strokeWidth = 1.8.dp) },
+                        icon = {
+                            StockMonochromeAppIcon(
+                                packageName = "com.android.systemui",
+                                tint = menuContentColor,
+                                modifier = Modifier.size(16.dp),
+                                fallback = { SlidersIcon(color = menuContentColor, size = 15.dp, strokeWidth = 1.8.dp) }
+                            )
+                        },
                         enabled = true
                     )
                     MenuRow(
@@ -347,7 +364,14 @@ fun RootScaffold(
                                 )
                             )
                         },
-                        icon = { AppGridIcon(color = menuContentColor, size = 15.dp) },
+                        icon = {
+                            StockMonochromeAppIcon(
+                                packageName = "com.miui.home",
+                                tint = menuContentColor,
+                                modifier = Modifier.size(16.dp),
+                                fallback = { AppGridIcon(color = menuContentColor, size = 15.dp) }
+                            )
+                        },
                         enabled = true
                     )
                     MenuRow(
@@ -371,7 +395,7 @@ fun RootScaffold(
                                 )
                             )
                         },
-                        icon = { PowerIcon(color = menuContentColor, size = 14.dp, strokeWidth = 1.8.dp) },
+                        icon = { ResetArrowIcon(color = menuContentColor, size = 15.dp, strokeWidth = 1.8.dp) },
                         enabled = true
                     )
                 }
@@ -398,5 +422,54 @@ fun RootScaffold(
             }
         }
         }
+    }
+}
+
+@Composable
+private fun StockMonochromeAppIcon(
+    packageName: String,
+    tint: Color,
+    modifier: Modifier = Modifier,
+    fallback: @Composable () -> Unit
+) {
+    val context = LocalContext.current
+    val imageBitmap = remember(packageName, context) {
+        try {
+            val pm = context.packageManager
+            val appIcon = pm.getApplicationIcon(packageName)
+            val drawable = if (appIcon is android.graphics.drawable.AdaptiveIconDrawable) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && appIcon.monochrome != null) {
+                    appIcon.monochrome
+                } else {
+                    appIcon.foreground
+                }
+            } else {
+                appIcon
+            } ?: appIcon
+
+            val bmp = android.graphics.Bitmap.createBitmap(
+                drawable.intrinsicWidth.takeIf { it > 0 } ?: 96,
+                drawable.intrinsicHeight.takeIf { it > 0 } ?: 96,
+                android.graphics.Bitmap.Config.ARGB_8888
+            )
+            val canvas = android.graphics.Canvas(bmp)
+            drawable.setBounds(0, 0, canvas.width, canvas.height)
+            drawable.draw(canvas)
+
+            bmp.asImageBitmap()
+        } catch (_: Throwable) {
+            null
+        }
+    }
+
+    if (imageBitmap != null) {
+        Image(
+            bitmap = imageBitmap,
+            contentDescription = null,
+            modifier = modifier,
+            colorFilter = ColorFilter.tint(tint, BlendMode.SrcIn)
+        )
+    } else {
+        fallback()
     }
 }

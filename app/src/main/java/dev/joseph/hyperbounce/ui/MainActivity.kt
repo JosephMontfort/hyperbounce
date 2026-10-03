@@ -167,6 +167,13 @@ private fun HyperiOSApp(repository: SettingsRepository) {
                 var isPopping by remember { mutableStateOf(false) }
 
                 val push: (Destination) -> Unit = { destination ->
+                    // If a pop is currently in progress, cancel and finalize removing the exiting screen
+                    if (isPopping || dragOffset.value > 0f) {
+                        isPopping = false
+                        if (backStack.isNotEmpty()) {
+                            backStack.removeAt(backStack.lastIndex)
+                        }
+                    }
                     coroutineScope.launch {
                         dragOffset.snapTo(screenWidth)
                         backStack.add(destination)
@@ -178,12 +185,15 @@ private fun HyperiOSApp(repository: SettingsRepository) {
                     if (backStack.isNotEmpty() && !isPopping) {
                         isPopping = true
                         coroutineScope.launch {
-                            dragOffset.animateTo(screenWidth, spring(dampingRatio = 0.88f, stiffness = 420f))
-                            if (backStack.isNotEmpty()) {
-                                backStack.removeAt(backStack.lastIndex)
+                            try {
+                                dragOffset.animateTo(screenWidth, spring(dampingRatio = 0.88f, stiffness = 420f))
+                                if (backStack.isNotEmpty()) {
+                                    backStack.removeAt(backStack.lastIndex)
+                                }
+                                dragOffset.snapTo(0f)
+                            } finally {
+                                isPopping = false
                             }
-                            dragOffset.snapTo(0f)
-                            isPopping = false
                         }
                     }
                 }
@@ -305,17 +315,10 @@ private fun HyperiOSApp(repository: SettingsRepository) {
 
                                             if (localDragging) {
                                                 val threshold = screenWidth * 0.32f
-                                                coroutineScope.launch {
-                                                    if (dragOffset.value > threshold) {
-                                                        dragOffset.animateTo(
-                                                            screenWidth,
-                                                            spring(dampingRatio = 0.88f, stiffness = 420f)
-                                                        )
-                                                        if (backStack.isNotEmpty()) {
-                                                            backStack.removeAt(backStack.lastIndex)
-                                                        }
-                                                        dragOffset.snapTo(0f)
-                                                    } else {
+                                                if (dragOffset.value > threshold) {
+                                                    pop()
+                                                } else {
+                                                    coroutineScope.launch {
                                                         dragOffset.animateTo(
                                                             0f,
                                                             spring(dampingRatio = 0.78f, stiffness = 440f)
@@ -339,51 +342,57 @@ private fun HyperiOSApp(repository: SettingsRepository) {
                     }
                 }
 
-                // Floating bottom-center tab bar
-                AnimatedVisibility(
-                    visible = atRoot,
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .navigationBarsPadding()
-                        .padding(bottom = 16.dp),
-                    enter = slideInVertically(spring(dampingRatio = 0.8f, stiffness = 380f)) { it / 2 } + fadeIn(),
-                    exit = slideOutVertically(spring(dampingRatio = 0.8f, stiffness = 380f)) { it / 2 } + fadeOut()
-                ) {
-                    Box(Modifier.width(264.dp)) {
-                        val tabItemColor = if (isDark) Color.White else Color.Black
-                        LiquidBottomTabs(
-                            selectedTabIndex = { pagerState.currentPage },
-                            onTabSelected = selectTab,
-                            backdrop = navBackdrop,
-                            tabsCount = 3,
-                            modifier = Modifier.padding(bottom = 24.dp)
+                // Floating bottom-center tab bar (fluidly synchronized with screen transitions)
+                if (backStack.size <= 1) {
+                    val barProgress = if (backStack.isEmpty()) 1f else (dragOffset.value / screenWidth.coerceAtLeast(1f)).coerceIn(0f, 1f)
+                    if (barProgress > 0.001f) {
+                        Box(
+                            Modifier
+                                .align(Alignment.BottomCenter)
+                                .navigationBarsPadding()
+                                .padding(bottom = 16.dp)
+                                .graphicsLayer {
+                                    alpha = barProgress
+                                    translationY = (1f - barProgress) * 72.dp.toPx()
+                                }
                         ) {
-                            LiquidBottomTab(onClick = { selectTab(0) }) {
-                                Image(
-                                    painter = painterResource(R.drawable.ic_nav_home),
-                                    contentDescription = null,
-                                    modifier = Modifier.size(20.dp),
-                                    colorFilter = ColorFilter.tint(tabItemColor)
-                                )
-                                BasicText("Home", style = HyperBounceType.caption.copy(color = tabItemColor))
-                            }
-                            LiquidBottomTab(onClick = { selectTab(1) }) {
-                                Image(
-                                    painter = painterResource(R.drawable.ic_nav_settings),
-                                    contentDescription = null,
-                                    modifier = Modifier.size(20.dp),
-                                    colorFilter = ColorFilter.tint(tabItemColor)
-                                )
-                                BasicText("Settings", style = HyperBounceType.caption.copy(color = tabItemColor))
-                            }
-                            LiquidBottomTab(onClick = { selectTab(2) }) {
-                                Image(
-                                    painter = painterResource(R.drawable.ic_nav_about),
-                                    contentDescription = null,
-                                    modifier = Modifier.size(20.dp),
-                                    colorFilter = ColorFilter.tint(tabItemColor)
-                                )
-                                BasicText("About", style = HyperBounceType.caption.copy(color = tabItemColor))
+                            Box(Modifier.width(264.dp)) {
+                                val tabItemColor = if (isDark) Color.White else Color.Black
+                                LiquidBottomTabs(
+                                    selectedTabIndex = { pagerState.targetPage },
+                                    onTabSelected = selectTab,
+                                    backdrop = navBackdrop,
+                                    tabsCount = 3,
+                                    modifier = Modifier.padding(bottom = 24.dp)
+                                ) {
+                                    LiquidBottomTab(onClick = { selectTab(0) }) {
+                                        Image(
+                                            painter = painterResource(R.drawable.ic_nav_home),
+                                            contentDescription = null,
+                                            modifier = Modifier.size(20.dp),
+                                            colorFilter = ColorFilter.tint(tabItemColor)
+                                        )
+                                        BasicText("Home", style = HyperBounceType.caption.copy(color = tabItemColor))
+                                    }
+                                    LiquidBottomTab(onClick = { selectTab(1) }) {
+                                        Image(
+                                            painter = painterResource(R.drawable.ic_nav_settings),
+                                            contentDescription = null,
+                                            modifier = Modifier.size(20.dp),
+                                            colorFilter = ColorFilter.tint(tabItemColor)
+                                        )
+                                        BasicText("Settings", style = HyperBounceType.caption.copy(color = tabItemColor))
+                                    }
+                                    LiquidBottomTab(onClick = { selectTab(2) }) {
+                                        Image(
+                                            painter = painterResource(R.drawable.ic_nav_about),
+                                            contentDescription = null,
+                                            modifier = Modifier.size(20.dp),
+                                            colorFilter = ColorFilter.tint(tabItemColor)
+                                        )
+                                        BasicText("About", style = HyperBounceType.caption.copy(color = tabItemColor))
+                                    }
+                                }
                             }
                         }
                     }

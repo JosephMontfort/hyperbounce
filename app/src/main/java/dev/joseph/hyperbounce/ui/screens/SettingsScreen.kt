@@ -118,6 +118,16 @@ fun SettingsScreen(
                 colors = colors,
                 backdrop = backdrop
             )
+
+            RowDivider(colors.separator)
+
+            SettingsToggleRow(
+                title = "Haptic Feedback",
+                colors = colors,
+                backdrop = backdrop,
+                checked = repository.globalGlass.hapticsEnabled,
+                onCheckedChange = repository.globalGlass::setHapticsEnabled
+            )
         }
 
         // --- Card 2: System Integration ---
@@ -162,16 +172,6 @@ fun SettingsScreen(
                 title = "Safe Mode & Crash Recovery",
                 colors = colors,
                 onClick = { onNavigate(Destination.SafeMode) }
-            )
-
-            RowDivider(colors.separator)
-
-            SettingsToggleRow(
-                title = "Haptic Feedback",
-                colors = colors,
-                backdrop = backdrop,
-                checked = repository.globalGlass.hapticsEnabled,
-                onCheckedChange = repository.globalGlass::setHapticsEnabled
             )
         }
     }
