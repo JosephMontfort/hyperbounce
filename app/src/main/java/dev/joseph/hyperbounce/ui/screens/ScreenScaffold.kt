@@ -123,8 +123,8 @@ fun ScreenScaffold(
                         modifier = Modifier
                             .padding(horizontal = 20.dp)
                             .graphicsLayer {
-                                alpha = 1f - collapseProgress * 0.85f
-                                translationY = -collapseProgress * 6.dp.toPx()
+                                alpha = (1f - collapseProgress * 1.5f).coerceIn(0f, 1f)
+                                translationY = -collapseProgress * 8.dp.toPx()
                             },
                         style = HyperBounceType.largeTitle.copy(color = colors.label)
                     )
@@ -133,7 +133,7 @@ fun ScreenScaffold(
                             subtitle,
                             modifier = Modifier
                                 .padding(horizontal = 20.dp, vertical = 4.dp)
-                                .graphicsLayer { alpha = 1f - collapseProgress },
+                                .graphicsLayer { alpha = (1f - collapseProgress * 1.5f).coerceIn(0f, 1f) },
                             style = HyperBounceType.subhead.copy(color = colors.secondaryLabel)
                         )
                     }
@@ -150,23 +150,36 @@ fun ScreenScaffold(
                 tintColor = colors.background,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(130.dp)
+                    .height(110.dp)
+                    .graphicsLayer { alpha = collapseProgress }
             )
 
-            // Dedicated top-left pinned back button and collapsed title
-            Row(
+            // Dedicated top-left pinned back button
+            Box(
                 Modifier
                     .align(Alignment.TopStart)
                     .safeDrawingPadding()
-                    .padding(start = 16.dp, top = 10.dp, bottom = 10.dp, end = 72.dp),
-                verticalAlignment = Alignment.CenterVertically
+                    .padding(start = 16.dp, top = 6.dp)
             ) {
                 CircularGlassBackButton(onClick = onBack, backdrop = backdrop)
-                Spacer(Modifier.width(12.dp))
+            }
+
+            // Centered collapsed title, fades in at center top as the large title scrolls away
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .height(56.dp)
+                    .safeDrawingPadding()
+                    .padding(horizontal = 72.dp)
+                    .align(Alignment.TopCenter),
+                contentAlignment = Alignment.Center
+            ) {
                 BasicText(
                     title,
                     modifier = Modifier.graphicsLayer { alpha = collapseProgress },
-                    style = HyperBounceType.headline.copy(color = colors.label)
+                    style = HyperBounceType.headline.copy(color = colors.label),
+                    maxLines = 1,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                 )
             }
 

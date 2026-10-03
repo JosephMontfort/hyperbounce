@@ -152,11 +152,9 @@ fun NotificationCenterSheetScreen(
                     title = "Notification Center iOS Sheet",
                     subtitle = if (sheet.enabled) "Single cohesive container sliding down with static notifications" else "Disabled (Stock rolling animation)",
                     colors = colors,
-                    iconTint = colors.accentBlue,
                     backdrop = backdrop,
                     checked = sheet.enabled,
-                    onCheckedChange = sheet::setEnabled,
-                    icon = { SlidersIcon(color = Color.White, size = 15.dp) }
+                    onCheckedChange = sheet::setEnabled
                 )
             }
         }
@@ -168,11 +166,9 @@ fun NotificationCenterSheetScreen(
                     title = "Lock Screen Wallpaper Background",
                     subtitle = if (sheet.lockWallpaperEnabled) "Unblurred lockscreen wallpaper attached to the sheet, rolling down with it" else "Disabled (Transparent glass sheet)",
                     colors = colors,
-                    iconTint = colors.accentPurple,
                     backdrop = backdrop,
                     checked = sheet.lockWallpaperEnabled,
                     onCheckedChange = sheet::setLockWallpaperEnabled,
-                    icon = { LockIcon(color = Color.White, size = 15.dp) },
                     enabled = sheet.enabled
                 )
                 if (sheet.lockWallpaperEnabled) {
@@ -181,11 +177,9 @@ fun NotificationCenterSheetScreen(
                         title = "1:1 Finger Tracking",
                         subtitle = if (sheet.oneToOneTrackingEnabled) "Physical 1:1 finger tracking on shade pulldown with 50% halfway threshold snap on release" else "Disabled (HyperOS native 200px threshold)",
                         colors = colors,
-                        iconTint = colors.accentBlue,
                         backdrop = backdrop,
                         checked = sheet.oneToOneTrackingEnabled,
                         onCheckedChange = sheet::setOneToOneTrackingEnabled,
-                        icon = { SlidersIcon(color = Color.White, size = 15.dp) },
                         enabled = sheet.enabled && sheet.lockWallpaperEnabled
                     )
                     RowDivider(colors.separator)
@@ -193,11 +187,9 @@ fun NotificationCenterSheetScreen(
                         title = "Homescreen Only",
                         subtitle = if (sheet.lockWallpaperHomescreenOnly) "Active only when pulling down over homescreen; uses transparent glass over running apps" else "Active everywhere (over homescreen and apps)",
                         colors = colors,
-                        iconTint = colors.accentGreen,
                         backdrop = backdrop,
                         checked = sheet.lockWallpaperHomescreenOnly,
                         onCheckedChange = sheet::setLockWallpaperHomescreenOnly,
-                        icon = { AppGridIcon(color = Color.White, size = 15.dp) },
                         enabled = sheet.enabled && sheet.lockWallpaperEnabled
                     )
                     RowDivider(colors.separator)
@@ -205,11 +197,9 @@ fun NotificationCenterSheetScreen(
                         title = "Custom Background Wallpaper",
                         subtitle = if (sheet.customWallpaperEnabled) "Custom cropped wallpaper displayed behind notification sheet" else "Disabled (Uses lockscreen wallpaper)",
                         colors = colors,
-                        iconTint = colors.accentBlue,
                         backdrop = backdrop,
                         checked = sheet.customWallpaperEnabled,
                         onCheckedChange = sheet::setCustomWallpaperEnabled,
-                        icon = { ImageIcon(color = Color.White, size = 15.dp) },
                         enabled = sheet.enabled && sheet.lockWallpaperEnabled
                     )
                     if (sheet.customWallpaperEnabled) {
@@ -218,11 +208,9 @@ fun NotificationCenterSheetScreen(
                             title = if (hasCustomWallpaper) "Change & Crop Wallpaper" else "Choose & Crop Wallpaper",
                             subtitle = if (hasCustomWallpaper) "Custom wallpaper active. Tap to choose a new one and crop" else "Pick an image and crop to match screen aspect ratio",
                             colors = colors,
-                            iconTint = colors.accentBlue,
                             onClick = {
                                 customWallpaperPickerLauncher.launch("image/*")
-                            },
-                            icon = { ImageIcon(color = Color.White, size = 15.dp) }
+                            }
                         )
                         if (hasCustomWallpaper) {
                             RowDivider(colors.separator)
@@ -230,7 +218,6 @@ fun NotificationCenterSheetScreen(
                                 title = "Remove Custom Wallpaper",
                                 subtitle = "Revert to lockscreen wallpaper background",
                                 colors = colors,
-                                iconTint = colors.accentRed,
                                 titleColor = colors.accentRed,
                                 onClick = {
                                     CustomWallpaperHelper.clearCustomWallpaper(context)
@@ -241,8 +228,7 @@ fun NotificationCenterSheetScreen(
                                         val intent = Intent("dev.joseph.hyperbounce.ACTION_REFRESH_DEPTH_WALLPAPER")
                                         context.sendBroadcast(intent)
                                     } catch (_: Throwable) {}
-                                },
-                                icon = { TrashIcon(color = Color.White, size = 15.dp) }
+                                }
                             )
                         }
                     }
@@ -262,14 +248,12 @@ fun NotificationCenterSheetScreen(
                         title = "iOS 27 Depth Wallpaper Effect",
                         subtitle = if (sheet.depthWallpaperEnabled) "Static subject revealed over transparent background as shade descends" else "Disabled by default",
                         colors = colors,
-                        iconTint = colors.accentPurple,
                         backdrop = backdrop,
                         checked = sheet.depthWallpaperEnabled,
                         onCheckedChange = { enabled ->
                             sheet.setDepthWallpaperEnabled(enabled)
                             hasCustomSubject = DepthWallpaperHelper.hasCustomSubject(context) || sheet.depthCustomSubject
                         },
-                        icon = { LockIcon(color = Color.White, size = 15.dp) },
                         enabled = sheet.enabled && sheet.lockWallpaperEnabled
                     )
                     if (sheet.depthWallpaperEnabled) {
@@ -278,11 +262,9 @@ fun NotificationCenterSheetScreen(
                             title = if (hasCustomSubject) "Change Custom Subject (PNG)" else "Upload Custom Subject (PNG)",
                             subtitle = if (hasCustomSubject) "Custom subject active (cutout). Tap to pick another" else "Use your own cutout image with background already removed",
                             colors = colors,
-                            iconTint = colors.accentBlue,
                             onClick = {
                                 imagePickerLauncher.launch("image/*")
-                            },
-                            icon = { ImageIcon(color = Color.White, size = 15.dp) }
+                            }
                         )
                         if (hasCustomSubject) {
                             RowDivider(colors.separator)
@@ -290,7 +272,6 @@ fun NotificationCenterSheetScreen(
                                 title = "Adjust Depth Subject Position",
                                 subtitle = "Reposition and scale the cutout over the wallpaper",
                                 colors = colors,
-                                iconTint = colors.accentPurple,
                                 onClick = {
                                     val currentBmp = DepthWallpaperHelper.getSubjectBitmap(context)
                                     if (currentBmp != null) {
@@ -298,15 +279,13 @@ fun NotificationCenterSheetScreen(
                                     } else {
                                         Toast.makeText(context, "No subject image available to adjust", Toast.LENGTH_SHORT).show()
                                     }
-                                },
-                                icon = { LockIcon(color = Color.White, size = 15.dp) }
+                                }
                             )
                             RowDivider(colors.separator)
                             SettingsClickableRow(
                                 title = "Remove Custom Subject",
                                 subtitle = "Clear custom cutout subject",
                                 colors = colors,
-                                iconTint = colors.accentRed,
                                 titleColor = colors.accentRed,
                                 onClick = {
                                     DepthWallpaperHelper.clearCustomSubject(context) { success ->
@@ -318,8 +297,7 @@ fun NotificationCenterSheetScreen(
                                             context.sendBroadcast(intent)
                                         } catch (_: Throwable) {}
                                     }
-                                },
-                                icon = { TrashIcon(color = Color.White, size = 15.dp) }
+                                }
                             )
                         }
                     }
@@ -337,11 +315,9 @@ fun NotificationCenterSheetScreen(
                         title = "Lock Screen as Notification Center",
                         subtitle = if (sheet.lockScreenAsNotifCenterEnabled) "Replicates your active HyperOS lock screen clock, depth layering & shortcuts when pulling down shade" else "Disabled (Standard notification shade)",
                         colors = colors,
-                        iconTint = colors.accentBlue,
                         backdrop = backdrop,
                         checked = sheet.lockScreenAsNotifCenterEnabled,
                         onCheckedChange = sheet::setLockScreenAsNotifCenterEnabled,
-                        icon = { LockIcon(color = Color.White, size = 15.dp) },
                         enabled = sheet.enabled && sheet.lockWallpaperEnabled
                     )
                     if (sheet.lockScreenAsNotifCenterEnabled) {
@@ -350,11 +326,9 @@ fun NotificationCenterSheetScreen(
                             title = "Bottom Torch & Camera Widgets",
                             subtitle = if (sheet.showBottomWidgets) "Quick-access flashlight and camera buttons with tactile haptics & pop-in springs" else "Hidden",
                             colors = colors,
-                            iconTint = colors.accentOrange,
                             backdrop = backdrop,
                             checked = sheet.showBottomWidgets,
                             onCheckedChange = sheet::setShowBottomWidgets,
-                            icon = { SlidersIcon(color = Color.White, size = 15.dp) },
                             enabled = sheet.enabled && sheet.lockWallpaperEnabled && sheet.lockScreenAsNotifCenterEnabled
                         )
                         RowDivider(colors.separator)
@@ -362,11 +336,9 @@ fun NotificationCenterSheetScreen(
                             title = "Dynamic Clock Morphing",
                             subtitle = if (sheet.clockMorphOnNotifications) "Clock smoothly scales to compact variant when notifications are present" else "Static full-size clock layout",
                             colors = colors,
-                            iconTint = colors.accentPurple,
                             backdrop = backdrop,
                             checked = sheet.clockMorphOnNotifications,
                             onCheckedChange = sheet::setClockMorphOnNotifications,
-                            icon = { AppGridIcon(color = Color.White, size = 15.dp) },
                             enabled = sheet.enabled && sheet.lockWallpaperEnabled && sheet.lockScreenAsNotifCenterEnabled
                         )
                     }
@@ -391,11 +363,9 @@ fun NotificationCenterSheetScreen(
                         "Disabled by default (Clean border outline without shader overhead)"
                     },
                     colors = colors,
-                    iconTint = colors.accentBlue,
                     backdrop = backdrop,
                     checked = sheet.glassEffectsEnabled,
                     onCheckedChange = sheet::setGlassEffectsEnabled,
-                    icon = { SlidersIcon(color = Color.White, size = 15.dp) },
                     enabled = sheet.enabled && sheet.lockWallpaperEnabled
                 )
                 if (sheet.glassEffectsEnabled) {
@@ -404,11 +374,9 @@ fun NotificationCenterSheetScreen(
                         title = "Only Without Lockscreen Wallpaper",
                         subtitle = if (sheet.glassOnlyWithoutWallpaper) "Show glass effects only when lockscreen wallpaper is not actively shown on the sheet" else "Always show glass effects when enabled",
                         colors = colors,
-                        iconTint = colors.accentPurple,
                         backdrop = backdrop,
                         checked = sheet.glassOnlyWithoutWallpaper,
                         onCheckedChange = sheet::setGlassOnlyWithoutWallpaper,
-                        icon = { LockIcon(color = Color.White, size = 15.dp) },
                         enabled = sheet.enabled && sheet.lockWallpaperEnabled && sheet.glassEffectsEnabled
                     )
                 }
@@ -642,11 +610,9 @@ fun NotificationCenterSheetScreen(
                     title = "iOS 26 Pop-Up Animation",
                     subtitle = "Emerges from and retreats into center top notch with lively spring overshoot bounce and inertia squeeze",
                     colors = colors,
-                    iconTint = colors.accentBlue,
                     backdrop = backdrop,
                     checked = sheet.iosHunAnimationEnabled,
                     onCheckedChange = sheet::setIosHunAnimationEnabled,
-                    icon = { SlidersIcon(color = Color.White, size = 15.dp) },
                     enabled = sheet.enabled
                 )
                 if (sheet.iosHunAnimationEnabled) {

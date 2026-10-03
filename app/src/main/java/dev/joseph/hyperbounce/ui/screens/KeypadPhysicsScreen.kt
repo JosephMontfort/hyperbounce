@@ -70,9 +70,7 @@ fun KeypadPhysicsScreen(
                     title = "iOS 26 Radial Bloom Physics",
                     subtitle = "Cluster origin, radial spring damping & bloom expansion",
                     colors = colors,
-                    iconTint = colors.accentBlue,
-                    onClick = { onNavigate(Destination.KeypadIosBloomPhysics) },
-                    icon = { SlidersIcon(color = Color.White, size = 15.dp) }
+                    onClick = { onNavigate(Destination.KeypadIosBloomPhysics) }
                 )
             }
             SectionFooter(

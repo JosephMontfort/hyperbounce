@@ -169,8 +169,8 @@ fun RootScaffold(
             ) {
                 Column(
                     Modifier.graphicsLayer {
-                        alpha = 1f - collapseProgress * 0.85f
-                        translationY = -collapseProgress * 6.dp.toPx()
+                        alpha = (1f - collapseProgress * 1.5f).coerceIn(0f, 1f)
+                        translationY = -collapseProgress * 8.dp.toPx()
                     }
                 ) {
                     BasicText(title, style = HyperBounceType.largeTitle.copy(color = colors.label))
@@ -195,17 +195,24 @@ fun RootScaffold(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(110.dp)
+                .graphicsLayer { alpha = collapseProgress }
         )
 
-        // Small collapsed title, fades in behind the menu as the large title scrolls away.
-        BasicText(
-            title,
+        // Centered collapsed title, fades in at center top as the large title scrolls away.
+        Box(
             modifier = Modifier
+                .fillMaxWidth()
+                .height(56.dp)
                 .safeDrawingPadding()
-                .padding(start = 20.dp, top = 14.dp)
-                .graphicsLayer { alpha = collapseProgress },
-            style = HyperBounceType.headline.copy(color = colors.label)
-        )
+                .padding(horizontal = 72.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            BasicText(
+                title,
+                modifier = Modifier.graphicsLayer { alpha = collapseProgress },
+                style = HyperBounceType.headline.copy(color = colors.label)
+            )
+        }
 
         // Full-screen scrim to dismiss the menu when tapping outside it
         if (menuExpanded) {

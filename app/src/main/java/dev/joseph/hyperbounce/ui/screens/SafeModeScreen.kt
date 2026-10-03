@@ -120,11 +120,9 @@ fun SafeModeScreen(
                     title = "Global Safe Mode",
                     subtitle = if (safe.globalSafeMode) "All LSPosed hooks bypassed system-wide" else "Normal operation",
                     colors = colors,
-                    iconTint = colors.accentRed.copy(alpha = 0.85f),
                     backdrop = backdrop,
                     checked = safe.globalSafeMode,
-                    onCheckedChange = safe::setGlobalSafeMode,
-                    icon = { PowerIcon(color = Color.White, size = 14.dp) }
+                    onCheckedChange = safe::setGlobalSafeMode
                 )
             }
             SectionFooter("Bypasses all hooks across SystemUI, Launcher, and third-party apps instantly.", colors)
@@ -138,55 +136,45 @@ fun SafeModeScreen(
                     title = "System UI Safe Mode",
                     subtitle = if (safe.systemUiSafeMode || activeAliases.contains("systemui")) "SystemUI hooks DISABLED" else "Lockscreen sheet, PIN keys, Control Center active",
                     colors = colors,
-                    iconTint = colors.accentOrange.copy(alpha = 0.85f),
                     backdrop = backdrop,
                     checked = safe.systemUiSafeMode || activeAliases.contains("systemui"),
-                    onCheckedChange = safe::setSystemUiSafeMode,
-                    icon = { SlidersIcon(color = Color.White, size = 14.dp) }
+                    onCheckedChange = safe::setSystemUiSafeMode
                 )
                 RowDivider(colors.separator)
                 SettingsToggleRow(
                     title = "HyperOS Launcher Safe Mode",
                     subtitle = if (safe.launcherSafeMode || activeAliases.contains("home")) "Launcher hooks DISABLED" else "Unlock grid kinetics & app open/close active",
                     colors = colors,
-                    iconTint = colors.accentOrange.copy(alpha = 0.85f),
                     backdrop = backdrop,
                     checked = safe.launcherSafeMode || activeAliases.contains("home"),
-                    onCheckedChange = safe::setLauncherSafeMode,
-                    icon = { SlidersIcon(color = Color.White, size = 14.dp) }
+                    onCheckedChange = safe::setLauncherSafeMode
                 )
                 RowDivider(colors.separator)
                 SettingsToggleRow(
                     title = "Instagram Safe Mode",
                     subtitle = if (safe.instagramSafeMode || activeAliases.contains("instagram")) "Instagram nav hook DISABLED" else "Liquid floating nav bar active",
                     colors = colors,
-                    iconTint = colors.accentBlue.copy(alpha = 0.85f),
                     backdrop = backdrop,
                     checked = safe.instagramSafeMode || activeAliases.contains("instagram"),
-                    onCheckedChange = safe::setInstagramSafeMode,
-                    icon = { SlidersIcon(color = Color.White, size = 14.dp) }
+                    onCheckedChange = safe::setInstagramSafeMode
                 )
                 RowDivider(colors.separator)
                 SettingsToggleRow(
                     title = "WhatsApp Safe Mode",
                     subtitle = if (safe.whatsappSafeMode || activeAliases.contains("whatsapp")) "WhatsApp nav hook DISABLED" else "Liquid floating nav bar active",
                     colors = colors,
-                    iconTint = colors.accentGreen.copy(alpha = 0.85f),
                     backdrop = backdrop,
                     checked = safe.whatsappSafeMode || activeAliases.contains("whatsapp"),
-                    onCheckedChange = safe::setWhatsappSafeMode,
-                    icon = { SlidersIcon(color = Color.White, size = 14.dp) }
+                    onCheckedChange = safe::setWhatsappSafeMode
                 )
                 RowDivider(colors.separator)
                 SettingsToggleRow(
                     title = "YouTube Safe Mode",
                     subtitle = if (safe.youtubeSafeMode || activeAliases.contains("youtube")) "YouTube nav hook DISABLED" else "Liquid floating nav bar active",
                     colors = colors,
-                    iconTint = colors.accentRed.copy(alpha = 0.85f),
                     backdrop = backdrop,
                     checked = safe.youtubeSafeMode || activeAliases.contains("youtube"),
-                    onCheckedChange = safe::setYoutubeSafeMode,
-                    icon = { SlidersIcon(color = Color.White, size = 14.dp) }
+                    onCheckedChange = safe::setYoutubeSafeMode
                 )
             }
         }

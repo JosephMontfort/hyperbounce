@@ -67,11 +67,9 @@ fun AppDetailScreen(
                     title = "Floating Nav Bar",
                     subtitle = if (s.enabled) "Liquid glass replaces the stock bar" else "Stock nav bar restored",
                     colors = colors,
-                    iconTint = accentColor.copy(alpha = 0.85f),
                     backdrop = backdrop,
                     checked = s.enabled,
-                    onCheckedChange = holder::setEnabled,
-                    icon = { PowerIcon(color = Color.White, size = 15.dp, strokeWidth = 1.8.dp) }
+                    onCheckedChange = holder::setEnabled
                 )
             }
         }
@@ -84,18 +82,14 @@ fun AppDetailScreen(
                     title = "Appearance",
                     subtitle = "Glass engine, opacity, theme & accent",
                     colors = colors,
-                    iconTint = accentColor.copy(alpha = 0.85f),
-                    onClick = { onNavigate(Destination.AppAppearance(app)) },
-                    icon = { SlidersIcon(color = Color.White, size = 15.dp, strokeWidth = 1.8.dp) }
+                    onClick = { onNavigate(Destination.AppAppearance(app)) }
                 )
                 RowDivider(colors.separator)
                 SettingsNavRow(
                     title = "Layout",
                     subtitle = "Corner radius, bar height, tab width & margin",
                     colors = colors,
-                    iconTint = accentColor.copy(alpha = 0.85f),
-                    onClick = { onNavigate(Destination.AppLayout(app)) },
-                    icon = { SlidersIcon(color = Color.White, size = 15.dp, strokeWidth = 1.8.dp) }
+                    onClick = { onNavigate(Destination.AppLayout(app)) }
                 )
             }
         }
@@ -110,11 +104,9 @@ fun AppDetailScreen(
                             title = "Auto-Shrink on Scroll",
                             subtitle = "Shrinks and docks down when scrolling feeds",
                             colors = colors,
-                            iconTint = accentColor.copy(alpha = 0.85f),
                             backdrop = backdrop,
                             checked = s.autoShrink,
                             onCheckedChange = holder::setAutoShrink,
-                            icon = { SlidersIcon(color = Color.White, size = 15.dp, strokeWidth = 1.8.dp) },
                             enabled = s.enabled
                         )
                         if (s.autoShrink) {
@@ -142,12 +134,10 @@ fun AppDetailScreen(
                             title = "Reels Fullscreen Zoom (Not Recommended)",
                             subtitle = "Expands Reels container to match parent. May crop 16:9 videos.",
                             colors = colors,
-                            iconTint = Color(0xFFFF9500),
                             backdrop = backdrop,
                             checked = s.reelsFullscreenZoom,
                             onCheckedChange = holder::setReelsFullscreenZoom,
-                            enabled = s.enabled,
-                            icon = { SlidersIcon(color = Color.White, size = 15.dp, strokeWidth = 1.8.dp) }
+                            enabled = s.enabled
                         )
                     }
                 }
@@ -161,11 +151,9 @@ fun AppDetailScreen(
                             title = "Auto-Shrink on Scroll",
                             subtitle = "Shrinks and docks down when scrolling feeds",
                             colors = colors,
-                            iconTint = accentColor.copy(alpha = 0.85f),
                             backdrop = backdrop,
                             checked = s.autoShrink,
                             onCheckedChange = holder::setAutoShrink,
-                            icon = { SlidersIcon(color = Color.White, size = 15.dp, strokeWidth = 1.8.dp) },
                             enabled = s.enabled
                         )
                         if (s.autoShrink) {

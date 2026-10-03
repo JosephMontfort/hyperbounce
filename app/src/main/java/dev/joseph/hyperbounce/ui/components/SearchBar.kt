@@ -2,10 +2,10 @@ package dev.joseph.hyperbounce.ui.components
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -183,11 +183,17 @@ fun HyperLightSearchBar(
             }
         }
 
-        // Animated Cancel button reveal with increased bounce
+        // Animated Cancel button reveal with simultaneous shrinking of search bar (HyperLight style)
         AnimatedVisibility(
             visible = isActive,
-            enter = slideInHorizontally(spring(dampingRatio = 0.65f, stiffness = 340f)) { it } + fadeIn(),
-            exit = slideOutHorizontally(spring(dampingRatio = 0.8f, stiffness = 380f)) { it } + fadeOut()
+            enter = expandHorizontally(
+                animationSpec = spring(dampingRatio = 0.78f, stiffness = 400f),
+                expandFrom = Alignment.End
+            ) + fadeIn(spring(stiffness = 400f)),
+            exit = shrinkHorizontally(
+                animationSpec = spring(dampingRatio = 0.78f, stiffness = 400f),
+                shrinkTowards = Alignment.End
+            ) + fadeOut(spring(stiffness = 400f))
         ) {
             BasicText(
                 "Cancel",

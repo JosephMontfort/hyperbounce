@@ -67,11 +67,9 @@ fun ControlCenterScreen(
                     title = "Unlock Control Center Edit Page",
                     subtitle = "Unlocks all control center tiles to be resized and grouped dynamically",
                     colors = colors,
-                    iconTint = colors.accentBlue,
                     backdrop = backdrop,
                     checked = cc.modularEditEnabled,
-                    onCheckedChange = cc::setModularEditEnabled,
-                    icon = { SlidersIcon(color = Color.White, size = 15.dp) }
+                    onCheckedChange = cc::setModularEditEnabled
                 )
                 if (cc.modularEditEnabled) {
                     RowDivider(colors.separator)
@@ -92,11 +90,9 @@ fun ControlCenterScreen(
                         title = "Enhanced Tile Resize Handling",
                         subtitle = "Real-time tile expansion with dynamic neighbour displacement during resize drag",
                         colors = colors,
-                        iconTint = colors.accentPurple,
                         backdrop = backdrop,
                         checked = cc.fluidResizeEnabled,
-                        onCheckedChange = cc::setFluidResizeEnabled,
-                        icon = { SlidersIcon(color = Color.White, size = 15.dp) }
+                        onCheckedChange = cc::setFluidResizeEnabled
                     )
                 }
 
@@ -149,33 +145,27 @@ fun ControlCenterScreen(
                     title = "Center Bounce Animation",
                     subtitle = "Emerge outward from screen center with harmonic spring physics",
                     colors = colors,
-                    iconTint = colors.accentPink,
                     backdrop = backdrop,
                     checked = cc.animEnabled,
-                    onCheckedChange = cc::setAnimEnabled,
-                    icon = { SlidersIcon(color = Color.White, size = 15.dp) }
+                    onCheckedChange = cc::setAnimEnabled
                 )
                 RowDivider(colors.separator)
                 SettingsToggleRow(
                     title = "Jelly Physics Engine",
                     subtitle = "Velocity-coupled Poisson lateral squish & top-anchored stretch",
                     colors = colors,
-                    iconTint = colors.accentOrange,
                     backdrop = backdrop,
                     checked = cc.jellyEnabled,
-                    onCheckedChange = cc::setJellyEnabled,
-                    icon = { SlidersIcon(color = Color.White, size = 15.dp) }
+                    onCheckedChange = cc::setJellyEnabled
                 )
                 RowDivider(colors.separator)
                 SettingsToggleRow(
                     title = "Unlock Flashlight Brightness Control",
                     subtitle = "Unlocks flashlight brightness control for low-end devices",
                     colors = colors,
-                    iconTint = colors.accentOrange,
                     backdrop = backdrop,
                     checked = cc.lowEndFlashlightEnabled,
-                    onCheckedChange = cc::setLowEndFlashlightEnabled,
-                    icon = { SlidersIcon(color = Color.White, size = 15.dp) }
+                    onCheckedChange = cc::setLowEndFlashlightEnabled
                 )
                 if (cc.lowEndFlashlightEnabled) {
                     val hwMax = dev.joseph.hyperbounce.controlcenter.FlashlightBrightnessHook.getHardwareMaxBrightness()
@@ -203,7 +193,6 @@ fun ControlCenterScreen(
                     title = "Reset Layout to Stock",
                     subtitle = "Dissolves all tile groups and restores stock component positions",
                     colors = colors,
-                    iconTint = Color(0xFFE53935),
                     titleColor = Color(0xFFFF453A),
                     onClick = {
                         dialogHost.showConfirmation(
@@ -225,8 +214,7 @@ fun ControlCenterScreen(
                                 }
                             }
                         )
-                    },
-                    icon = { ResetArrowIcon(color = Color.White, size = 15.dp) }
+                    }
                 )
             }
         }

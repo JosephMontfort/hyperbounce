@@ -92,15 +92,15 @@ private fun IconChip(tint: Color, content: @Composable () -> Unit) {
     }
 }
 
-/** A tappable row that navigates to a detail screen, with a leading icon and trailing chevron. */
+/** A tappable row that navigates to a detail screen, with an optional leading icon and trailing chevron. */
 @Composable
 fun SettingsNavRow(
     title: String,
     colors: HyperBounceColors,
-    iconTint: Color,
     onClick: () -> Unit,
+    iconTint: Color? = null,
     subtitle: String? = null,
-    icon: @Composable () -> Unit
+    icon: (@Composable () -> Unit)? = null
 ) {
     Row(
         Modifier
@@ -114,7 +114,9 @@ fun SettingsNavRow(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        IconChip(iconTint) { icon() }
+        if (icon != null) {
+            IconChip(iconTint ?: Color.Transparent) { icon() }
+        }
         Column(Modifier.weight(1f)) {
             BasicText(title, style = HyperBounceType.body.copy(color = colors.label))
             if (subtitle != null) {
@@ -125,17 +127,17 @@ fun SettingsNavRow(
     }
 }
 
-/** A tappable action row with a leading icon, title/subtitle, and no trailing chevron. */
+/** A tappable action row with an optional leading icon, title/subtitle, and no trailing chevron. */
 @Composable
 fun SettingsClickableRow(
     title: String,
     colors: HyperBounceColors,
-    iconTint: Color,
     onClick: () -> Unit,
+    iconTint: Color? = null,
     subtitle: String? = null,
     titleColor: Color? = null,
     trailing: (@Composable () -> Unit)? = null,
-    icon: @Composable () -> Unit
+    icon: (@Composable () -> Unit)? = null
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
@@ -154,7 +156,9 @@ fun SettingsClickableRow(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        IconChip(iconTint) { icon() }
+        if (icon != null) {
+            IconChip(iconTint ?: Color.Transparent) { icon() }
+        }
         Column(Modifier.weight(1f)) {
             BasicText(title, style = HyperBounceType.body.copy(color = titleColor ?: colors.label))
             if (subtitle != null) {
@@ -167,18 +171,18 @@ fun SettingsClickableRow(
     }
 }
 
-/** A row with a leading icon, title/subtitle, and a trailing [LiquidToggle]. */
+/** A row with an optional leading icon, title/subtitle, and a trailing [LiquidToggle]. */
 @Composable
 fun SettingsToggleRow(
     title: String,
     colors: HyperBounceColors,
-    iconTint: Color,
     backdrop: Backdrop,
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
+    iconTint: Color? = null,
     subtitle: String? = null,
     enabled: Boolean = true,
-    icon: @Composable () -> Unit
+    icon: (@Composable () -> Unit)? = null
 ) {
     val displayAlpha = if (enabled) 1f else 0.35f
     Row(
@@ -189,7 +193,9 @@ fun SettingsToggleRow(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        IconChip(iconTint) { icon() }
+        if (icon != null) {
+            IconChip(iconTint ?: Color.Transparent) { icon() }
+        }
         Column(Modifier.weight(1f)) {
             BasicText(title, style = HyperBounceType.body.copy(color = colors.label))
             if (subtitle != null) {

@@ -29,6 +29,28 @@ import androidx.compose.ui.unit.sp
 import dev.joseph.hyperbounce.ui.theme.HyperBounceColors
 import dev.joseph.hyperbounce.ui.theme.HyperBounceType
 
+val XiaomiSquircleShape = androidx.compose.foundation.shape.GenericShape { size, _ ->
+    val sx = size.width / 28f
+    val sy = size.height / 28f
+    moveTo(0f * sx, 11.952f * sy)
+    cubicTo(0f * sx, 7.768f * sy, 0f * sx, 5.677f * sy, 0.813f * sx, 4.079f * sy)
+    cubicTo(1.529f * sx, 2.673f * sy, 2.672f * sx, 1.53f * sy, 4.078f * sx, 0.814f * sy)
+    cubicTo(5.676f * sx, 0f * sy, 7.767f * sx, 0f * sy, 11.951f * sx, 0f * sy)
+    lineTo(16.047f * sx, 0f * sy)
+    cubicTo(20.231f * sx, 0f * sy, 22.322f * sx, 0f * sy, 23.92f * sx, 0.814f * sy)
+    cubicTo(25.326f * sx, 1.53f * sy, 26.469f * sx, 2.673f * sy, 27.185f * sx, 4.079f * sy)
+    cubicTo(28f * sx, 5.677f * sy, 28f * sx, 7.768f * sy, 28f * sx, 11.952f * sy)
+    lineTo(28f * sx, 16.048f * sy)
+    cubicTo(28f * sx, 20.232f * sy, 28f * sx, 22.323f * sy, 27.185f * sx, 23.921f * sy)
+    cubicTo(26.469f * sx, 25.327f * sy, 25.326f * sx, 26.47f * sy, 23.92f * sx, 27.186f * sy)
+    cubicTo(22.322f * sx, 28f * sy, 20.231f * sx, 28f * sy, 16.047f * sx, 28f * sy)
+    lineTo(11.951f * sx, 28f * sy)
+    cubicTo(7.767f * sx, 28f * sy, 5.676f * sx, 28f * sy, 4.078f * sx, 27.186f * sy)
+    cubicTo(2.672f * sx, 26.47f * sy, 1.529f * sx, 25.327f * sy, 0.813f * sx, 23.921f * sy)
+    cubicTo(0f * sx, 22.323f * sy, 0f * sx, 20.232f * sy, 0f * sx, 16.048f * sy)
+    close()
+}
+
 /**
  * Premium feature row with uniform vertical height across all categories,
  * an icon on the left, bold title, two-line subtitle description, and trailing chevron.
@@ -62,7 +84,7 @@ fun FeatureCategoryRow(
         Box(
             modifier = Modifier
                 .size(42.dp)
-                .clip(RoundedCornerShape(11.dp)),
+                .clip(XiaomiSquircleShape),
             contentAlignment = Alignment.Center
         ) {
             icon()

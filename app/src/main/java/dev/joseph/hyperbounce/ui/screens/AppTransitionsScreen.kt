@@ -48,11 +48,9 @@ fun AppTransitionsScreen(
                     title = "Enable App Transitions Engine",
                     subtitle = "Master switch for custom transition physics and ballistic flight curves",
                     colors = colors,
-                    iconTint = colors.accentGreen,
                     backdrop = backdrop,
                     checked = trans.enabled,
-                    onCheckedChange = trans::setEnabled,
-                    icon = { SlidersIcon(color = Color.White, size = 15.dp) }
+                    onCheckedChange = trans::setEnabled
                 )
             }
         }
@@ -110,36 +108,30 @@ fun AppTransitionsScreen(
                     title = "1:1 Folder Icon Trajectories",
                     subtitle = "Desktop preview icons track 1:1 into open folder positions with zero outline border",
                     colors = colors,
-                    iconTint = colors.accentOrange,
                     backdrop = backdrop,
                     checked = trans.folderTracking,
                     onCheckedChange = trans::setFolderTracking,
-                    enabled = trans.enabled,
-                    icon = { AppGridIcon(color = Color.White, size = 15.dp) }
+                    enabled = trans.enabled
                 )
                 RowDivider(colors.separator)
                 SettingsToggleRow(
                     title = "Center Active App in Recents",
                     subtitle = "Current app stays centered in overview instead of shifting right",
                     colors = colors,
-                    iconTint = colors.accentBlue,
                     backdrop = backdrop,
                     checked = trans.recentsCentering,
                     onCheckedChange = trans::setRecentsCentering,
-                    enabled = trans.enabled,
-                    icon = { AppsIcon(color = Color.White, size = 15.dp) }
+                    enabled = trans.enabled
                 )
                 RowDivider(colors.separator)
                 SettingsToggleRow(
                     title = "Zero Friction Drag Resistance",
                     subtitle = "Removes rubber-band friction wall when swiping up from apps",
                     colors = colors,
-                    iconTint = colors.accentGreen,
                     backdrop = backdrop,
                     checked = trans.zeroFrictionDrag,
                     onCheckedChange = trans::setZeroFrictionDrag,
-                    enabled = trans.enabled,
-                    icon = { SlidersIcon(color = Color.White, size = 15.dp) }
+                    enabled = trans.enabled
                 )
             }
         }
@@ -152,24 +144,20 @@ fun AppTransitionsScreen(
                     title = "Refined Tactile Haptics",
                     subtitle = "Crisp elastic pop on back gestures and tactile latch tick on Recents",
                     colors = colors,
-                    iconTint = colors.accentGreen,
                     backdrop = backdrop,
                     checked = trans.refinedHaptics,
                     onCheckedChange = trans::setRefinedHaptics,
-                    enabled = trans.enabled,
-                    icon = { PowerIcon(color = Color.White, size = 15.dp) }
+                    enabled = trans.enabled
                 )
                 RowDivider(colors.separator)
                 SettingsToggleRow(
                     title = "Haptics for Sliding Cards",
                     subtitle = "Light mechanical clock tick as each app card crosses the screen center line in Stack recents",
                     colors = colors,
-                    iconTint = colors.accentBlue,
                     backdrop = backdrop,
                     checked = trans.stackRecentsHaptics,
                     onCheckedChange = trans::setStackRecentsHaptics,
-                    enabled = trans.enabled,
-                    icon = { SlidersIcon(color = Color.White, size = 15.dp) }
+                    enabled = trans.enabled
                 )
             }
         }

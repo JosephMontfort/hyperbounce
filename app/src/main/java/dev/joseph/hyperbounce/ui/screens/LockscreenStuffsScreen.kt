@@ -50,7 +50,7 @@ fun LockscreenStuffsScreen(
                     onClick = { onNavigate(Destination.LockScreenSheet) },
                     icon = {
                         Image(
-                            painter = painterResource(R.drawable.ic_feature_lockscreen),
+                            painter = painterResource(R.drawable.ic_sub_lockscreen_sheet),
                             contentDescription = "Lock Screen Sheet",
                             modifier = Modifier.fillMaxSize()
                         )
@@ -65,14 +65,11 @@ fun LockscreenStuffsScreen(
                     colors = colors,
                     onClick = { onNavigate(Destination.Keypad) },
                     icon = {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(Color(0xFF007AFF)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            SlidersIcon(color = Color.White, size = 20.dp)
-                        }
+                        Image(
+                            painter = painterResource(R.drawable.ic_sub_pinpad),
+                            contentDescription = "PIN Pad Physics",
+                            modifier = Modifier.fillMaxSize()
+                        )
                     }
                 )
             }

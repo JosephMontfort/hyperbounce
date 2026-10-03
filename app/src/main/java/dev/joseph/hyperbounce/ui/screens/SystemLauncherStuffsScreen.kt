@@ -50,7 +50,7 @@ fun SystemLauncherStuffsScreen(
                     onClick = { onNavigate(Destination.AppTransitions) },
                     icon = {
                         Image(
-                            painter = painterResource(R.drawable.ic_feature_launcher),
+                            painter = painterResource(R.drawable.ic_sub_app_transitions),
                             contentDescription = "App Transitions",
                             modifier = Modifier.fillMaxSize()
                         )
@@ -65,14 +65,11 @@ fun SystemLauncherStuffsScreen(
                     colors = colors,
                     onClick = { onNavigate(Destination.ScreenUnlock) },
                     icon = {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(Color(0xFF5856D6)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            SlidersIcon(color = Color.White, size = 20.dp)
-                        }
+                        Image(
+                            painter = painterResource(R.drawable.ic_sub_screen_unlock),
+                            contentDescription = "Screen Unlock",
+                            modifier = Modifier.fillMaxSize()
+                        )
                     }
                 )
             }

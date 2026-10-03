@@ -89,12 +89,10 @@ fun KeypadButtonsLayoutScreen(
                     title = "Show Klondike Letters",
                     subtitle = "Display ABC, DEF subtitle letters below digits",
                     colors = colors,
-                    iconTint = colors.accentOrange,
                     backdrop = backdrop,
                     checked = keypad.showKlondike,
                     onCheckedChange = keypad::setShowKlondike,
-                    enabled = keypad.enabled,
-                    icon = { SlidersIcon(color = Color.White, size = 14.dp) }
+                    enabled = keypad.enabled
                 )
             }
             SectionFooter(

@@ -45,11 +45,9 @@ fun KeypadScreen(
                     title = "Liquid Glass PIN Pad",
                     subtitle = if (keypad.enabled) "Liquid Glass 2.0 lens buttons & layout physics active" else "Disabled (Stock)",
                     colors = colors,
-                    iconTint = colors.accentBlue,
                     backdrop = backdrop,
                     checked = keypad.enabled,
-                    onCheckedChange = repository::setKeypadEnabled,
-                    icon = { SlidersIcon(color = Color.White, size = 15.dp) }
+                    onCheckedChange = repository::setKeypadEnabled
                 )
             }
         }
@@ -61,36 +59,28 @@ fun KeypadScreen(
                     title = "iOS 26 Radial Bloom Physics",
                     subtitle = "Cluster origin, radial spring damping & bloom expansion",
                     colors = colors,
-                    iconTint = colors.accentBlue,
-                    onClick = { onNavigate(Destination.KeypadIosBloomPhysics) },
-                    icon = { SlidersIcon(color = Color.White, size = 15.dp) }
+                    onClick = { onNavigate(Destination.KeypadIosBloomPhysics) }
                 )
                 RowDivider(colors.separator)
                 SettingsNavRow(
                     title = "Liquid Glass Tuning",
                     subtitle = "Refraction, bevel thickness, dispersion & specular rims",
                     colors = colors,
-                    iconTint = colors.accentPurple,
-                    onClick = { onNavigate(Destination.KeypadGlassTuning) },
-                    icon = { SlidersIcon(color = Color.White, size = 15.dp) }
+                    onClick = { onNavigate(Destination.KeypadGlassTuning) }
                 )
                 RowDivider(colors.separator)
                 SettingsNavRow(
                     title = "Buttons Layout",
                     subtitle = "Key circle diameter, liquid press scale & typography",
                     colors = colors,
-                    iconTint = colors.accentOrange,
-                    onClick = { onNavigate(Destination.KeypadButtonsLayout) },
-                    icon = { SlidersIcon(color = Color.White, size = 15.dp) }
+                    onClick = { onNavigate(Destination.KeypadButtonsLayout) }
                 )
                 RowDivider(colors.separator)
                 SettingsNavRow(
                     title = "PIN Pad Layout",
                     subtitle = "Keypad lift, PIN dots position & grid spacing",
                     colors = colors,
-                    iconTint = colors.accentGreen,
-                    onClick = { onNavigate(Destination.KeypadPadLayout) },
-                    icon = { SlidersIcon(color = Color.White, size = 15.dp) }
+                    onClick = { onNavigate(Destination.KeypadPadLayout) }
                 )
             }
             SectionFooter(

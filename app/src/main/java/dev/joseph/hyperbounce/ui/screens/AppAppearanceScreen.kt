@@ -71,11 +71,9 @@ fun AppAppearanceScreen(
                     title = "Liquid Glass Engine",
                     subtitle = if (s.liquidGlass) "Dynamic liquid refraction, lens and blur" else "Translucent iOS-style bar (zero backdrop lag)",
                     colors = colors,
-                    iconTint = accentColor.copy(alpha = 0.85f),
                     backdrop = backdrop,
                     checked = s.liquidGlass,
                     onCheckedChange = holder::setLiquidGlass,
-                    icon = { SlidersIcon(color = Color.White, size = 15.dp, strokeWidth = 1.8.dp) },
                     enabled = s.enabled
                 )
                 if (s.liquidGlass) {
@@ -110,11 +108,9 @@ fun AppAppearanceScreen(
                         title = "Pill Chromatic Aberration",
                         subtitle = "Color dispersion fringe around pill refraction edges",
                         colors = colors,
-                        iconTint = accentColor.copy(alpha = 0.85f),
                         backdrop = backdrop,
                         checked = s.pillChromaticAberration,
                         onCheckedChange = holder::setPillChromaticAberration,
-                        icon = { SlidersIcon(color = Color.White, size = 15.dp, strokeWidth = 1.8.dp) },
                         enabled = s.enabled && s.liquidGlass
                     )
                     RowDivider(colors.separator, insetStart = 16.dp)
@@ -122,11 +118,9 @@ fun AppAppearanceScreen(
                         title = "Pill Shadows & Depth",
                         subtitle = "Drop shadow and inner depth shadow on the indicator pill",
                         colors = colors,
-                        iconTint = accentColor.copy(alpha = 0.85f),
                         backdrop = backdrop,
                         checked = s.pillShadow,
                         onCheckedChange = holder::setPillShadow,
-                        icon = { SlidersIcon(color = Color.White, size = 15.dp, strokeWidth = 1.8.dp) },
                         enabled = s.enabled && s.liquidGlass
                     )
                 }
