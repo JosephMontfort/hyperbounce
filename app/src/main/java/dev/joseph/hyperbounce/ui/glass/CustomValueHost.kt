@@ -456,6 +456,8 @@ fun GlassDialogHost(
                                         }
                                     }
                                 }
+                            }
+
                             is GlassDialogRequest.TextInput -> {
                                 var textValue by remember(req) { mutableStateOf(req.initialValue) }
 
