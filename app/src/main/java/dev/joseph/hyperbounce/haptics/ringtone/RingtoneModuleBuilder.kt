@@ -212,10 +212,10 @@ object RingtoneModuleBuilder {
                 val modulePropContent = buildString {
                     appendLine("id=hyperios_custom_ringtones")
                     appendLine("name=HyperiOS Custom Haptic Ringtones")
-                    appendLine("version=v1.1")
-                    appendLine("versionCode=101")
-                    appendLine("author=JosephMontfort & HyperiOS")
-                    appendLine("description=Custom ringtones with precision tactile haptics mapped to hardware linear resonant actuator. Bundles ${packageItems.size} custom ringtone(s).")
+                    appendLine("version=v1.0")
+                    appendLine("versionCode=100")
+                    appendLine("author=HyperiOS")
+                    appendLine("description=Custom Ringtones and synced haptics for HyperOS")
                 }
                 zos.putNextEntry(ZipEntry("module.prop"))
                 zos.write(modulePropContent.toByteArray(Charsets.UTF_8))
@@ -253,10 +253,12 @@ object RingtoneModuleBuilder {
                     appendLine("done")
                     appendLine("# Reseed Xiaomi vibratorfeature daemon to scan newly mounted /vendor/firmware/ files")
                     appendLine("killall vendor.xiaomi.hardware.vibratorfeature.service 2>/dev/null || true")
-                    appendLine("# Notify MediaStore to index new ringtones cleanly (single broadcast)")
-                    packageItems.forEach { item ->
-                        appendLine("am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE -d \"file:///product/media/audio/ringtones/${item.cleanName}.ogg\" >/dev/null 2>&1")
-                    }
+                    appendLine("# Notify MediaStore to index all ringtones dynamically")
+                    appendLine("for audio_file in /product/media/audio/ringtones/*.ogg; do")
+                    appendLine("    if [ -f \"\$audio_file\" ]; then")
+                    appendLine("        am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE -d \"file://\$audio_file\" >/dev/null 2>&1")
+                    appendLine("    fi")
+                    appendLine("done")
                 }
                 zos.putNextEntry(ZipEntry("service.sh"))
                 zos.write(serviceShContent.toByteArray(Charsets.UTF_8))

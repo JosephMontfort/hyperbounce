@@ -298,9 +298,9 @@ private fun OpenSourceLicensesSection(colors: HyperBounceColors, backdrop: Backd
         listOf(
             LicenseItem(
                 name = "LibXposed API",
-                developer = "libxposed",
+                developer = "JingMatrix",
                 license = "Apache-2.0",
-                url = "https://github.com/libxposed/api"
+                url = "https://github.com/JingMatrix/libxposed-api"
             ),
             LicenseItem(
                 name = "Android Liquid Glass",
@@ -309,22 +309,16 @@ private fun OpenSourceLicensesSection(colors: HyperBounceColors, backdrop: Backd
                 url = "https://github.com/Kyant0/AndroidLiquidGlass"
             ),
             LicenseItem(
-                name = "AndroidLiquidGlassView",
-                developer = "Qmdeve",
-                license = "Apache-2.0",
-                url = "https://github.com/Qmdeve/AndroidLiquidGlassView"
+                name = "Liquid Glass Android",
+                developer = "QWEA0",
+                license = "MIT",
+                url = "https://github.com/QWEA0/Liquid-Glass-Android"
             ),
             LicenseItem(
                 name = "miuix-kotlin-multiplatform",
                 developer = "YuKongA",
                 license = "Apache-2.0",
                 url = "https://github.com/YuKongA/miuix-kotlin-multiplatform"
-            ),
-            LicenseItem(
-                name = "Android HiddenApiBypass",
-                developer = "LSPosed",
-                license = "Apache-2.0",
-                url = "https://github.com/LSPosed/AndroidHiddenApiBypass"
             ),
             LicenseItem(
                 name = "Compose Multiplatform",
