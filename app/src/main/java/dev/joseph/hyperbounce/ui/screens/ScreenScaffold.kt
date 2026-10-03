@@ -112,6 +112,7 @@ fun ScreenScaffold(
     Box(
         Modifier
             .fillMaxSize()
+            .background(colors.background)
     ) {
         DropdownOverlayHost {
             LazyColumn(

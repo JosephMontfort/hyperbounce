@@ -15,6 +15,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -253,6 +254,7 @@ private fun HyperiOSApp(repository: SettingsRepository) {
                                             val progress = (dragOffset.value / screenWidth.coerceAtLeast(1f)).coerceIn(0f, 1f)
                                             translationX = -screenWidth * 0.22f * (1f - progress)
                                         }
+                                        .background(colors.background)
                                 ) {
                                     androidx.compose.runtime.key(parentDest) {
                                         DestinationContent(
@@ -296,13 +298,16 @@ private fun HyperiOSApp(repository: SettingsRepository) {
                                             if (activeAnimationJob?.isActive == true || isPopping) {
                                                 activeAnimationJob?.cancel()
                                                 isPopping = false
-                                                if (dragOffset.value > screenWidth * 0.35f && backStack.isNotEmpty()) {
+                                                if (dragOffset.value > screenWidth * 0.25f && backStack.isNotEmpty()) {
                                                     backStack.removeAt(backStack.lastIndex)
                                                 }
                                                 coroutineScope.launch {
                                                     dragOffset.snapTo(0f)
                                                 }
                                             }
+
+                                            val velocityTracker = VelocityTracker()
+                                            velocityTracker.addPosition(down.uptimeMillis, down.position)
 
                                             var totalDx = 0f
                                             var totalDy = 0f
@@ -323,20 +328,21 @@ private fun HyperiOSApp(repository: SettingsRepository) {
                                                     break
                                                 }
 
+                                                velocityTracker.addPosition(change.uptimeMillis, change.position)
                                                 val dx = change.position.x - change.previousPosition.x
                                                 val dy = change.position.y - change.previousPosition.y
                                                 totalDx += dx
                                                 totalDy += dy
 
                                                 if (!localDragging) {
-                                                    // Highly sensitive screen-wide swipe right: ~10px threshold
-                                                    if (totalDx > 10f && totalDx > kotlin.math.abs(totalDy) * 1.15f) {
+                                                    // KEIMI-inspired gesture slop: effortless horizontal activation
+                                                    if (totalDx > 8f && totalDx > kotlin.math.abs(totalDy) * 0.85f) {
                                                         localDragging = true
                                                         change.consume()
                                                         coroutineScope.launch {
                                                             dragOffset.snapTo(totalDx)
                                                         }
-                                                    } else if (kotlin.math.abs(totalDy) > 14f || totalDx < -10f) {
+                                                    } else if (kotlin.math.abs(totalDy) > 16f || totalDx < -8f) {
                                                         break
                                                     }
                                                 } else {
@@ -349,13 +355,19 @@ private fun HyperiOSApp(repository: SettingsRepository) {
                                             }
 
                                             if (localDragging) {
-                                                val threshold = screenWidth * 0.32f
-                                                if (dragOffset.value > threshold) {
+                                                val velocityX = velocityTracker.calculateVelocity().x
+                                                val threshold = screenWidth * 0.22f
+                                                val shouldDismiss = dragOffset.value > threshold || velocityX >= 750f
+
+                                                if (shouldDismiss) {
                                                     // Directly execute pop animation without cooldown blocking
                                                     activeAnimationJob = coroutineScope.launch {
                                                         isPopping = true
                                                         try {
-                                                            dragOffset.animateTo(screenWidth, spring(dampingRatio = 0.88f, stiffness = 420f))
+                                                            dragOffset.animateTo(
+                                                                screenWidth,
+                                                                spring(dampingRatio = 0.90f, stiffness = 380f)
+                                                            )
                                                             if (backStack.isNotEmpty()) {
                                                                 backStack.removeAt(backStack.lastIndex)
                                                             }
@@ -368,7 +380,7 @@ private fun HyperiOSApp(repository: SettingsRepository) {
                                                     activeAnimationJob = coroutineScope.launch {
                                                         dragOffset.animateTo(
                                                             0f,
-                                                            spring(dampingRatio = 0.78f, stiffness = 440f)
+                                                            spring(dampingRatio = 0.82f, stiffness = 420f)
                                                         )
                                                     }
                                                 }
