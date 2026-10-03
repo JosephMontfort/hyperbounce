@@ -608,6 +608,9 @@ private fun StepConfirmationContent(
     val hasStoragePerm = remember { RingtoneModuleBuilder.hasStoragePermission(context) }
     var editingItem by remember { mutableStateOf<RingtoneModuleBuilder.RingtonePackageItem?>(null) }
     var editTitleInput by remember { mutableStateOf("") }
+    val isDark = isSystemInDarkTheme()
+    val cardBg = if (isDark) Color(0xFF1E1E20) else Color(0xFFFFFFFF)
+    val cancelBtnBg = if (isDark) Color(0xFF2C2C2E) else Color(0xFFE5E5EA)
 
     Column(modifier = Modifier.fillMaxWidth()) {
         BasicText(
