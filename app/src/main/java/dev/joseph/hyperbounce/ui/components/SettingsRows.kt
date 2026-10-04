@@ -6,6 +6,8 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -37,6 +39,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -360,7 +363,6 @@ fun SettingsSliderRow(
     if (componentStyle == ComponentStyle.MIUIX) {
         val isModified = abs(value - defaultValue) > 0.0001f
         SliderPreference(
-            modifier = modifier.sliderImmune(),
             value = value,
             onValueChange = onValueChange,
             title = title,
@@ -412,6 +414,7 @@ fun SettingsSliderRow(
                 }
             },
             modifier = modifier
+                .sliderImmune()
                 .searchHighlight(searchKey ?: title, colors)
                 .then(
                     if (allowCustomInput && enabled) {

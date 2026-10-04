@@ -383,8 +383,8 @@ private fun HyperiOSApp(repository: SettingsRepository) {
                                                 velocityTracker.addPosition(change.uptimeMillis, change.position)
 
                                                 if (!localDragging) {
-                                                    // If a child (e.g. slider) actively consumed this movement, abort swipe-to-back immediately
-                                                    if (change.isConsumed) {
+                                                    // If a child (e.g. slider) actively consumed this movement or down, abort swipe-to-back immediately
+                                                    if (down.isConsumed || change.isConsumed) {
                                                         break
                                                     }
 
