@@ -376,7 +376,9 @@ private fun HyperiOSApp(repository: SettingsRepository) {
                                                 if (backStack.isNotEmpty()) {
                                                     backStack.removeAt(backStack.lastIndex)
                                                 }
-                                                dragOffset.snapTo(0f)
+                                                coroutineScope.launch(kotlinx.coroutines.Dispatchers.Main.immediate) {
+                                                    dragOffset.snapTo(0f)
+                                                }
                                             }
 
                                             val velocityTracker = VelocityTracker()
@@ -413,14 +415,18 @@ private fun HyperiOSApp(repository: SettingsRepository) {
                                                     if (totalDx > 12f && totalDx > kotlin.math.abs(totalDy) * 0.85f) {
                                                         localDragging = true
                                                         change.consume()
-                                                        dragOffset.snapTo(totalDx)
+                                                        coroutineScope.launch(kotlinx.coroutines.Dispatchers.Main.immediate) {
+                                                            dragOffset.snapTo(totalDx)
+                                                        }
                                                     } else if (kotlin.math.abs(totalDy) > 16f || totalDx < -10f) {
                                                         break
                                                     }
                                                 } else {
                                                     change.consume()
                                                     val nextX = (dragOffset.value + dx).coerceAtLeast(0f)
-                                                    dragOffset.snapTo(nextX)
+                                                    coroutineScope.launch(kotlinx.coroutines.Dispatchers.Main.immediate) {
+                                                        dragOffset.snapTo(nextX)
+                                                    }
                                                 }
                                             }
 

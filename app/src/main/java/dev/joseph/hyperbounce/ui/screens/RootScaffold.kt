@@ -196,6 +196,7 @@ fun RootScaffold(
                         alpha = (1f - (collapseProgress * 2.2f)).coerceIn(0f, 1f)
                         translationY = -collapseProgress * 8.dp.toPx()
                     }
+                ) {
                     val titleColor = if (componentStyle == dev.joseph.hyperbounce.ui.state.ComponentStyle.MIUIX) {
                         MiuixTheme.colorScheme.onSurface
                     } else {
