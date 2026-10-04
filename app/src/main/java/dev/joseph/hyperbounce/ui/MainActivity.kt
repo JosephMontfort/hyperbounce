@@ -353,36 +353,46 @@ private fun HyperiOSApp(repository: SettingsRepository) {
                                             var totalDy = 0f
                                             var localDragging = false
                                             val pointerId = down.id
+                                            var consumedStreak = 0
 
                                             while (true) {
-                                                val event = awaitPointerEvent(pass = PointerEventPass.Main)
+                                                val event = awaitPointerEvent(pass = PointerEventPass.Final)
                                                 val change = event.changes.firstOrNull { it.id == pointerId } ?: break
-
-                                                // If child (LiquidSlider / LiquidToggle thumb) consumed the pointer,
-                                                // do NOT intercept or trigger screen swipe!
-                                                if (change.isConsumed && !localDragging) {
-                                                    break
-                                                }
 
                                                 if (!change.pressed) {
                                                     break
                                                 }
 
-                                                velocityTracker.addPosition(change.uptimeMillis, change.position)
                                                 val dx = change.position.x - change.previousPosition.x
                                                 val dy = change.position.y - change.previousPosition.y
-                                                totalDx += dx
-                                                totalDy += dy
+                                                if (dx == 0f && dy == 0f) continue
+
+                                                velocityTracker.addPosition(change.uptimeMillis, change.position)
 
                                                 if (!localDragging) {
+                                                    // If a child actively consumed this horizontal drag movement (e.g. slider thumb),
+                                                    // track consecutive consumed movements.
+                                                    if (change.isConsumed) {
+                                                        consumedStreak++
+                                                        if (consumedStreak >= 2) {
+                                                            // Child widget (e.g. slider) owns this gesture
+                                                            break
+                                                        }
+                                                    } else {
+                                                        consumedStreak = 0
+                                                    }
+
+                                                    totalDx += dx
+                                                    totalDy += dy
+
                                                     // KEIMI-inspired gesture slop: effortless horizontal activation
-                                                    if (totalDx > 8f && totalDx > kotlin.math.abs(totalDy) * 0.85f) {
+                                                    if (totalDx > 10f && totalDx > kotlin.math.abs(totalDy) * 0.85f && consumedStreak < 2) {
                                                         localDragging = true
                                                         change.consume()
                                                         coroutineScope.launch {
                                                             dragOffset.snapTo(totalDx)
                                                         }
-                                                    } else if (kotlin.math.abs(totalDy) > 16f || totalDx < -8f) {
+                                                    } else if (kotlin.math.abs(totalDy) > 16f || totalDx < -10f) {
                                                         break
                                                     }
                                                 } else {
@@ -584,6 +594,7 @@ private fun ScreenLayer(
                 )
 
                 else -> AboutScreen(
+                    repository = repository,
                     colors = colors,
                     backdrop = backdrop,
                     onBack = null
@@ -876,6 +887,7 @@ private fun DestinationContent(
         )
 
         Destination.About -> AboutScreen(
+            repository = repository,
             colors = colors,
             backdrop = backdrop,
             onBack = onBack

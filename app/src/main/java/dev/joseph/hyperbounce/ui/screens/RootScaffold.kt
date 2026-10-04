@@ -97,9 +97,9 @@ import top.yukonga.miuix.kmp.popup.WindowDropdownPopup
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.More
-import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.overScrollVertical
 import top.yukonga.miuix.kmp.utils.scrollEndHaptic
+import dev.joseph.hyperbounce.ui.glass.deadEndHaptic
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -111,12 +111,12 @@ enum class MenuPage {
 @Composable
 fun RootScaffold(
     title: String,
-    subtitle: String,
     colors: HyperBounceColors,
     backdrop: Backdrop,
     repository: SettingsRepository,
+    subtitle: String = "",
     showTopAction: Boolean = true,
-    onAbout: () -> Unit,
+    onAbout: (() -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit
 ) {
     val context = LocalContext.current
@@ -173,6 +173,7 @@ fun RootScaffold(
             Modifier
                 .fillMaxSize()
                 .layerBackdrop(contentBackdrop)
+                .deadEndHaptic(glass.hapticsEnabled)
                 .safeDrawingPadding()
                 .then(
                     if (componentStyle == dev.joseph.hyperbounce.ui.state.ComponentStyle.MIUIX) {
@@ -193,7 +194,7 @@ fun RootScaffold(
             ) {
                 Column(
                     Modifier.graphicsLayer {
-                        alpha = (1f - collapseProgress).coerceIn(0f, 1f)
+                        alpha = (1f - (collapseProgress * 2.2f)).coerceIn(0f, 1f)
                         translationY = -collapseProgress * 8.dp.toPx()
                     }
                 ) {
@@ -230,7 +231,9 @@ fun RootScaffold(
         ) {
             BasicText(
                 title,
-                modifier = Modifier.graphicsLayer { alpha = collapseProgress },
+                modifier = Modifier.graphicsLayer {
+                    alpha = ((collapseProgress - 0.55f) * 2.2f).coerceIn(0f, 1f)
+                },
                 style = HyperBounceType.headline.copy(color = colors.label)
             )
         }
@@ -314,13 +317,6 @@ fun RootScaffold(
                                         confirmColor = Color(0xFFFF453A),
                                         onConfirm = { RootUtils.rebootDevice(context) }
                                     )
-                                }
-                            ),
-                            DropdownItem(
-                                text = "Copy Debug Info",
-                                onClick = {
-                                    miuixMenuExpanded = false
-                                    copyDebugInfo()
                                 }
                             )
                         )

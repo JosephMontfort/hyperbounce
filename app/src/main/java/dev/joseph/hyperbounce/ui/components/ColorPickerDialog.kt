@@ -85,12 +85,15 @@ fun ColorPickerDialog(
     }
 
     val isDark = isSystemInDarkTheme()
-    val cardBg = if (isDark) Color(0xFF1E1E20) else Color(0xFFFFFFFF)
+    val cardBg = if (isDark) Color(0xFF242424) else Color(0xFFFFFFFF)
     val cancelBtnBg = if (isDark) Color(0xFF2C2C2E) else Color(0xFFE5E5EA)
 
     val animProgress by animateFloatAsState(
         targetValue = 1f,
-        animationSpec = spring(dampingRatio = 0.85f, stiffness = 380f),
+        animationSpec = androidx.compose.animation.core.tween(
+            durationMillis = 300,
+            easing = androidx.compose.animation.core.CubicBezierEasing(0.2f, 0f, 0f, 1f)
+        ),
         label = "colorPickerDialogAnim"
     )
 

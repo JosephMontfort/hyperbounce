@@ -33,6 +33,8 @@ import dev.joseph.hyperbounce.ui.components.GlassCard
 import dev.joseph.hyperbounce.ui.components.RowDivider
 import dev.joseph.hyperbounce.ui.glass.LiquidToggle
 import dev.joseph.hyperbounce.ui.state.SettingsRepository
+import dev.joseph.hyperbounce.ui.state.ComponentStyle
+import dev.joseph.hyperbounce.ui.state.LocalComponentStyle
 import dev.joseph.hyperbounce.ui.theme.HyperBounceColors
 import dev.joseph.hyperbounce.ui.theme.HyperBounceType
 import dev.joseph.hyperbounce.ui.theme.LocalIsDarkTheme
@@ -179,10 +181,18 @@ private fun SafeModeAppRow(
             )
         }
 
-        LiquidToggle(
-            selected = { checked },
-            onSelect = onCheckedChange,
-            backdrop = toggleBackdrop
-        )
+        val componentStyle = LocalComponentStyle.current
+        if (componentStyle == ComponentStyle.MIUIX) {
+            top.yukonga.miuix.kmp.basic.Switch(
+                checked = checked,
+                onCheckedChange = onCheckedChange
+            )
+        } else {
+            LiquidToggle(
+                selected = { checked },
+                onSelect = onCheckedChange,
+                backdrop = toggleBackdrop
+            )
+        }
     }
 }

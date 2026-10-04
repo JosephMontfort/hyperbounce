@@ -197,7 +197,10 @@ fun GlassDialogHost(
     val isVisible = displayedRequest != null && !isClosing
     val animProgress by animateFloatAsState(
         targetValue = if (isVisible) 1f else 0f,
-        animationSpec = spring(dampingRatio = 0.85f, stiffness = 380f),
+        animationSpec = androidx.compose.animation.core.tween(
+            durationMillis = 300,
+            easing = androidx.compose.animation.core.CubicBezierEasing(0.2f, 0f, 0f, 1f)
+        ),
         label = "glassDialogAnimProgress",
         finishedListener = { progress ->
             if (progress == 0f && isClosing) {
@@ -206,6 +209,9 @@ fun GlassDialogHost(
             }
         }
     )
+
+    val isDark = isSystemInDarkTheme()
+    val dialogBgColor = if (isDark) Color(0xFF242424) else top.yukonga.miuix.kmp.theme.MiuixTheme.colorScheme.surfaceContainer
 
     val componentStyle = dev.joseph.hyperbounce.ui.state.LocalComponentStyle.current
     if (componentStyle == dev.joseph.hyperbounce.ui.state.ComponentStyle.MIUIX && displayedRequest != null) {
@@ -232,6 +238,7 @@ fun GlassDialogHost(
                     show = isVisible,
                     title = "Custom Value",
                     summary = "${req.title}\nStock Range: [${req.valueRange.start} .. ${req.valueRange.endInclusive}] • Default: ${req.defaultValue}",
+                    backgroundColor = dialogBgColor,
                     onDismissRequest = { hostState.dismiss() },
                     onDismissFinished = {
                         displayedRequest = null
@@ -275,6 +282,7 @@ fun GlassDialogHost(
                     show = isVisible,
                     title = req.title,
                     summary = req.message,
+                    backgroundColor = dialogBgColor,
                     onDismissRequest = {
                         req.onCancel?.invoke()
                         hostState.dismiss()
@@ -316,6 +324,7 @@ fun GlassDialogHost(
                     show = isVisible,
                     title = req.title,
                     summary = req.message ?: "",
+                    backgroundColor = dialogBgColor,
                     onDismissRequest = {
                         req.onCancel?.invoke()
                         hostState.dismiss()
@@ -366,6 +375,7 @@ fun GlassDialogHost(
                 top.yukonga.miuix.kmp.window.WindowDialog(
                     show = isVisible,
                     title = req.title,
+                    backgroundColor = dialogBgColor,
                     onDismissRequest = { hostState.dismiss() },
                     onDismissFinished = {
                         displayedRequest = null
@@ -383,13 +393,20 @@ fun GlassDialogHost(
         LocalGlassDialogHost provides hostState
     ) {
         Box(Modifier.fillMaxSize()) {
-            // Main content underneath with dynamic smooth animated blur
+            // Main content underneath with dynamic smooth animated blur and background shrink
             Box(
                 Modifier
                     .fillMaxSize()
+                    .graphicsLayer {
+                        val s = 1f - 0.045f * animProgress
+                        scaleX = s
+                        scaleY = s
+                        shape = RoundedCornerShape(24.dp * animProgress)
+                        clip = animProgress > 0.005f
+                    }
                     .then(
                         if (animProgress > 0.001f) {
-                            Modifier.blur((24.dp * animProgress))
+                            Modifier.blur(24.dp * animProgress)
                         } else {
                             Modifier
                         }

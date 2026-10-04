@@ -48,9 +48,11 @@ import dev.joseph.hyperbounce.ui.components.RowDivider
 import dev.joseph.hyperbounce.ui.components.SectionHeader
 import dev.joseph.hyperbounce.ui.theme.HyperBounceColors
 import dev.joseph.hyperbounce.ui.theme.HyperBounceType
+import dev.joseph.hyperbounce.ui.state.SettingsRepository
 
 @Composable
 fun AboutScreen(
+    repository: SettingsRepository,
     colors: HyperBounceColors,
     backdrop: Backdrop,
     onBack: (() -> Unit)? = null
@@ -82,25 +84,19 @@ fun AboutScreen(
             }
         }
     } else {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .safeDrawingPadding()
-                .verticalScroll(rememberScrollState())
+        RootScaffold(
+            title = "About",
+            colors = colors,
+            backdrop = backdrop,
+            repository = repository,
+            showTopAction = false
         ) {
-            Spacer(Modifier.height(56.dp))
-            BasicText(
-                "About",
-                modifier = Modifier.padding(horizontal = 20.dp),
-                style = HyperBounceType.largeTitle.copy(color = colors.label)
-            )
-            Spacer(Modifier.height(8.dp))
             AboutHeader(colors)
             DeveloperSection(colors, backdrop)
             SystemInfoSection(colors, backdrop)
             OpenSourceLicensesSection(colors, backdrop)
             DonationSection(colors, backdrop)
-            Spacer(Modifier.height(120.dp)) // Bottom tab clearance
+            Spacer(Modifier.height(36.dp))
         }
     }
 }

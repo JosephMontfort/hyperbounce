@@ -54,6 +54,22 @@ fun SettingsScreen(
         contract = ActivityResultContracts.OpenDocument()
     ) { uri: Uri? ->
         if (uri != null) {
+            val fileName = try {
+                var displayName: String? = null
+                context.contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
+                    if (cursor.moveToFirst()) {
+                        val idx = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                        if (idx >= 0) displayName = cursor.getString(idx)
+                    }
+                }
+                displayName ?: uri.lastPathSegment ?: ""
+            } catch (e: Exception) {
+                uri.lastPathSegment ?: ""
+            }
+            if (!fileName.endsWith(".json", ignoreCase = true)) {
+                Toast.makeText(context, "Only .json settings files are supported", Toast.LENGTH_SHORT).show()
+                return@rememberLauncherForActivityResult
+            }
             try {
                 val json = context.contentResolver.openInputStream(uri)?.use { stream ->
                     stream.bufferedReader(Charsets.UTF_8).readText()
@@ -160,7 +176,7 @@ fun SettingsScreen(
                 title = "Restore Module Settings",
                 colors = colors,
                 onClick = {
-                    restoreLauncher.launch(arrayOf("application/json", "*/*"))
+                    restoreLauncher.launch(arrayOf("application/json"))
                 }
             )
         }
