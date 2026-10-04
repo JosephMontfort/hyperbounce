@@ -11,7 +11,7 @@ data class NotificationSheetConfig(
     var depthCustomSubject: Boolean = false,
     var lockScreenAsNotifCenterEnabled: Boolean = false,
     var showBottomWidgets: Boolean = true,
-    var clockMorphOnNotifications: Boolean = true,
+    var clockMorphOnNotifications: Boolean = false,
     var glassEffectsEnabled: Boolean = false,
     var glassOnlyWithoutWallpaper: Boolean = false,
     // Optics (Liquid Glass 2.0)
@@ -41,9 +41,9 @@ data class NotificationSheetConfig(
     var oneToOneTrackingEnabled: Boolean = false,
     // iOS 26 Heads-Up Banner Animation
     var iosHunAnimationEnabled: Boolean = true,
-    var iosHunDurationMs: Float = 380.0f,
-    var iosHunStartScale: Float = 0.45f,
-    var iosHunSqueezeStrength: Float = 0.40f
+    var iosHunDurationMs: Float = 600.0f,
+    var iosHunStartScale: Float = 0.25f,
+    var iosHunSqueezeStrength: Float = 3.0f
 ) {
     /**
      * True only if sheet is enabled and lockscreen wallpaper toggle is on.
@@ -98,7 +98,7 @@ object NotificationSheetConfigHolder {
         sheet.oneToOneTrackingEnabled = prefs.getBoolean("notif_sheet_one_to_one_tracking", false)
         sheet.lockScreenAsNotifCenterEnabled = prefs.getBoolean("notif_sheet_lockscreen_enabled", false)
         sheet.showBottomWidgets = prefs.getBoolean("notif_sheet_show_bottom_widgets", true)
-        sheet.clockMorphOnNotifications = prefs.getBoolean("notif_sheet_clock_morph", true)
+        sheet.clockMorphOnNotifications = prefs.getBoolean("notif_sheet_clock_morph", false)
         sheet.glassEffectsEnabled = prefs.getBoolean("notif_sheet_glass_effects_enabled", false)
         sheet.glassOnlyWithoutWallpaper = prefs.getBoolean("notif_sheet_glass_only_without_wallpaper", false)
         sheet.refractionHeight = prefs.getFloat("notif_card_refraction_height", 24.0f)
@@ -122,8 +122,8 @@ object NotificationSheetConfigHolder {
         sheet.pillHeight = prefs.getFloat("notif_pill_height", 6.0f)
         sheet.pillBottomMargin = prefs.getFloat("notif_pill_bottom_margin", 9.0f)
         sheet.iosHunAnimationEnabled = prefs.getBoolean("notif_ios_hun_animation_enabled", true)
-        sheet.iosHunDurationMs = prefs.getFloat("notif_ios_hun_duration_ms", 380.0f)
-        sheet.iosHunStartScale = prefs.getFloat("notif_ios_hun_start_scale", 0.45f)
-        sheet.iosHunSqueezeStrength = prefs.getFloat("notif_ios_hun_squeeze_strength", 0.40f)
+        sheet.iosHunDurationMs = prefs.getFloat("notif_ios_hun_duration_ms", 600.0f)
+        sheet.iosHunStartScale = prefs.getFloat("notif_ios_hun_start_scale", 0.25f)
+        sheet.iosHunSqueezeStrength = prefs.getFloat("notif_ios_hun_squeeze_strength", 3.0f)
     }
 }

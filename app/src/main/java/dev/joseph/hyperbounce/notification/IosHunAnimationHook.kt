@@ -217,9 +217,9 @@ object IosHunAnimationHook {
         row.translationY = notchY
         row.alpha = 0.0f
 
-        val durationMs = cfg.iosHunDurationMs.toLong().coerceIn(200L, 800L)
+        val durationMs = cfg.iosHunDurationMs.toLong().coerceIn(150L, 1200L)
         val spring = Ios26SpringInterpolator(dampingRatio = 0.65f, response = 0.48f)
-        val squeezeStrength = cfg.iosHunSqueezeStrength.coerceIn(0.0f, 1.0f)
+        val squeezeStrength = cfg.iosHunSqueezeStrength.coerceIn(0.0f, 5.0f)
         val kv = 0.045f * squeezeStrength
         val ks = 1.25f * squeezeStrength
 

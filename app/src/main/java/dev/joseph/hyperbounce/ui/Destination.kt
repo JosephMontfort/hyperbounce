@@ -24,6 +24,9 @@ sealed interface Destination {
     data object LockScreenSheetLighting : Destination
     data object LockScreenSheetHomeIndicator : Destination
     data object NotificationCenterSheet : Destination
+    data object NotificationCenterSheetGlassTuning : Destination
+    data object NotificationCenterSheetLighting : Destination
+    data object NotificationCenterSheetHomeIndicator : Destination
     data object Keypad : Destination
     data object KeypadDelays : Destination
     data object KeypadPhysics : Destination

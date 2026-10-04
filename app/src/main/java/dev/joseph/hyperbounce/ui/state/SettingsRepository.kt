@@ -647,6 +647,9 @@ class SettingsRepository(context: Context) {
         var blurRadius by prefsFloatState("notif_card_blur_radius", defaults.blurRadius); private set
         var cornerRadius by prefsFloatState("notif_card_corner_radius", defaults.cornerRadius); private set
         var sideMargin by prefsFloatState("notif_side_margin", defaults.sideMargin); private set
+        var pillWidth by prefsFloatState("notif_pill_width", defaults.pillWidth); private set
+        var pillHeight by prefsFloatState("notif_pill_height", defaults.pillHeight); private set
+        var pillBottomMargin by prefsFloatState("notif_pill_bottom_margin", defaults.pillBottomMargin); private set
         var iosHunAnimationEnabled by prefsBooleanState("notif_ios_hun_animation_enabled", defaults.iosHunAnimationEnabled); private set
         var iosHunDurationMs by prefsFloatState("notif_ios_hun_duration_ms", defaults.iosHunDurationMs); private set
         var iosHunStartScale by prefsFloatState("notif_ios_hun_start_scale", defaults.iosHunStartScale); private set
@@ -663,6 +666,7 @@ class SettingsRepository(context: Context) {
             dispersionStrength, specularStrength, hairlineStrength, innerGlowStrength, rimSoftness,
             innerShadow, saturationFactor, blurRadius,
             cornerRadius, sideMargin,
+            pillWidth, pillHeight, pillBottomMargin,
             iosHunAnimationEnabled, iosHunDurationMs, iosHunStartScale, iosHunSqueezeStrength
         )
 
@@ -695,6 +699,9 @@ class SettingsRepository(context: Context) {
         @JvmName("setNotifSheetBlurRadiusPref") fun setBlurRadius(v: Float) { blurRadius = v }
         @JvmName("setNotifSheetCornerRadiusPref") fun setCornerRadius(v: Float) { cornerRadius = v }
         @JvmName("setNotifSheetSideMarginPref") fun setSideMargin(v: Float) { sideMargin = v }
+        @JvmName("setNotifSheetPillWidthPref") fun setPillWidth(v: Float) { pillWidth = v }
+        @JvmName("setNotifSheetPillHeightPref") fun setPillHeight(v: Float) { pillHeight = v }
+        @JvmName("setNotifSheetPillBottomMarginPref") fun setPillBottomMargin(v: Float) { pillBottomMargin = v }
         @JvmName("setNotifIosHunAnimationEnabledPref") fun setIosHunAnimationEnabled(v: Boolean) { iosHunAnimationEnabled = v }
         @JvmName("setNotifIosHunDurationMsPref") fun setIosHunDurationMs(v: Float) { iosHunDurationMs = v }
         @JvmName("setNotifIosHunStartScalePref") fun setIosHunStartScale(v: Float) { iosHunStartScale = v }
@@ -729,6 +736,9 @@ class SettingsRepository(context: Context) {
             blurRadius = defaults.blurRadius
             cornerRadius = defaults.cornerRadius
             sideMargin = defaults.sideMargin
+            pillWidth = defaults.pillWidth
+            pillHeight = defaults.pillHeight
+            pillBottomMargin = defaults.pillBottomMargin
             iosHunAnimationEnabled = defaults.iosHunAnimationEnabled
             iosHunDurationMs = defaults.iosHunDurationMs
             iosHunStartScale = defaults.iosHunStartScale

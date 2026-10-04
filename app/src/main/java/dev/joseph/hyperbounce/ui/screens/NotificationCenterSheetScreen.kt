@@ -27,7 +27,9 @@ import dev.joseph.hyperbounce.ui.components.ResetArrowIcon
 import dev.joseph.hyperbounce.ui.components.RowDivider
 import dev.joseph.hyperbounce.ui.components.SectionFooter
 import dev.joseph.hyperbounce.ui.components.SectionHeader
+import dev.joseph.hyperbounce.ui.Destination
 import dev.joseph.hyperbounce.ui.components.SettingsClickableRow
+import dev.joseph.hyperbounce.ui.components.SettingsNavRow
 import dev.joseph.hyperbounce.ui.components.SettingsSliderRow
 import dev.joseph.hyperbounce.ui.components.SettingsToggleRow
 import dev.joseph.hyperbounce.ui.components.SlidersIcon
@@ -43,7 +45,8 @@ fun NotificationCenterSheetScreen(
     repository: SettingsRepository,
     colors: HyperBounceColors,
     backdrop: Backdrop,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    onNavigate: (Destination) -> Unit
 ) {
     val sheet = repository.notificationSheet
     val context = androidx.compose.ui.platform.LocalContext.current
@@ -149,7 +152,7 @@ fun NotificationCenterSheetScreen(
             GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
                 SettingsToggleRow(
                     title = "Notification Center iOS Sheet",
-                    subtitle = if (sheet.enabled) "Single cohesive container sliding down with static notifications" else "Disabled (Stock rolling animation)",
+                    subtitle = null,
                     colors = colors,
                     backdrop = backdrop,
                     checked = sheet.enabled,
@@ -163,7 +166,7 @@ fun NotificationCenterSheetScreen(
             GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
                 SettingsToggleRow(
                     title = "Lock Screen Wallpaper Background",
-                    subtitle = if (sheet.lockWallpaperEnabled) "Unblurred lockscreen wallpaper attached to the sheet, rolling down with it" else "Disabled (Transparent glass sheet)",
+                    subtitle = "Lockscreen wallpaper attached to the sheet, rolling down with it",
                     colors = colors,
                     backdrop = backdrop,
                     checked = sheet.lockWallpaperEnabled,
@@ -174,7 +177,7 @@ fun NotificationCenterSheetScreen(
                     RowDivider(colors.separator)
                     SettingsToggleRow(
                         title = "1:1 Finger Tracking",
-                        subtitle = if (sheet.oneToOneTrackingEnabled) "Physical 1:1 finger tracking on shade pulldown with 50% halfway threshold snap on release" else "Disabled (HyperOS native 200px threshold)",
+                        subtitle = "Physical 1:1 finger tracking on notification shade pulldown",
                         colors = colors,
                         backdrop = backdrop,
                         checked = sheet.oneToOneTrackingEnabled,
@@ -184,7 +187,7 @@ fun NotificationCenterSheetScreen(
                     RowDivider(colors.separator)
                     SettingsToggleRow(
                         title = "Homescreen Only",
-                        subtitle = if (sheet.lockWallpaperHomescreenOnly) "Active only when pulling down over homescreen; uses transparent glass over running apps" else "Active everywhere (over homescreen and apps)",
+                        subtitle = "Active only when pulling down over homescreen; uses transparent glass over running apps",
                         colors = colors,
                         backdrop = backdrop,
                         checked = sheet.lockWallpaperHomescreenOnly,
@@ -194,7 +197,7 @@ fun NotificationCenterSheetScreen(
                     RowDivider(colors.separator)
                     SettingsToggleRow(
                         title = "Custom Background Wallpaper",
-                        subtitle = if (sheet.customWallpaperEnabled) "Custom cropped wallpaper displayed behind notification sheet" else "Disabled (Uses lockscreen wallpaper)",
+                        subtitle = "Custom wallpaper displayed behind notification sheet",
                         colors = colors,
                         backdrop = backdrop,
                         checked = sheet.customWallpaperEnabled,
@@ -205,7 +208,7 @@ fun NotificationCenterSheetScreen(
                         RowDivider(colors.separator)
                         SettingsClickableRow(
                             title = if (hasCustomWallpaper) "Change & Crop Wallpaper" else "Choose & Crop Wallpaper",
-                            subtitle = if (hasCustomWallpaper) "Custom wallpaper active. Tap to choose a new one and crop" else "Pick an image and crop to match screen aspect ratio",
+                            subtitle = if (hasCustomWallpaper) "Custom wallpaper active. Tap to choose a new one and crop" else "Pick an image and crop",
                             colors = colors,
                             onClick = {
                                 customWallpaperPickerLauncher.launch("image/*")
@@ -245,7 +248,7 @@ fun NotificationCenterSheetScreen(
                 GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
                     SettingsToggleRow(
                         title = "iOS 27 Depth Wallpaper Effect",
-                        subtitle = if (sheet.depthWallpaperEnabled) "Static subject revealed over transparent background as shade descends" else "Disabled by default",
+                        subtitle = "Static subject revealed over transparent background as shade descends",
                         colors = colors,
                         backdrop = backdrop,
                         checked = sheet.depthWallpaperEnabled,
@@ -312,7 +315,7 @@ fun NotificationCenterSheetScreen(
                 GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
                     SettingsToggleRow(
                         title = "Lock Screen as Notification Center",
-                        subtitle = if (sheet.lockScreenAsNotifCenterEnabled) "Replicates your active HyperOS lock screen clock, depth layering & shortcuts when pulling down shade" else "Disabled (Standard notification shade)",
+                        subtitle = "Replicates active HyperOS lock screen clock in notification centre",
                         colors = colors,
                         backdrop = backdrop,
                         checked = sheet.lockScreenAsNotifCenterEnabled,
@@ -323,21 +326,11 @@ fun NotificationCenterSheetScreen(
                         RowDivider(colors.separator)
                         SettingsToggleRow(
                             title = "Bottom Torch & Camera Widgets",
-                            subtitle = if (sheet.showBottomWidgets) "Quick-access flashlight and camera buttons with tactile haptics & pop-in springs" else "Hidden",
+                            subtitle = "Quick-access flashlight and camera buttons",
                             colors = colors,
                             backdrop = backdrop,
                             checked = sheet.showBottomWidgets,
                             onCheckedChange = sheet::setShowBottomWidgets,
-                            enabled = sheet.enabled && sheet.lockWallpaperEnabled && sheet.lockScreenAsNotifCenterEnabled
-                        )
-                        RowDivider(colors.separator)
-                        SettingsToggleRow(
-                            title = "Dynamic Clock Morphing",
-                            subtitle = if (sheet.clockMorphOnNotifications) "Clock smoothly scales to compact variant when notifications are present" else "Static full-size clock layout",
-                            colors = colors,
-                            backdrop = backdrop,
-                            checked = sheet.clockMorphOnNotifications,
-                            onCheckedChange = sheet::setClockMorphOnNotifications,
                             enabled = sheet.enabled && sheet.lockWallpaperEnabled && sheet.lockScreenAsNotifCenterEnabled
                         )
                     }
@@ -354,13 +347,7 @@ fun NotificationCenterSheetScreen(
             GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
                 SettingsToggleRow(
                     title = "3-Edge Liquid Glass Effects",
-                    subtitle = if (!sheet.lockWallpaperEnabled) {
-                        "Requires Lockscreen Wallpaper background to be enabled"
-                    } else if (sheet.glassEffectsEnabled) {
-                        "Real-time optical refraction, dispersion, and specular highlight along edges"
-                    } else {
-                        "Disabled by default (Clean border outline without shader overhead)"
-                    },
+                    subtitle = "Real-time optical refraction, dispersion, and specular highlight along edges",
                     colors = colors,
                     backdrop = backdrop,
                     checked = sheet.glassEffectsEnabled,
@@ -369,14 +356,46 @@ fun NotificationCenterSheetScreen(
                 )
                 if (sheet.glassEffectsEnabled) {
                     RowDivider(colors.separator)
-                    SettingsToggleRow(
-                        title = "Only Without Lockscreen Wallpaper",
-                        subtitle = if (sheet.glassOnlyWithoutWallpaper) "Show glass effects only when lockscreen wallpaper is not actively shown on the sheet" else "Always show glass effects when enabled",
+                    SettingsSliderRow(
+                        title = "Side Edges Bevel Width",
+                        subtitle = "Width of the left and right optical glass bevel slopes",
                         colors = colors,
                         backdrop = backdrop,
-                        checked = sheet.glassOnlyWithoutWallpaper,
-                        onCheckedChange = sheet::setGlassOnlyWithoutWallpaper,
+                        value = sheet.leftBevelWidth,
+                        onValueChange = {
+                            sheet.setLeftBevelWidth(it)
+                            sheet.setRightBevelWidth(it)
+                        },
+                        valueRange = 0.0f..80.0f,
+                        defaultValue = 32.0f,
+                        valueLabel = { String.format(Locale.US, "%.0f dp", it) },
                         enabled = sheet.enabled && sheet.lockWallpaperEnabled && sheet.glassEffectsEnabled
+                    )
+                    RowDivider(colors.separator)
+                    SettingsSliderRow(
+                        title = "Bottom Edge Bevel Width",
+                        subtitle = "Width of the bottom optical glass bevel slope",
+                        colors = colors,
+                        backdrop = backdrop,
+                        value = sheet.bottomBevelWidth,
+                        onValueChange = sheet::setBottomBevelWidth,
+                        valueRange = 0.0f..80.0f,
+                        defaultValue = 28.0f,
+                        valueLabel = { String.format(Locale.US, "%.0f dp", it) },
+                        enabled = sheet.enabled && sheet.lockWallpaperEnabled && sheet.glassEffectsEnabled
+                    )
+                    RowDivider(colors.separator)
+                    SettingsSliderRow(
+                        title = "Bottom Corner Radius",
+                        subtitle = "Curvature radius of bottom left/right sheet corners",
+                        colors = colors,
+                        backdrop = backdrop,
+                        value = sheet.cornerRadius,
+                        onValueChange = sheet::setCornerRadius,
+                        valueRange = 0.0f..64.0f,
+                        defaultValue = 36.0f,
+                        valueLabel = { String.format(Locale.US, "%.0f dp", it) },
+                        enabled = sheet.enabled
                     )
                 }
             }
@@ -384,200 +403,6 @@ fun NotificationCenterSheetScreen(
                 "Enables real-time AGSL refractive glass shader along left, right, and bottom sheet edges. Disabled by default to save GPU and capture overhead.",
                 colors
             )
-        }
-
-        item {
-            SectionHeader("Optics & Refraction (Liquid Glass 2.0)", colors)
-            GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
-                SettingsSliderRow(
-                    title = "Side Edges Refraction",
-                    subtitle = "Inward lens magnification and curvature along left and right borders",
-                    colors = colors,
-                    backdrop = backdrop,
-                    value = sheet.sideRefraction,
-                    onValueChange = sheet::setSideRefraction,
-                    valueRange = 0.0f..120.0f,
-                    defaultValue = 32.0f,
-                    valueLabel = { String.format(Locale.US, "%.0f dp", it) },
-                    enabled = sheet.enabled && sheet.lockWallpaperEnabled && sheet.glassEffectsEnabled
-                )
-                RowDivider(colors.separator)
-                SettingsSliderRow(
-                    title = "Bottom Edge Refraction",
-                    subtitle = "Upward lens refraction along the bottom rim (calibrated against stretching)",
-                    colors = colors,
-                    backdrop = backdrop,
-                    value = sheet.bottomRefraction,
-                    onValueChange = sheet::setBottomRefraction,
-                    valueRange = 0.0f..80.0f,
-                    defaultValue = 18.0f,
-                    valueLabel = { String.format(Locale.US, "%.0f dp", it) },
-                    enabled = sheet.enabled && sheet.lockWallpaperEnabled && sheet.glassEffectsEnabled
-                )
-                SettingsSliderRow(
-                    title = "Chromatic Dispersion",
-                    subtitle = "Physical R/G/B spectral separation along surface normals",
-                    colors = colors,
-                    backdrop = backdrop,
-                    value = sheet.dispersionStrength,
-                    onValueChange = sheet::setDispersionStrength,
-                    valueRange = 0.0f..0.30f,
-                    defaultValue = 0.03f,
-                    valueLabel = { String.format(Locale.US, "%.2f", it) },
-                    enabled = sheet.enabled && sheet.lockWallpaperEnabled && sheet.glassEffectsEnabled
-                )
-                RowDivider(colors.separator)
-                SettingsSliderRow(
-                    title = "Caustic Rim Softness",
-                    subtitle = "Normal-directed 3-tap sample smoothing radius along glass bevels",
-                    colors = colors,
-                    backdrop = backdrop,
-                    value = sheet.rimSoftness,
-                    onValueChange = sheet::setRimSoftness,
-                    valueRange = 0.0f..8.0f,
-                    defaultValue = 2.0f,
-                    valueLabel = { String.format(Locale.US, "%.1f dp", it) },
-                    enabled = sheet.enabled && sheet.lockWallpaperEnabled && sheet.glassEffectsEnabled
-                )
-                RowDivider(colors.separator)
-                SettingsSliderRow(
-                    title = "Saturation Boost Factor",
-                    subtitle = "Color vibrancy multiplication inside the glass lens",
-                    colors = colors,
-                    backdrop = backdrop,
-                    value = sheet.saturationFactor,
-                    onValueChange = sheet::setSaturationFactor,
-                    valueRange = 50.0f..200.0f,
-                    defaultValue = 120.0f,
-                    valueLabel = { String.format(Locale.US, "%.0f%%", it) },
-                    enabled = sheet.enabled && sheet.lockWallpaperEnabled && sheet.glassEffectsEnabled
-                )
-                RowDivider(colors.separator)
-                SettingsSliderRow(
-                    title = "Lens Blur Radius",
-                    subtitle = "Internal gaussian dispersion blur filter",
-                    colors = colors,
-                    backdrop = backdrop,
-                    value = sheet.blurRadius,
-                    onValueChange = sheet::setBlurRadius,
-                    valueRange = 0.0f..60.0f,
-                    defaultValue = 0.0f,
-                    valueLabel = { String.format(Locale.US, "%.0f dp", it) },
-                    enabled = sheet.enabled && sheet.lockWallpaperEnabled && sheet.glassEffectsEnabled
-                )
-            }
-            SectionFooter(
-                "Refracts underlying applications and wallpapers with crystal-clear 100% transparent interior.",
-                colors
-            )
-        }
-
-        item {
-            SectionHeader("Glass Lighting & Specular Highlights", colors)
-            GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
-                SettingsSliderRow(
-                    title = "Specular Highlight Intensity",
-                    subtitle = "Master surface lighting rim brightness",
-                    colors = colors,
-                    backdrop = backdrop,
-                    value = sheet.specularStrength,
-                    onValueChange = sheet::setSpecularStrength,
-                    valueRange = 0.0f..2.0f,
-                    defaultValue = 0.90f,
-                    valueLabel = { String.format(Locale.US, "%.2f", it) },
-                    enabled = sheet.enabled && sheet.lockWallpaperEnabled && sheet.glassEffectsEnabled
-                )
-                RowDivider(colors.separator)
-                SettingsSliderRow(
-                    title = "Perimeter Hairline Brightness",
-                    subtitle = "Crisp Apple-style white edge boundary reflection along all 3 rims",
-                    colors = colors,
-                    backdrop = backdrop,
-                    value = sheet.hairlineStrength,
-                    onValueChange = sheet::setHairlineStrength,
-                    valueRange = 0.0f..2.0f,
-                    defaultValue = 0.75f,
-                    valueLabel = { String.format(Locale.US, "%.2f", it) },
-                    enabled = sheet.enabled && sheet.lockWallpaperEnabled && sheet.glassEffectsEnabled
-                )
-                RowDivider(colors.separator)
-                SettingsSliderRow(
-                    title = "Inner Glow Band Intensity",
-                    subtitle = "Soft refractive inner light diffusion inside bevel slopes",
-                    colors = colors,
-                    backdrop = backdrop,
-                    value = sheet.innerGlowStrength,
-                    onValueChange = sheet::setInnerGlowStrength,
-                    valueRange = 0.0f..1.0f,
-                    defaultValue = 0.20f,
-                    valueLabel = { String.format(Locale.US, "%.2f", it) },
-                    enabled = sheet.enabled && sheet.lockWallpaperEnabled && sheet.glassEffectsEnabled
-                )
-                RowDivider(colors.separator)
-                SettingsSliderRow(
-                    title = "Inner Shadow Depth",
-                    subtitle = "Bevel inner groove shadow depth factor",
-                    colors = colors,
-                    backdrop = backdrop,
-                    value = sheet.innerShadow,
-                    onValueChange = sheet::setInnerShadow,
-                    valueRange = 0.0f..1.0f,
-                    defaultValue = 0.40f,
-                    valueLabel = { String.format(Locale.US, "%.2f", it) },
-                    enabled = sheet.enabled && sheet.lockWallpaperEnabled && sheet.glassEffectsEnabled
-                )
-            }
-            SectionFooter(
-                "Simulates directional specular gleam and omnidirectional rim reflection across all glass edges.",
-                colors
-            )
-        }
-
-        item {
-            SectionHeader("3-Edge Bevel Geometry", colors)
-            GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
-                SettingsSliderRow(
-                    title = "Side Edges Bevel Width",
-                    subtitle = "Width of the left and right optical glass bevel slopes",
-                    colors = colors,
-                    backdrop = backdrop,
-                    value = sheet.leftBevelWidth,
-                    onValueChange = {
-                        sheet.setLeftBevelWidth(it)
-                        sheet.setRightBevelWidth(it)
-                    },
-                    valueRange = 0.0f..80.0f,
-                    defaultValue = 32.0f,
-                    valueLabel = { String.format(Locale.US, "%.0f dp", it) },
-                    enabled = sheet.enabled && sheet.lockWallpaperEnabled && sheet.glassEffectsEnabled
-                )
-                RowDivider(colors.separator)
-                SettingsSliderRow(
-                    title = "Bottom Edge Bevel Width",
-                    subtitle = "Width of the bottom optical glass bevel slope",
-                    colors = colors,
-                    backdrop = backdrop,
-                    value = sheet.bottomBevelWidth,
-                    onValueChange = sheet::setBottomBevelWidth,
-                    valueRange = 0.0f..80.0f,
-                    defaultValue = 28.0f,
-                    valueLabel = { String.format(Locale.US, "%.0f dp", it) },
-                    enabled = sheet.enabled && sheet.lockWallpaperEnabled && sheet.glassEffectsEnabled
-                )
-                RowDivider(colors.separator)
-                SettingsSliderRow(
-                    title = "Bottom Corner Radius",
-                    subtitle = "Curvature radius of bottom left/right sheet corners",
-                    colors = colors,
-                    backdrop = backdrop,
-                    value = sheet.cornerRadius,
-                    onValueChange = sheet::setCornerRadius,
-                    valueRange = 0.0f..64.0f,
-                    defaultValue = 36.0f,
-                    valueLabel = { String.format(Locale.US, "%.0f dp", it) },
-                    enabled = sheet.enabled
-                )
-            }
         }
 
         item {
@@ -603,11 +428,41 @@ fun NotificationCenterSheetScreen(
         }
 
         item {
-            SectionHeader("iOS 26 Heads-Up Banner Animation", colors)
+            SectionHeader("Optics & Components", colors)
+            GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
+                SettingsNavRow(
+                    title = "Liquid Glass Tuning",
+                    subtitle = "Refraction, chromatic dispersion & corner curvature",
+                    colors = colors,
+                    onClick = { onNavigate(Destination.NotificationCenterSheetGlassTuning) }
+                )
+                RowDivider(colors.separator)
+                SettingsNavRow(
+                    title = "Glass Lighting & Highlights",
+                    subtitle = "Specular rims, perimeter hairline & inner glow",
+                    colors = colors,
+                    onClick = { onNavigate(Destination.NotificationCenterSheetLighting) }
+                )
+                RowDivider(colors.separator)
+                SettingsNavRow(
+                    title = "Home Indicator Pill",
+                    subtitle = "Pill dimensions, height & bottom margin",
+                    colors = colors,
+                    onClick = { onNavigate(Destination.NotificationCenterSheetHomeIndicator) }
+                )
+            }
+            SectionFooter(
+                "Configure optical refraction parameters, specular highlight reflections, and bottom home indicator styling.",
+                colors
+            )
+        }
+
+        item {
+            SectionHeader("Pop-Up Notification Animation", colors)
             GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
                 SettingsToggleRow(
                     title = "iOS 26 Pop-Up Animation",
-                    subtitle = "Emerges from and retreats into center top notch with lively spring overshoot bounce and inertia squeeze",
+                    subtitle = "iOS 26 style animation for pop up notifications",
                     colors = colors,
                     backdrop = backdrop,
                     checked = sheet.iosHunAnimationEnabled,
@@ -618,13 +473,13 @@ fun NotificationCenterSheetScreen(
                     RowDivider(colors.separator)
                     SettingsSliderRow(
                         title = "Animation Speed (Duration)",
-                        subtitle = "Controls spring emergence duration and physical responsiveness",
+                        subtitle = null,
                         colors = colors,
                         backdrop = backdrop,
                         value = sheet.iosHunDurationMs,
                         onValueChange = sheet::setIosHunDurationMs,
-                        valueRange = 200.0f..600.0f,
-                        defaultValue = 380.0f,
+                        valueRange = 200.0f..1000.0f,
+                        defaultValue = 600.0f,
                         valueLabel = { String.format(Locale.US, "%.0f ms", it) },
                         enabled = sheet.enabled
                     )
@@ -636,8 +491,8 @@ fun NotificationCenterSheetScreen(
                         backdrop = backdrop,
                         value = sheet.iosHunStartScale,
                         onValueChange = sheet::setIosHunStartScale,
-                        valueRange = 0.25f..0.70f,
-                        defaultValue = 0.45f,
+                        valueRange = 0.20f..0.70f,
+                        defaultValue = 0.25f,
                         valueLabel = { String.format(Locale.US, "%.0f%%", it * 100.0f) },
                         enabled = sheet.enabled
                     )
@@ -649,8 +504,8 @@ fun NotificationCenterSheetScreen(
                         backdrop = backdrop,
                         value = sheet.iosHunSqueezeStrength,
                         onValueChange = sheet::setIosHunSqueezeStrength,
-                        valueRange = 0.0f..1.0f,
-                        defaultValue = 0.40f,
+                        valueRange = 0.0f..4.0f,
+                        defaultValue = 3.0f,
                         valueLabel = { String.format(Locale.US, "%.0f%%", it * 100.0f) },
                         enabled = sheet.enabled
                     )

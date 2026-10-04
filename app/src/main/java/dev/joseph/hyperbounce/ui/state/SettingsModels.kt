@@ -170,7 +170,7 @@ data class NotificationSheetSettings(
     val oneToOneTrackingEnabled: Boolean = false,
     val lockScreenAsNotifCenterEnabled: Boolean = false,
     val showBottomWidgets: Boolean = true,
-    val clockMorphOnNotifications: Boolean = true,
+    val clockMorphOnNotifications: Boolean = false,
     val glassEffectsEnabled: Boolean = false,
     val glassOnlyWithoutWallpaper: Boolean = false,
     val refractionHeight: Float = 24.0f,
@@ -190,10 +190,13 @@ data class NotificationSheetSettings(
     val blurRadius: Float = 0.0f,
     val cornerRadius: Float = 36.0f,
     val sideMargin: Float = 14.0f,
+    val pillWidth: Float = 156.0f,
+    val pillHeight: Float = 6.0f,
+    val pillBottomMargin: Float = 9.0f,
     val iosHunAnimationEnabled: Boolean = true,
-    val iosHunDurationMs: Float = 380.0f,
-    val iosHunStartScale: Float = 0.45f,
-    val iosHunSqueezeStrength: Float = 0.40f
+    val iosHunDurationMs: Float = 600.0f,
+    val iosHunStartScale: Float = 0.25f,
+    val iosHunSqueezeStrength: Float = 3.0f
 )
 
 /** Feature 2: Liquid Glass 2.0 Button PIN Pad Engine Settings */

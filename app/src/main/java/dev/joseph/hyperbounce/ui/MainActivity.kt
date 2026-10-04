@@ -742,6 +742,28 @@ private fun DestinationContent(
             repository = repository,
             colors = colors,
             backdrop = backdrop,
+            onBack = onBack,
+            onNavigate = onNavigate
+        )
+
+        Destination.NotificationCenterSheetGlassTuning -> NotificationCenterSheetGlassTuningScreen(
+            repository = repository,
+            colors = colors,
+            backdrop = backdrop,
+            onBack = onBack
+        )
+
+        Destination.NotificationCenterSheetLighting -> NotificationCenterSheetLightingScreen(
+            repository = repository,
+            colors = colors,
+            backdrop = backdrop,
+            onBack = onBack
+        )
+
+        Destination.NotificationCenterSheetHomeIndicator -> NotificationCenterSheetHomeIndicatorScreen(
+            repository = repository,
+            colors = colors,
+            backdrop = backdrop,
             onBack = onBack
         )
 
