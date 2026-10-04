@@ -18,6 +18,7 @@ import dev.joseph.hyperbounce.ui.components.SettingsClickableRow
 import dev.joseph.hyperbounce.ui.components.SettingsDropdownRow
 import dev.joseph.hyperbounce.ui.components.SettingsNavRow
 import dev.joseph.hyperbounce.ui.components.SettingsToggleRow
+import dev.joseph.hyperbounce.ui.state.AppIconStyle
 import dev.joseph.hyperbounce.ui.state.AppTheme
 import dev.joseph.hyperbounce.ui.state.ComponentStyle
 import dev.joseph.hyperbounce.ui.state.SettingsRepository
@@ -146,6 +147,24 @@ fun SettingsScreen(
                     onCheckedChange = repository::setMiuixLiquidGlassBottomBar
                 )
             }
+
+            RowDivider(colors.separator)
+
+            // App Icon Style Dropdown
+            SettingsDropdownRow(
+                title = "App Icon Style",
+                options = listOf("Monet", "Flat"),
+                selectedIndex = repository.appIconStyle.ordinal,
+                onSelect = { index ->
+                    val style = when (index) {
+                        0 -> AppIconStyle.Monet
+                        else -> AppIconStyle.Flat
+                    }
+                    repository.setAppIconStyle(style)
+                },
+                colors = colors,
+                backdrop = backdrop
+            )
 
             RowDivider(colors.separator)
 

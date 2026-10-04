@@ -32,6 +32,7 @@ import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import dev.joseph.hyperbounce.launcher.ScreenUnlockDefaults
+import dev.joseph.hyperbounce.ui.utils.AppIconManager
 import kotlin.jvm.JvmName
 import kotlin.reflect.KProperty
 
@@ -108,6 +109,17 @@ class SettingsRepository(context: Context) {
     @JvmName("setComponentStyleExplicit")
     fun setComponentStyle(style: ComponentStyle) {
         componentStyle = style
+    }
+
+    var appIconStyle by prefsEnumState("app_icon_style", AppIconStyle.Monet)
+        private set
+
+    @JvmName("setAppIconStyleExplicit")
+    fun setAppIconStyle(style: AppIconStyle) {
+        appIconStyle = style
+        appContext?.let { ctx ->
+            AppIconManager.applyIconStyle(ctx, style)
+        }
     }
 
     var miuixLiquidGlassBottomBar by prefsBooleanState("miuix_liquid_glass_bottom_bar", false)

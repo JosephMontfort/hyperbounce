@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Monet Icon Colors (Pre-Android 12 fallback / Light mode) -->
+    <color name="ic_launcher_background">#DCE5FA</color>
+    <color name="ic_launcher_foreground">#183468</color>
+
+    <!-- Flat Fixed Icon Colors -->
+    <color name="ic_launcher_flat_background">#FDFDF9</color>
+    <color name="ic_launcher_flat_foreground">#2387FD</color>
+</resources>

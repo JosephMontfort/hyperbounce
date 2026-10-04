@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Native Monet System Tokens (Android 12+ Dark Mode - HyperCeiler Blueprint) -->
+    <color name="ic_launcher_background">@android:color/system_accent1_200</color>
+    <color name="ic_launcher_foreground">@android:color/system_accent1_800</color>
+
+    <!-- Flat Fixed Icon Colors -->
+    <color name="ic_launcher_flat_background">#FDFDF9</color>
+    <color name="ic_launcher_flat_foreground">#2387FD</color>
+</resources>

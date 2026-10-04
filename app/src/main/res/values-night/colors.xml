@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Monet Icon Colors (Dark mode fallback) -->
+    <color name="ic_launcher_background">#232838</color>
+    <color name="ic_launcher_foreground">#D0BCFF</color>
+
+    <!-- Flat Fixed Icon Colors -->
+    <color name="ic_launcher_flat_background">#FDFDF9</color>
+    <color name="ic_launcher_flat_foreground">#2387FD</color>
+</resources>

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Production Adaptive Icon Foreground for HyperBounce (Flat Style) -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:height="108dp"
+    android:width="108dp"
+    android:viewportWidth="432"
+    android:viewportHeight="432">
+    <!-- Left architectural leg -->
+    <path
+        android:fillColor="@color/ic_launcher_flat_foreground"
+        android:pathData="M132.37,115.00 L161.76,115.00 A20.84,20.84 0 0,1 182.60,135.84 L182.60,187.68 A12.29,12.29 0 0,0 194.89,199.97 L201.84,199.97 L201.84,238.98 L194.89,238.98 A12.29,12.29 0 0,0 182.60,251.27 L182.60,296.16 A20.84,20.84 0 0,1 161.76,317.00 L132.37,317.00 A14.43,14.43 0 0,1 117.94,302.57 L117.94,129.43 A14.43,14.43 0 0,1 132.37,115.00 Z"/>
+    <!-- Right architectural leg -->
+    <path
+        android:fillColor="@color/ic_launcher_flat_foreground"
+        android:pathData="M205.58,199.97 L237.11,199.97 A12.29,12.29 0 0,0 249.40,187.68 L249.40,135.84 A20.84,20.84 0 0,1 270.24,115.00 L299.63,115.00 A14.43,14.43 0 0,1 314.06,129.43 L314.06,302.57 A14.43,14.43 0 0,1 299.63,317.00 L270.24,317.00 A20.84,20.84 0 0,1 249.40,296.16 L249.40,251.27 A12.29,12.29 0 0,0 237.11,238.98 L205.58,238.98 Z"/>
+</vector>

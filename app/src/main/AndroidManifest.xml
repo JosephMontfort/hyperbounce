@@ -24,17 +24,42 @@
             android:exported="true"
             android:label="@string/app_name"
             android:theme="@android:style/Theme.Material.NoActionBar"
-            android:windowSoftInputMode="adjustResize">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity>
+            android:windowSoftInputMode="adjustResize" />
 
         <activity-alias
             android:name="dev.hyperios.app.ui.MainActivity"
             android:targetActivity=".ui.MainActivity"
             android:exported="true" />
+
+        <!-- Monet Icon Launcher Entry (Default enabled) -->
+        <activity-alias
+            android:name=".ui.MainActivityMonet"
+            android:targetActivity=".ui.MainActivity"
+            android:label="@string/app_name"
+            android:icon="@mipmap/ic_launcher"
+            android:roundIcon="@mipmap/ic_launcher_round"
+            android:enabled="true"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <!-- Flat Fixed Icon Launcher Entry (Disabled by default) -->
+        <activity-alias
+            android:name=".ui.MainActivityFlat"
+            android:targetActivity=".ui.MainActivity"
+            android:label="@string/app_name"
+            android:icon="@mipmap/ic_launcher_flat"
+            android:roundIcon="@mipmap/ic_launcher_flat_round"
+            android:enabled="false"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
 
         <provider
             android:name=".ConfigProvider"
