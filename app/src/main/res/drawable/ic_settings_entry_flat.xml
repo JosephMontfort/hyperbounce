@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Dedicated HyperOS System Settings Icon for HyperiOS (Flat Fixed Style) -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="28dp"
+    android:height="28dp"
+    android:viewportWidth="28"
+    android:viewportHeight="28">
+    <!-- Continuous HyperOS Squircle Background -->
+    <path
+        android:fillColor="@color/ic_launcher_flat_background"
+        android:pathData="M0,12.8C0,8.32 0,6.079 0.872,4.368C1.639,2.863 2.863,1.639 4.368,0.872C6.079,0 8.32,0 12.8,0H15.2C19.68,0 21.921,0 23.632,0.872C25.137,1.639 26.361,2.863 27.128,4.368C28,6.079 28,8.32 28,12.8V15.2C28,19.68 28,21.921 27.128,23.632C26.361,25.137 25.137,26.361 23.632,27.128C21.921,28 19.68,28 15.2,28H12.8C8.32,28 6.079,28 4.368,27.128C2.863,26.361 1.639,25.137 0.872,23.632C0,21.921 0,19.68 0,15.2V12.8Z" />
+
+    <!-- Left architectural leg -->
+    <path
+        android:fillColor="@color/ic_launcher_flat_foreground"
+        android:pathData="M7.17,5.75 L9.57,5.75 A1.70,1.70 0 0,1 11.27,7.45 L11.27,11.69 A1.00,1.00 0 0,0 12.28,12.69 L12.84,12.69 L12.84,15.88 L12.28,15.88 A1.00,1.00 0 0,0 11.27,16.88 L11.27,20.55 A1.70,1.70 0 0,1 9.57,22.25 L7.17,22.25 A1.18,1.18 0 0,1 5.99,21.07 L5.99,6.93 A1.18,1.18 0 0,1 7.17,5.75 Z" />
+
+    <!-- Right architectural leg -->
+    <path
+        android:fillColor="@color/ic_launcher_flat_foreground"
+        android:pathData="M13.15,12.69 L15.72,12.69 A1.00,1.00 0 0,0 16.73,11.69 L16.73,7.45 A1.70,1.70 0 0,1 18.43,5.75 L20.83,5.75 A1.18,1.18 0 0,1 22.01,6.93 L22.01,21.07 A1.18,1.18 0 0,1 20.83,22.25 L18.43,22.25 A1.70,1.70 0 0,1 16.73,20.55 L16.73,16.88 A1.00,1.00 0 0,0 15.72,15.88 L13.15,15.88 Z" />
+</vector>

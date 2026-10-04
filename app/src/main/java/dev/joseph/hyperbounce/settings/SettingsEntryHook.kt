@@ -81,6 +81,9 @@ object SettingsEntryHook {
                             headerClass.getField("title").set(header, "HyperiOS")
                         } catch (_: Throwable) {}
 
+                        val iconStyleStr = prefs?.getString("app_icon_style", "Monet") ?: "Monet"
+                        val isFlat = iconStyleStr.equals("Flat", ignoreCase = true)
+
                         // Inject module resources into Settings so it can resolve our app icon and drawables
                         var appIconDrawable: android.graphics.drawable.Drawable? = null
                         var iconRes = 0
@@ -91,8 +94,6 @@ object SettingsEntryHook {
                             } catch (_: Throwable) {
                                 context.packageManager.getApplicationInfo("dev.joseph.hyperbounce", 0)
                             }
-                            iconRes = appInfo.icon
-                            appIconDrawable = context.packageManager.getApplicationIcon(appInfo)
 
                             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R && !isLoaderAdded) {
                                 try {
@@ -108,6 +109,29 @@ object SettingsEntryHook {
                                 } catch (e: Throwable) {
                                     Log.w(TAG, "Failed to add ResourcesLoader: ${e.message}")
                                 }
+                            }
+
+                            val iconDrawableName = if (isFlat) "ic_settings_entry_flat" else "ic_settings_entry_monet"
+
+                            // 1. Try to load the 28dp squircle drawable directly from module package context
+                            try {
+                                val moduleContext = context.createPackageContext(pkgName, Context.CONTEXT_IGNORE_SECURITY)
+                                val modResId = moduleContext.resources.getIdentifier(iconDrawableName, "drawable", pkgName)
+                                if (modResId != 0) {
+                                    appIconDrawable = moduleContext.getDrawable(modResId)
+                                }
+                            } catch (_: Throwable) {}
+
+                            // 2. Resolve resource ID in injected resources
+                            iconRes = context.resources.getIdentifier(iconDrawableName, "drawable", pkgName)
+                            if (iconRes == 0) {
+                                iconRes = activity.resources.getIdentifier(iconDrawableName, "drawable", pkgName)
+                            }
+
+                            if (appIconDrawable == null && iconRes != 0) {
+                                try {
+                                    appIconDrawable = context.resources.getDrawable(iconRes, context.theme)
+                                } catch (_: Throwable) {}
                             }
                         } catch (t: Throwable) {
                             Log.w(TAG, "Failed resolving module info: ${t.message}")

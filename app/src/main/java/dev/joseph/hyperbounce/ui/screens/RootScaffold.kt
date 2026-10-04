@@ -212,8 +212,8 @@ fun RootScaffold(
             content()
 
             // Clearance so the last card isn't hidden behind the floating bottom tab bar,
-            // and pages with fewer items (like Settings) are always scrollable so the title can collapse.
-            val bottomClearance = if (componentStyle == dev.joseph.hyperbounce.ui.state.ComponentStyle.MIUIX) 340.dp else 260.dp
+            // matching HyperLight's balanced bottom spacing when scrolled up.
+            val bottomClearance = 110.dp
             Spacer(Modifier.height(bottomClearance))
         }
 

@@ -101,7 +101,6 @@ fun AboutScreen(
             SystemInfoSection(colors, backdrop)
             OpenSourceLicensesSection(colors, backdrop)
             DonationSection(colors, backdrop)
-            Spacer(Modifier.height(36.dp))
         }
     }
 }
