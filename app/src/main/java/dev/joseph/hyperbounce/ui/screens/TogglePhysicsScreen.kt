@@ -17,7 +17,6 @@ fun TogglePhysicsScreen(
 
     ScreenScaffold(
         title = "Toggles Drag Physics",
-        subtitle = "Touch tracking & spring bounce dynamics",
         colors = colors,
         backdrop = backdrop,
         onBack = onBack,

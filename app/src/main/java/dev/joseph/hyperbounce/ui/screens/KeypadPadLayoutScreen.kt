@@ -26,7 +26,6 @@ fun KeypadPadLayoutScreen(
 
     ScreenScaffold(
         title = "PIN Pad Layout",
-        subtitle = "Keypad lift, PIN dots position & grid spacing",
         colors = colors,
         backdrop = backdrop,
         onBack = onBack,

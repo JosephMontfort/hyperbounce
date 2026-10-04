@@ -38,6 +38,8 @@ fun DropdownPicker(
     val isDark = dev.joseph.hyperbounce.ui.theme.LocalIsDarkTheme.current
     var expanded by remember { mutableStateOf(false) }
 
+    val view = androidx.compose.ui.platform.LocalView.current
+
     val entry = remember(options, selectedIndex) {
         DropdownEntry(
             items = options.mapIndexed { idx, opt ->
@@ -45,6 +47,7 @@ fun DropdownPicker(
                     text = opt,
                     selected = idx == selectedIndex,
                     onClick = {
+                        view.performHapticFeedback(android.view.HapticFeedbackConstants.CONTEXT_CLICK)
                         onSelect(idx)
                         expanded = false
                     }
@@ -60,7 +63,10 @@ fun DropdownPicker(
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
-                        onClick = { expanded = !expanded }
+                        onClick = {
+                            view.performHapticFeedback(android.view.HapticFeedbackConstants.CONTEXT_CLICK)
+                            expanded = !expanded
+                        }
                     )
                     .padding(horizontal = 8.dp, vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -81,7 +87,10 @@ fun DropdownPicker(
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
-                        onClick = { expanded = !expanded }
+                        onClick = {
+                            view.performHapticFeedback(android.view.HapticFeedbackConstants.CONTEXT_CLICK)
+                            expanded = !expanded
+                        }
                     )
                     .padding(horizontal = 12.dp, vertical = 7.dp),
                 horizontalArrangement = Arrangement.spacedBy(6.dp),

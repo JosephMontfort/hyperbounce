@@ -52,7 +52,6 @@ fun ToggleAppearanceScreen(
 
     ScreenScaffold(
         title = "Toggles Appearance",
-        subtitle = "Active switch accent color & Liquid Glass optics",
         colors = colors,
         backdrop = backdrop,
         onBack = onBack,

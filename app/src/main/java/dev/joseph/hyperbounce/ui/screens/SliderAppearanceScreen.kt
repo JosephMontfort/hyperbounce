@@ -52,7 +52,6 @@ fun SliderAppearanceScreen(
 
     ScreenScaffold(
         title = "Sliders Appearance",
-        subtitle = "Active track accent color & Liquid Glass optics",
         colors = colors,
         backdrop = backdrop,
         onBack = onBack,

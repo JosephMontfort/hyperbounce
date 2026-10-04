@@ -53,6 +53,7 @@ import com.kyant.backdrop.Backdrop
 import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import dev.joseph.hyperbounce.R
+import dev.joseph.hyperbounce.ui.components.SliderThumbTracker
 import dev.joseph.hyperbounce.ui.glass.LiquidBottomTab
 import dev.joseph.hyperbounce.ui.glass.LiquidBottomTabs
 import dev.joseph.hyperbounce.ui.glass.LocalGlassSettings
@@ -73,6 +74,9 @@ import dev.joseph.hyperbounce.ui.screens.KeypadReleasePhysicsScreen
 import dev.joseph.hyperbounce.ui.screens.KeypadScreen
 import dev.joseph.hyperbounce.ui.screens.KeypadStretchPhysicsScreen
 import dev.joseph.hyperbounce.ui.screens.LockScreenSheetScreen
+import dev.joseph.hyperbounce.ui.screens.LockScreenSheetGlassTuningScreen
+import dev.joseph.hyperbounce.ui.screens.LockScreenSheetLightingScreen
+import dev.joseph.hyperbounce.ui.screens.LockScreenSheetHomeIndicatorScreen
 import dev.joseph.hyperbounce.ui.screens.LockscreenStuffsScreen
 import dev.joseph.hyperbounce.ui.screens.NotificationCenterSheetScreen
 import dev.joseph.hyperbounce.ui.screens.ScreenUnlockCascadeBounceScreen
@@ -341,9 +345,9 @@ private fun HyperiOSApp(repository: SettingsRepository) {
                                         awaitEachGesture {
                                             val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
 
-                                            // If child widget (slider thumb/track) consumed down on Initial pass,
-                                            // do not initiate swipe-to-back gesture
-                                            if (down.isConsumed) {
+                                            // Only exempt the slider's thumb from swipe-to-back gesture.
+                                            // Everything else on screen (tuning cards, headers, background) responds to swipe-to-back!
+                                            if (SliderThumbTracker.isThumbTouched) {
                                                 return@awaitEachGesture
                                             }
 
@@ -369,10 +373,14 @@ private fun HyperiOSApp(repository: SettingsRepository) {
                                             val pointerId = down.id
 
                                             while (true) {
-                                                val event = awaitPointerEvent(pass = PointerEventPass.Final)
+                                                val event = awaitPointerEvent(pass = PointerEventPass.Initial)
                                                 val change = event.changes.firstOrNull { it.id == pointerId } ?: break
 
                                                 if (!change.pressed) {
+                                                    break
+                                                }
+
+                                                if (SliderThumbTracker.isThumbTouched) {
                                                     break
                                                 }
 
@@ -383,15 +391,10 @@ private fun HyperiOSApp(repository: SettingsRepository) {
                                                 velocityTracker.addPosition(change.uptimeMillis, change.position)
 
                                                 if (!localDragging) {
-                                                    // If a child (e.g. slider) actively consumed this movement or down, abort swipe-to-back immediately
-                                                    if (down.isConsumed || change.isConsumed) {
-                                                        break
-                                                    }
-
                                                     totalDx += dx
                                                     totalDy += dy
 
-                                                    // Effortless horizontal activation on unconsumed gestures (cards, lists, background)
+                                                    // Effortless horizontal activation on cards, lists, and background
                                                     if (totalDx > 12f && totalDx > kotlin.math.abs(totalDy) * 0.85f) {
                                                         localDragging = true
                                                         change.consume()
@@ -707,6 +710,28 @@ private fun DestinationContent(
         )
 
         Destination.LockScreenSheet -> LockScreenSheetScreen(
+            repository = repository,
+            colors = colors,
+            backdrop = backdrop,
+            onBack = onBack,
+            onNavigate = onNavigate
+        )
+
+        Destination.LockScreenSheetGlassTuning -> LockScreenSheetGlassTuningScreen(
+            repository = repository,
+            colors = colors,
+            backdrop = backdrop,
+            onBack = onBack
+        )
+
+        Destination.LockScreenSheetLighting -> LockScreenSheetLightingScreen(
+            repository = repository,
+            colors = colors,
+            backdrop = backdrop,
+            onBack = onBack
+        )
+
+        Destination.LockScreenSheetHomeIndicator -> LockScreenSheetHomeIndicatorScreen(
             repository = repository,
             colors = colors,
             backdrop = backdrop,

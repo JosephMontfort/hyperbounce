@@ -300,6 +300,7 @@ fun SettingsDropdownRow(
     icon: (@Composable () -> Unit)? = null
 ) {
     val componentStyle = LocalComponentStyle.current
+    val view = LocalView.current
     if (componentStyle == ComponentStyle.MIUIX) {
         WindowDropdownPreference(
             items = options,
@@ -307,7 +308,10 @@ fun SettingsDropdownRow(
             title = title,
             summary = subtitle,
             startAction = icon?.let { { IconChip(iconTint ?: Color.Transparent) { icon() } } },
-            onSelectedIndexChange = onSelect,
+            onSelectedIndexChange = { idx ->
+                view.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
+                onSelect(idx)
+            },
             modifier = modifier.searchHighlight(searchKey ?: title, colors)
         )
     } else {
@@ -341,13 +345,6 @@ fun SettingsDropdownRow(
     }
 }
 
-private fun Modifier.sliderImmune(): Modifier = this.pointerInput(Unit) {
-    awaitEachGesture {
-        val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
-        down.consume()
-    }
-}
-
 /** A title + live value label, with a circular reset button and [LiquidSlider] beneath it.
  *  Long-pressing the value label opens a dialog to set an exact custom numeric value. */
 @OptIn(ExperimentalFoundationApi::class)
@@ -370,23 +367,20 @@ fun SettingsSliderRow(
     val componentStyle = LocalComponentStyle.current
     val customValueHost = dev.joseph.hyperbounce.ui.glass.LocalCustomValueHost.current
     if (componentStyle == ComponentStyle.MIUIX) {
+        val context = androidx.compose.ui.platform.LocalContext.current
         val isModified = abs(value - defaultValue) > 0.0001f
         val view = LocalView.current
         val glass = LocalGlassSettings.current
+        var lastTickLabel by remember { mutableStateOf(valueLabel(value)) }
         var lastTickTime by remember { mutableLongStateOf(0L) }
-        var lastTickValue by remember { mutableFloatStateOf(value) }
-        val tickStep = remember(valueRange) {
-            (valueRange.endInclusive - valueRange.start) / 60f
-        }
 
         val debouncedOnValueChange: (Float) -> Unit = { newValue ->
+            val newLabel = valueLabel(newValue)
             val now = android.os.SystemClock.uptimeMillis()
-            val isAtEdge = newValue <= valueRange.start || newValue >= valueRange.endInclusive
-            val crossedStep = abs(newValue - lastTickValue) >= tickStep
-            if (glass.hapticsEnabled && (now - lastTickTime >= 35L) && (crossedStep || isAtEdge)) {
-                view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+            if (glass.hapticsEnabled && newLabel != lastTickLabel && (now - lastTickTime >= 12L)) {
+                performSliderTick(context, view)
+                lastTickLabel = newLabel
                 lastTickTime = now
-                lastTickValue = newValue
             }
             onValueChange(newValue)
         }
@@ -462,7 +456,30 @@ fun SettingsSliderRow(
                     onValueChange = debouncedOnValueChange,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .sliderImmune(),
+                        .pointerInput(value, valueRange) {
+                            awaitEachGesture {
+                                val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                                val width = size.width.toFloat()
+                                val height = size.height.toFloat()
+                                val thumbRadius = height / 2f
+                                val availableWidth = (width - 2f * thumbRadius).coerceAtLeast(0f)
+                                val fraction = ((value - valueRange.start) / (valueRange.endInclusive - valueRange.start)).coerceIn(0f, 1f)
+                                val thumbX = thumbRadius + fraction * availableWidth
+                                val hitRadius = thumbRadius * 1.5f + 16.dp.toPx()
+                                val isOverThumb = abs(down.position.x - thumbX) <= hitRadius
+                                if (isOverThumb) {
+                                    SliderThumbTracker.isThumbTouched = true
+                                    try {
+                                        while (true) {
+                                            val event = awaitPointerEvent(pass = PointerEventPass.Initial)
+                                            if (event.changes.none { it.id == down.id && it.pressed }) break
+                                        }
+                                    } finally {
+                                        SliderThumbTracker.isThumbTouched = false
+                                    }
+                                }
+                            }
+                        },
                     enabled = enabled,
                     valueRange = valueRange,
                     hapticEffect = SliderDefaults.SliderHapticEffect.None
@@ -483,6 +500,23 @@ fun SettingsSliderRow(
         )
     } else {
         val displayAlpha = if (enabled) 1f else 0.35f
+        val context = androidx.compose.ui.platform.LocalContext.current
+        val view = LocalView.current
+        val glass = LocalGlassSettings.current
+        var lastTickLabel by remember { mutableStateOf(valueLabel(value)) }
+        var lastTickTime by remember { mutableLongStateOf(0L) }
+
+        val debouncedOnValueChange: (Float) -> Unit = { newValue ->
+            val newLabel = valueLabel(newValue)
+            val now = android.os.SystemClock.uptimeMillis()
+            if (glass.hapticsEnabled && newLabel != lastTickLabel && (now - lastTickTime >= 12L)) {
+                performSliderTick(context, view)
+                lastTickLabel = newLabel
+                lastTickTime = now
+            }
+            onValueChange(newValue)
+        }
+
         Column(
             modifier
                 .searchHighlight(searchKey ?: title, colors)
@@ -598,11 +632,11 @@ fun SettingsSliderRow(
 
                     LiquidSlider(
                         value = { value },
-                        onValueChange = onValueChange,
+                        onValueChange = debouncedOnValueChange,
                         valueRange = valueRange,
                         visibilityThreshold = (valueRange.endInclusive - valueRange.start) / 1000f,
                         backdrop = localBackdrop,
-                        modifier = Modifier.sliderImmune().fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth()
                     )
                 } else {
                     // Static disabled track — no interaction, no backdrop capture needed.

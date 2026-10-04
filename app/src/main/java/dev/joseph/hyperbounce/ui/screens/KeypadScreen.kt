@@ -52,7 +52,7 @@ fun KeypadScreen(
         }
 
         item {
-            SectionHeader("Physics & Layout Subpages", colors)
+            SectionHeader("Physics & Layout", colors)
             GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
                 SettingsNavRow(
                     title = "iOS 26 Radial Bloom Physics",

@@ -35,7 +35,6 @@ fun KeypadIosBloomPhysicsScreen(
 
     ScreenScaffold(
         title = "iOS 26 Liquid Bloom Physics",
-        subtitle = "Radial bloom, 2D inertia squish & decoupled glass lenses",
         colors = colors,
         backdrop = backdrop,
         onBack = onBack,

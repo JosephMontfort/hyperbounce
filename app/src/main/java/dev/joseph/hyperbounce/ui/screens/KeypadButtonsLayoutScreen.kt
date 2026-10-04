@@ -29,7 +29,6 @@ fun KeypadButtonsLayoutScreen(
 
     ScreenScaffold(
         title = "Buttons Layout",
-        subtitle = "Key diameter, liquid press scale & typography",
         colors = colors,
         backdrop = backdrop,
         onBack = onBack,

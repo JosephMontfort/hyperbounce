@@ -192,56 +192,47 @@ object SearchIndex {
         SearchItem(
             id = "lockscreen_bottom_refraction",
             title = "Bottom Edge Refraction",
-            category = "LockScreen Stuffs > Lock Screen Sheet",
-            destination = Destination.LockScreenSheet,
+            category = "LockScreen Stuffs > Lock Screen Sheet > Liquid Glass Tuning",
+            destination = Destination.LockScreenSheetGlassTuning,
             highlightKey = "Bottom Edge Refraction",
-            scrollIndex = 1,
+            scrollIndex = 0,
             keywords = listOf("refraction", "bottom", "rim", "edge", "lens")
         ),
         SearchItem(
             id = "lockscreen_dispersion",
             title = "Chromatic Dispersion",
-            category = "LockScreen Stuffs > Lock Screen Sheet",
-            destination = Destination.LockScreenSheet,
+            category = "LockScreen Stuffs > Lock Screen Sheet > Liquid Glass Tuning",
+            destination = Destination.LockScreenSheetGlassTuning,
             highlightKey = "Chromatic Dispersion",
-            scrollIndex = 1,
+            scrollIndex = 0,
             keywords = listOf("chromatic", "dispersion", "rgb", "prism", "spectral")
         ),
         SearchItem(
             id = "lockscreen_caustic_softness",
             title = "Caustic Rim Softness",
-            category = "LockScreen Stuffs > Lock Screen Sheet",
-            destination = Destination.LockScreenSheet,
+            category = "LockScreen Stuffs > Lock Screen Sheet > Liquid Glass Tuning",
+            destination = Destination.LockScreenSheetGlassTuning,
             highlightKey = "Caustic Rim Softness",
-            scrollIndex = 1,
+            scrollIndex = 0,
             keywords = listOf("caustic", "rim", "softness", "bevel")
         ),
         SearchItem(
             id = "lockscreen_saturation",
             title = "Vibrancy Saturation Boost",
-            category = "LockScreen Stuffs > Lock Screen Sheet",
-            destination = Destination.LockScreenSheet,
+            category = "LockScreen Stuffs > Lock Screen Sheet > Liquid Glass Tuning",
+            destination = Destination.LockScreenSheetGlassTuning,
             highlightKey = "Vibrancy Saturation Boost",
-            scrollIndex = 1,
+            scrollIndex = 0,
             keywords = listOf("saturation", "vibrancy", "color")
         ),
         SearchItem(
             id = "lockscreen_frosted_blur",
             title = "Frosted Glass Blur",
-            category = "LockScreen Stuffs > Lock Screen Sheet",
-            destination = Destination.LockScreenSheet,
+            category = "LockScreen Stuffs > Lock Screen Sheet > Liquid Glass Tuning",
+            destination = Destination.LockScreenSheetGlassTuning,
             highlightKey = "Frosted Glass Blur",
-            scrollIndex = 1,
+            scrollIndex = 0,
             keywords = listOf("blur", "frosted", "glass", "crystal")
-        ),
-        SearchItem(
-            id = "lockscreen_tint_opacity",
-            title = "Dark Glass Tint Opacity",
-            category = "LockScreen Stuffs > Lock Screen Sheet",
-            destination = Destination.LockScreenSheet,
-            highlightKey = "Dark Glass Tint Opacity",
-            scrollIndex = 1,
-            keywords = listOf("tint", "opacity", "dark", "glass")
         ),
         SearchItem(
             id = "keypad_glass_blur",

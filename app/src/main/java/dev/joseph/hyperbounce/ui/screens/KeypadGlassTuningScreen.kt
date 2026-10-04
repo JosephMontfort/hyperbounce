@@ -26,7 +26,6 @@ fun KeypadGlassTuningScreen(
 
     ScreenScaffold(
         title = "Liquid Glass Tuning",
-        subtitle = "Optical refraction, bevel, dispersion & specular rims",
         colors = colors,
         backdrop = backdrop,
         onBack = onBack,
