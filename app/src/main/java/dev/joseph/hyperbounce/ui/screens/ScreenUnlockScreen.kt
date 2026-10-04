@@ -67,7 +67,7 @@ fun ScreenUnlockScreen(
         }
 
         item {
-            SectionHeader("ANIMATION MODE", colors)
+            SectionHeader("Animation Mode", colors)
             GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
                 Column(
                     modifier = Modifier

@@ -39,7 +39,7 @@ fun ScreenUnlockRadialDockScreen(
         onRestartApp = { dev.joseph.hyperbounce.ui.utils.RootUtils.restartLauncher(context) }
     ) { _ ->
         item {
-            SectionHeader("RADIAL DOCK SETTLING", colors)
+            SectionHeader("Radial Dock Settling", colors)
             GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
                 SettingsSliderRow(
                     title = "Dock Damping",

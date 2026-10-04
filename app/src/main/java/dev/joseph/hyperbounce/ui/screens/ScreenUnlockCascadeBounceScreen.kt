@@ -43,7 +43,7 @@ fun ScreenUnlockCascadeBounceScreen(
         onRestartApp = { dev.joseph.hyperbounce.ui.utils.RootUtils.restartLauncher(context) }
     ) { _ ->
         item {
-            SectionHeader("DYNAMIC VELOCITY BOUNCE (CENTER VS OUTER)", colors)
+            SectionHeader("Dynamic Velocity Bounce (Center vs Outer)", colors)
             GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
                 for (r in 0 until rows) {
                     if (r > 0) RowDivider(colors.separator)

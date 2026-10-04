@@ -196,8 +196,12 @@ fun RootScaffold(
                         alpha = (1f - (collapseProgress * 2.2f)).coerceIn(0f, 1f)
                         translationY = -collapseProgress * 8.dp.toPx()
                     }
-                ) {
-                    BasicText(title, style = HyperBounceType.largeTitle.copy(color = colors.label))
+                    val titleColor = if (componentStyle == dev.joseph.hyperbounce.ui.state.ComponentStyle.MIUIX) {
+                        MiuixTheme.colorScheme.onSurface
+                    } else {
+                        colors.label
+                    }
+                    BasicText(title, style = HyperBounceType.largeTitle.copy(color = titleColor))
                 }
                 Spacer(Modifier.size(44.dp)) // reserved footprint; the real menu is drawn as an overlay below
             }
@@ -206,13 +210,20 @@ fun RootScaffold(
 
             content()
 
-            // Clearance so the last card isn't hidden behind the floating bottom tab bar.
-            Spacer(Modifier.height(110.dp))
+            // Clearance so the last card isn't hidden behind the floating bottom tab bar,
+            // and pages with fewer items (like Settings) are always scrollable so the title can collapse.
+            val bottomClearance = if (componentStyle == dev.joseph.hyperbounce.ui.state.ComponentStyle.MIUIX) 340.dp else 260.dp
+            Spacer(Modifier.height(bottomClearance))
         }
 
+        val headerTint = if (componentStyle == dev.joseph.hyperbounce.ui.state.ComponentStyle.MIUIX) {
+            MiuixTheme.colorScheme.background
+        } else {
+            colors.background
+        }
         ProgressiveBlurHeader(
             backdrop = contentBackdrop,
-            tintColor = colors.background,
+            tintColor = headerTint,
             modifier = Modifier
                 .fillMaxWidth()
                 .height(110.dp)
@@ -228,12 +239,17 @@ fun RootScaffold(
                 .padding(horizontal = 72.dp),
             contentAlignment = Alignment.Center
         ) {
+            val titleColor = if (componentStyle == dev.joseph.hyperbounce.ui.state.ComponentStyle.MIUIX) {
+                MiuixTheme.colorScheme.onSurface
+            } else {
+                colors.label
+            }
             BasicText(
                 title,
                 modifier = Modifier.graphicsLayer {
-                    alpha = ((collapseProgress - 0.55f) * 2.2f).coerceIn(0f, 1f)
+                    alpha = ((collapseProgress - 0.45f) * 2.2f).coerceIn(0f, 1f)
                 },
-                style = HyperBounceType.headline.copy(color = colors.label)
+                style = HyperBounceType.headline.copy(color = titleColor)
             )
         }
 

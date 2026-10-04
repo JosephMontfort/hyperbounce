@@ -53,9 +53,9 @@ fun AppTransitionsScreen(
             }
         }
 
-        // 2. SPRING DYNAMICS & SPEED
+        // 2. Spring Dynamics & Speed
         item {
-            SectionHeader("SPRING DYNAMICS & SPEED", colors)
+            SectionHeader("Spring Dynamics & Speed", colors)
             GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
                 SettingsSliderRow(
                     title = "Animation Speed",
@@ -98,9 +98,9 @@ fun AppTransitionsScreen(
             }
         }
 
-        // 3. FOLDER & RECENTS GESTURES
+        // 3. Folder & Recents Gestures
         item {
-            SectionHeader("FOLDER & RECENTS GESTURES", colors)
+            SectionHeader("Folder & Recents Gestures", colors)
             GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
                 SettingsToggleRow(
                     title = "1:1 Folder Icon Trajectories",

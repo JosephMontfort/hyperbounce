@@ -233,17 +233,31 @@ private fun HyperiOSApp(repository: SettingsRepository) {
                 }
 
                 val pop: () -> Unit = {
-                    if (backStack.isNotEmpty() && !isPopping) {
-                        isPopping = true
-                        activeAnimationJob = coroutineScope.launch {
-                            try {
-                                dragOffset.animateTo(screenWidth, spring(dampingRatio = 0.88f, stiffness = 420f))
-                                if (backStack.isNotEmpty()) {
-                                    backStack.removeAt(backStack.lastIndex)
+                    if (backStack.isNotEmpty()) {
+                        if (isPopping || activeAnimationJob?.isActive == true) {
+                            activeAnimationJob?.cancel()
+                            isPopping = false
+                            if (backStack.isNotEmpty()) {
+                                backStack.removeAt(backStack.lastIndex)
+                            }
+                        }
+                        if (backStack.isNotEmpty()) {
+                            isPopping = true
+                            activeAnimationJob = coroutineScope.launch {
+                                try {
+                                    dragOffset.snapTo(0f)
+                                    dragOffset.animateTo(screenWidth, spring(dampingRatio = 0.88f, stiffness = 420f))
+                                    if (backStack.isNotEmpty()) {
+                                        backStack.removeAt(backStack.lastIndex)
+                                    }
+                                    dragOffset.snapTo(0f)
+                                } finally {
+                                    isPopping = false
                                 }
+                            }
+                        } else {
+                            coroutineScope.launch {
                                 dragOffset.snapTo(0f)
-                            } finally {
-                                isPopping = false
                             }
                         }
                     }
@@ -359,12 +373,10 @@ private fun HyperiOSApp(repository: SettingsRepository) {
                                             if (activeAnimationJob?.isActive == true || isPopping) {
                                                 activeAnimationJob?.cancel()
                                                 isPopping = false
-                                                if (dragOffset.value > screenWidth * 0.25f && backStack.isNotEmpty()) {
+                                                if (backStack.isNotEmpty()) {
                                                     backStack.removeAt(backStack.lastIndex)
                                                 }
-                                                coroutineScope.launch {
-                                                    dragOffset.snapTo(0f)
-                                                }
+                                                dragOffset.snapTo(0f)
                                             }
 
                                             val velocityTracker = VelocityTracker()
@@ -401,18 +413,14 @@ private fun HyperiOSApp(repository: SettingsRepository) {
                                                     if (totalDx > 12f && totalDx > kotlin.math.abs(totalDy) * 0.85f) {
                                                         localDragging = true
                                                         change.consume()
-                                                        coroutineScope.launch {
-                                                            dragOffset.snapTo(totalDx)
-                                                        }
+                                                        dragOffset.snapTo(totalDx)
                                                     } else if (kotlin.math.abs(totalDy) > 16f || totalDx < -10f) {
                                                         break
                                                     }
                                                 } else {
                                                     change.consume()
                                                     val nextX = (dragOffset.value + dx).coerceAtLeast(0f)
-                                                    coroutineScope.launch {
-                                                        dragOffset.snapTo(nextX)
-                                                    }
+                                                    dragOffset.snapTo(nextX)
                                                 }
                                             }
 

@@ -41,7 +41,7 @@ fun ScreenUnlockCascadeGlobalsScreen(
         onRestartApp = { dev.joseph.hyperbounce.ui.utils.RootUtils.restartLauncher(context) }
     ) { _ ->
         item {
-            SectionHeader("KINETIC Y-AXIS UNLOCK GLOBALS", colors)
+            SectionHeader("Kinetic Y-Axis Unlock Globals", colors)
             GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
                 SettingsSliderRow(
                     title = "Global Anim Duration",

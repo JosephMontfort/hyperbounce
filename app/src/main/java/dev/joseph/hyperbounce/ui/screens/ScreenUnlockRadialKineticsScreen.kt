@@ -42,7 +42,7 @@ fun ScreenUnlockRadialKineticsScreen(
         onRestartApp = { dev.joseph.hyperbounce.ui.utils.RootUtils.restartLauncher(context) }
     ) { _ ->
         item {
-            SectionHeader("RADIAL DISPERSION SPRING PHYSICS", colors)
+            SectionHeader("Radial Dispersion Spring Physics", colors)
             GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
                 SettingsSliderRow(
                     title = "Center Damping",

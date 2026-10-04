@@ -42,7 +42,7 @@ fun ScreenUnlockCascadeZDepthScreen(
         onRestartApp = { dev.joseph.hyperbounce.ui.utils.RootUtils.restartLauncher(context) }
     ) { _ ->
         item {
-            SectionHeader("ROW-BY-ROW 3D PERSPECTIVE (Z-DEPTH)", colors)
+            SectionHeader("Row-By-Row 3D Perspective (Z-Depth)", colors)
             GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
                 for (r in 0 until rows) {
                     if (r > 0) RowDivider(colors.separator)
