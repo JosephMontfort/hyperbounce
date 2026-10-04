@@ -229,7 +229,6 @@ fun ScreenScaffold(
                         .layerBackdrop(contentBackdrop)
                         .background(if (isDark) Color.Black else MiuixTheme.colorScheme.background)
                         .deadEndHaptic(glass.hapticsEnabled)
-                        .then(if (glass.hapticsEnabled) Modifier.scrollEndHaptic() else Modifier)
                         .overScrollVertical()
                         .nestedScroll(scrollBehavior.nestedScrollConnection)
                         .safeDrawingPadding(),

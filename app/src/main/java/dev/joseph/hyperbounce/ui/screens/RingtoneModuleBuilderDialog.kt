@@ -156,7 +156,7 @@ fun RingtoneModuleBuilderDialog(
         }
     }
 
-    val isDark = isSystemInDarkTheme()
+    val isDark = dev.joseph.hyperbounce.ui.theme.LocalIsDarkTheme.current
     val cardBg = if (isDark) Color(0xFF1E1E20) else Color(0xFFFFFFFF)
 
     Box(
@@ -540,7 +540,7 @@ private fun StepSelectionContent(
             RowDivider(colors.separator)
             Spacer(Modifier.height(12.dp))
 
-            val isDark = isSystemInDarkTheme()
+            val isDark = dev.joseph.hyperbounce.ui.theme.LocalIsDarkTheme.current
             val cancelBtnBg = if (isDark) Color(0xFF2C2C2E) else Color(0xFFE5E5EA)
 
             // Action Buttons
@@ -741,7 +741,7 @@ private fun StepConfirmationContent(
         RowDivider(colors.separator)
         Spacer(Modifier.height(12.dp))
 
-        val isDark = isSystemInDarkTheme()
+        val isDark = dev.joseph.hyperbounce.ui.theme.LocalIsDarkTheme.current
         val cancelBtnBg = if (isDark) Color(0xFF2C2C2E) else Color(0xFFE5E5EA)
 
         // Action Buttons

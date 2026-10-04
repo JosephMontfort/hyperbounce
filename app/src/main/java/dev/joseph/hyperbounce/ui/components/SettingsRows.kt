@@ -329,6 +329,13 @@ fun SettingsDropdownRow(
     }
 }
 
+private fun Modifier.sliderImmune(): Modifier = this.pointerInput(Unit) {
+    awaitEachGesture {
+        val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+        down.consume()
+    }
+}
+
 /** A title + live value label, with a circular reset button and [LiquidSlider] beneath it.
  *  Long-pressing the value label opens a dialog to set an exact custom numeric value. */
 @OptIn(ExperimentalFoundationApi::class)
@@ -353,6 +360,7 @@ fun SettingsSliderRow(
     if (componentStyle == ComponentStyle.MIUIX) {
         val isModified = abs(value - defaultValue) > 0.0001f
         SliderPreference(
+            modifier = modifier.sliderImmune(),
             value = value,
             onValueChange = onValueChange,
             title = title,
@@ -517,7 +525,7 @@ fun SettingsSliderRow(
                         valueRange = valueRange,
                         visibilityThreshold = (valueRange.endInclusive - valueRange.start) / 1000f,
                         backdrop = localBackdrop,
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.sliderImmune().fillMaxWidth()
                     )
                 } else {
                     // Static disabled track — no interaction, no backdrop capture needed.

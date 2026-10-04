@@ -178,9 +178,7 @@ fun RootScaffold(
                 .safeDrawingPadding()
                 .then(
                     if (componentStyle == dev.joseph.hyperbounce.ui.state.ComponentStyle.MIUIX) {
-                        Modifier
-                            .then(if (glass.hapticsEnabled) Modifier.scrollEndHaptic() else Modifier)
-                            .overScrollVertical()
+                        Modifier.overScrollVertical()
                     } else Modifier
                 )
                 .verticalScroll(scrollState)

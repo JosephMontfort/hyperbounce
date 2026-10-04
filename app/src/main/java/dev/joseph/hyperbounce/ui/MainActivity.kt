@@ -184,7 +184,14 @@ private fun HyperiOSApp(repository: SettingsRepository) {
             surfaceVariant = Color(0xFF1E1E1E)
         )
     } else {
-        lightColorScheme()
+        lightColorScheme(
+            background = Color(0xFFF7F7F7),
+            surface = Color(0xFFF7F7F7),
+            surfaceContainer = Color.White,
+            surfaceContainerHigh = Color(0xFFE8E8E8),
+            surfaceContainerHighest = Color(0xFFE8E8E8),
+            surfaceVariant = Color.White
+        )
     }
     MiuixTheme(colors = miuixColors) {
         CompositionLocalProvider(
@@ -237,7 +244,8 @@ private fun HyperiOSApp(repository: SettingsRepository) {
 
                 BackHandler(enabled = backStack.isNotEmpty()) { pop() }
 
-                val rootBoxModifier = if (repository.componentStyle == ComponentStyle.MIUIX) {
+                val useMiuixBottomBar = repository.componentStyle == ComponentStyle.MIUIX && !repository.miuixLiquidGlassBottomBar
+                val rootBoxModifier = if (useMiuixBottomBar) {
                     Modifier.fillMaxSize().miuixLayerBackdrop(miuixNavBackdrop)
                 } else {
                     Modifier.fillMaxSize().layerBackdrop(navBackdrop)
@@ -333,6 +341,12 @@ private fun HyperiOSApp(repository: SettingsRepository) {
                                         awaitEachGesture {
                                             val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
 
+                                            // If child widget (slider thumb/track) consumed down on Initial pass,
+                                            // do not initiate swipe-to-back gesture
+                                            if (down.isConsumed) {
+                                                return@awaitEachGesture
+                                            }
+
                                             // Interruptible: if a previous pop animation is running, cancel and finalize immediately
                                             // so there is zero cooldown between swipe gestures
                                             if (activeAnimationJob?.isActive == true || isPopping) {
@@ -353,7 +367,6 @@ private fun HyperiOSApp(repository: SettingsRepository) {
                                             var totalDy = 0f
                                             var localDragging = false
                                             val pointerId = down.id
-                                            var consumedStreak = 0
 
                                             while (true) {
                                                 val event = awaitPointerEvent(pass = PointerEventPass.Final)
@@ -370,23 +383,16 @@ private fun HyperiOSApp(repository: SettingsRepository) {
                                                 velocityTracker.addPosition(change.uptimeMillis, change.position)
 
                                                 if (!localDragging) {
-                                                    // If a child actively consumed this horizontal drag movement (e.g. slider thumb),
-                                                    // track consecutive consumed movements.
+                                                    // If a child (e.g. slider) actively consumed this movement, abort swipe-to-back immediately
                                                     if (change.isConsumed) {
-                                                        consumedStreak++
-                                                        if (consumedStreak >= 2) {
-                                                            // Child widget (e.g. slider) owns this gesture
-                                                            break
-                                                        }
-                                                    } else {
-                                                        consumedStreak = 0
+                                                        break
                                                     }
 
                                                     totalDx += dx
                                                     totalDy += dy
 
-                                                    // KEIMI-inspired gesture slop: effortless horizontal activation
-                                                    if (totalDx > 10f && totalDx > kotlin.math.abs(totalDy) * 0.85f && consumedStreak < 2) {
+                                                    // Effortless horizontal activation on unconsumed gestures (cards, lists, background)
+                                                    if (totalDx > 12f && totalDx > kotlin.math.abs(totalDy) * 0.85f) {
                                                         localDragging = true
                                                         change.consume()
                                                         coroutineScope.launch {
@@ -457,7 +463,7 @@ private fun HyperiOSApp(repository: SettingsRepository) {
                 if (backStack.size <= 1) {
                     val barProgress = if (backStack.isEmpty()) 1f else (dragOffset.value / screenWidth.coerceAtLeast(1f)).coerceIn(0f, 1f)
                     if (barProgress > 0.001f) {
-                        if (repository.componentStyle == ComponentStyle.MIUIX) {
+                        if (useMiuixBottomBar) {
                             Box(
                                 Modifier
                                     .align(Alignment.BottomCenter)

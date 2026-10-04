@@ -110,6 +110,14 @@ class SettingsRepository(context: Context) {
         componentStyle = style
     }
 
+    var miuixLiquidGlassBottomBar by prefsBooleanState("miuix_liquid_glass_bottom_bar", false)
+        private set
+
+    @JvmName("setMiuixLiquidGlassBottomBarExplicit")
+    fun setMiuixLiquidGlassBottomBar(enabled: Boolean) {
+        miuixLiquidGlassBottomBar = enabled
+    }
+
     var settingsAppEntryEnabled by prefsBooleanState("settings_app_entry_enabled", false)
         private set
 

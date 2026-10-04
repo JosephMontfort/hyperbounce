@@ -24,6 +24,7 @@ import dev.joseph.hyperbounce.ui.components.ChevronIcon
 import dev.joseph.hyperbounce.ui.components.FeatureCategoryRow
 import dev.joseph.hyperbounce.ui.components.GlassCard
 import dev.joseph.hyperbounce.ui.components.HyperLightSearchBar
+import dev.joseph.hyperbounce.ui.components.HyperLightMiuixSearchBar
 import dev.joseph.hyperbounce.ui.components.RowDivider
 import dev.joseph.hyperbounce.ui.components.SectionHeader
 import dev.joseph.hyperbounce.ui.components.SettingsClickableRow
@@ -174,51 +175,12 @@ fun TuningScreen(
     ) {
         val componentStyle = LocalComponentStyle.current
         if (componentStyle == ComponentStyle.MIUIX) {
-            top.yukonga.miuix.kmp.basic.SearchBar(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 12.dp),
-                inputField = {
-                    top.yukonga.miuix.kmp.basic.InputField(
-                        query = searchQuery,
-                        onQueryChange = { searchQuery = it },
-                        onSearch = {
-                            keyboardController?.hide()
-                            focusManager.clearFocus()
-                        },
-                        expanded = isSearching,
-                        onExpandedChange = { expanded ->
-                            if (!expanded) {
-                                searchQuery = ""
-                                keyboardController?.hide()
-                                focusManager.clearFocus()
-                            }
-                        },
-                        label = "Search settings...",
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                },
-                expanded = isSearching,
-                onExpandedChange = { expanded ->
-                    if (!expanded) {
-                        searchQuery = ""
-                        keyboardController?.hide()
-                        focusManager.clearFocus()
-                    }
-                },
-                outsideEndAction = {
-                    top.yukonga.miuix.kmp.basic.TextButton(
-                        text = "Cancel",
-                        onClick = {
-                            searchQuery = ""
-                            keyboardController?.hide()
-                            focusManager.clearFocus()
-                        },
-                        colors = top.yukonga.miuix.kmp.basic.ButtonDefaults.textButtonColorsPrimary(),
-                        modifier = Modifier.padding(end = 8.dp)
-                    )
-                }
-            ) {}
+            HyperLightMiuixSearchBar(
+                query = searchQuery,
+                onQueryChange = { searchQuery = it },
+                modifier = Modifier.padding(bottom = 12.dp),
+                placeholder = "Search settings..."
+            )
         } else {
             // HyperLight-style Search Bar with increased bounce
             HyperLightSearchBar(

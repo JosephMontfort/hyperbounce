@@ -210,7 +210,7 @@ fun GlassDialogHost(
         }
     )
 
-    val isDark = isSystemInDarkTheme()
+    val isDark = dev.joseph.hyperbounce.ui.theme.LocalIsDarkTheme.current
     val dialogBgColor = if (isDark) Color(0xFF242424) else top.yukonga.miuix.kmp.theme.MiuixTheme.colorScheme.surfaceContainer
 
     val componentStyle = dev.joseph.hyperbounce.ui.state.LocalComponentStyle.current
@@ -393,17 +393,10 @@ fun GlassDialogHost(
         LocalGlassDialogHost provides hostState
     ) {
         Box(Modifier.fillMaxSize()) {
-            // Main content underneath with dynamic smooth animated blur and background shrink
+            // Main content underneath with dynamic smooth animated blur
             Box(
                 Modifier
                     .fillMaxSize()
-                    .graphicsLayer {
-                        val s = 1f - 0.045f * animProgress
-                        scaleX = s
-                        scaleY = s
-                        shape = RoundedCornerShape(24.dp * animProgress)
-                        clip = animProgress > 0.005f
-                    }
                     .then(
                         if (animProgress > 0.001f) {
                             Modifier.blur(24.dp * animProgress)
@@ -418,7 +411,7 @@ fun GlassDialogHost(
             // Full-screen overlay with smooth dimming and AndroidLiquidGlass styled Dialog
             if (animProgress > 0.001f && displayedRequest != null && componentStyle != dev.joseph.hyperbounce.ui.state.ComponentStyle.MIUIX) {
                 val req = displayedRequest!!
-                val isDark = isSystemInDarkTheme()
+                val isDark = dev.joseph.hyperbounce.ui.theme.LocalIsDarkTheme.current
                 val cardBg = if (isDark) Color(0xFF1E1E20) else Color(0xFFFFFFFF)
                 val inputBg = if (isDark) Color(0xFF2C2C2E) else Color(0xFFE5E5EA)
                 val cancelBtnBg = if (isDark) Color(0xFF2C2C2E) else Color(0xFFE5E5EA)

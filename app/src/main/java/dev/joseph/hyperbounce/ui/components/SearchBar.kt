@@ -40,8 +40,19 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import dev.joseph.hyperbounce.ui.theme.HyperBounceColors
 import dev.joseph.hyperbounce.ui.theme.HyperBounceType
+import top.yukonga.miuix.kmp.basic.Icon
+import top.yukonga.miuix.kmp.basic.Text
+import top.yukonga.miuix.kmp.icon.MiuixIcons
+import top.yukonga.miuix.kmp.icon.basic.Search
+import top.yukonga.miuix.kmp.icon.basic.SearchCleanup
+import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 /**
  * HyperLight / iOS aesthetic search bar with spring bounce dynamics:
@@ -207,6 +218,160 @@ fun HyperLightSearchBar(
                     }
                     .padding(start = 12.dp, top = 8.dp, bottom = 8.dp),
                 style = HyperBounceType.body.copy(color = colors.accentBlue)
+            )
+        }
+    }
+}
+
+/**
+ * Exact HyperLight Search Bar implementation for MIUIX style:
+ * - Corner radius: 50% capsule (RoundedCornerShape(percent = 50))
+ * - Height: 45.dp
+ * - Background: MiuixTheme.colorScheme.surfaceContainerHigh
+ * - Leading icon: MiuixIcons.Basic.Search
+ * - Trailing cleanup icon: MiuixIcons.Basic.SearchCleanup
+ * - Smooth spring-animated Cancel button reveal in MiuixTheme primary color
+ */
+@Composable
+fun HyperLightMiuixSearchBar(
+    query: String,
+    onQueryChange: (String) -> Unit,
+    modifier: Modifier = Modifier,
+    placeholder: String = "Search"
+) {
+    var isFocused by remember { mutableStateOf(false) }
+    val focusRequester = remember { FocusRequester() }
+    val focusManager = LocalFocusManager.current
+    val keyboardController = LocalSoftwareKeyboardController.current
+
+    val isActive = isFocused || query.isNotEmpty()
+    val capsuleShape = RoundedCornerShape(percent = 50)
+
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .height(45.dp)
+                .background(
+                    color = MiuixTheme.colorScheme.surfaceContainerHigh,
+                    shape = capsuleShape
+                )
+                .clip(capsuleShape)
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null
+                ) {
+                    focusRequester.requestFocus()
+                },
+            contentAlignment = Alignment.CenterStart
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Leading Search Icon
+                Icon(
+                    imageVector = MiuixIcons.Basic.Search,
+                    contentDescription = "Search",
+                    tint = MiuixTheme.colorScheme.onSurfaceContainerHigh,
+                    modifier = Modifier.padding(start = 16.dp, end = 8.dp)
+                )
+
+                // Input Field / Placeholder
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(45.dp),
+                    contentAlignment = Alignment.CenterStart
+                ) {
+                    if (query.isEmpty()) {
+                        Text(
+                            text = placeholder,
+                            fontSize = 17.sp,
+                            fontWeight = FontWeight.Normal,
+                            color = MiuixTheme.colorScheme.onSurfaceContainerHigh
+                        )
+                    }
+                    BasicTextField(
+                        value = query,
+                        onValueChange = onQueryChange,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .focusRequester(focusRequester)
+                            .onFocusChanged { isFocused = it.isFocused },
+                        textStyle = TextStyle(
+                            color = MiuixTheme.colorScheme.onSurface,
+                            fontSize = 17.sp,
+                            fontWeight = FontWeight.Medium
+                        ),
+                        singleLine = true,
+                        cursorBrush = SolidColor(MiuixTheme.colorScheme.primary),
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                        keyboardActions = KeyboardActions(onSearch = {
+                            keyboardController?.hide()
+                            focusManager.clearFocus()
+                        })
+                    )
+                }
+
+                // Trailing Cleanup Button
+                if (query.isNotEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .padding(start = 8.dp, end = 16.dp)
+                            .clip(CircleShape)
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null
+                            ) {
+                                onQueryChange("")
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = MiuixIcons.Basic.SearchCleanup,
+                            contentDescription = "Clear",
+                            tint = MiuixTheme.colorScheme.onSurfaceContainerHighest
+                        )
+                    }
+                } else {
+                    Spacer(Modifier.width(16.dp))
+                }
+            }
+        }
+
+        // Animated Cancel button reveal (exact HyperLight spring reveal)
+        AnimatedVisibility(
+            visible = isActive,
+            enter = expandHorizontally(
+                animationSpec = spring(dampingRatio = 0.78f, stiffness = 400f),
+                expandFrom = Alignment.End
+            ) + fadeIn(spring(stiffness = 400f)),
+            exit = shrinkHorizontally(
+                animationSpec = spring(dampingRatio = 0.78f, stiffness = 400f),
+                shrinkTowards = Alignment.End
+            ) + fadeOut(spring(stiffness = 400f))
+        ) {
+            Text(
+                text = "Cancel",
+                modifier = Modifier
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null
+                    ) {
+                        onQueryChange("")
+                        keyboardController?.hide()
+                        focusManager.clearFocus()
+                    }
+                    .padding(start = 12.dp, top = 8.dp, bottom = 8.dp),
+                color = MiuixTheme.colorScheme.primary,
+                fontSize = 17.sp,
+                fontWeight = FontWeight.Normal
             )
         }
     }

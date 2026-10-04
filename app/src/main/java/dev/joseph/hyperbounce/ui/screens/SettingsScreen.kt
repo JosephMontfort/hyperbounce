@@ -135,6 +135,18 @@ fun SettingsScreen(
                 backdrop = backdrop
             )
 
+            if (repository.componentStyle == ComponentStyle.MIUIX) {
+                RowDivider(colors.separator)
+                SettingsToggleRow(
+                    title = "Liquid Glass Bottom Bar",
+                    subtitle = "Use Liquid Glass style for the floating nav bar",
+                    colors = colors,
+                    backdrop = backdrop,
+                    checked = repository.miuixLiquidGlassBottomBar,
+                    onCheckedChange = repository::setMiuixLiquidGlassBottomBar
+                )
+            }
+
             RowDivider(colors.separator)
 
             SettingsToggleRow(

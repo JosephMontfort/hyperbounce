@@ -27,6 +27,16 @@ fun Modifier.deadEndHaptic(enabled: Boolean = true): Modifier = composed {
         object : NestedScrollConnection {
             private var hitTop = false
             private var hitBottom = false
+            private var lastHapticTime = 0L
+            private val HAPTIC_COOLDOWN_MS = 300L
+
+            private fun triggerHaptic() {
+                val now = android.os.SystemClock.uptimeMillis()
+                if (now - lastHapticTime >= HAPTIC_COOLDOWN_MS) {
+                    lastHapticTime = now
+                    view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                }
+            }
 
             override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
                 // If dragging back away from top dead end, reset top latch
@@ -48,12 +58,12 @@ fun Modifier.deadEndHaptic(enabled: Boolean = true): Modifier = composed {
                 // Dragging down at top boundary
                 if (available.y > 2.5f && !hitTop) {
                     hitTop = true
-                    view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                    triggerHaptic()
                 }
                 // Dragging up at bottom boundary
                 else if (available.y < -2.5f && !hitBottom) {
                     hitBottom = true
-                    view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                    triggerHaptic()
                 }
                 return Offset.Zero
             }
@@ -61,10 +71,10 @@ fun Modifier.deadEndHaptic(enabled: Boolean = true): Modifier = composed {
             override suspend fun onPostFling(consumed: Velocity, available: Velocity): Velocity {
                 if (available.y > 60f && !hitTop) {
                     hitTop = true
-                    view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                    triggerHaptic()
                 } else if (available.y < -60f && !hitBottom) {
                     hitBottom = true
-                    view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                    triggerHaptic()
                 }
                 return Velocity.Zero
             }
