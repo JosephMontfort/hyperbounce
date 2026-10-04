@@ -59,9 +59,9 @@ import kotlin.math.roundToInt
 import top.yukonga.miuix.kmp.basic.BasicComponent
 import top.yukonga.miuix.kmp.basic.SmallTitle
 import top.yukonga.miuix.kmp.preference.ArrowPreference
-import top.yukonga.miuix.kmp.preference.OverlayDropdownPreference
 import top.yukonga.miuix.kmp.preference.SliderPreference
 import top.yukonga.miuix.kmp.preference.SwitchPreference
+import top.yukonga.miuix.kmp.preference.WindowDropdownPreference
 
 /** Small caps-style section label above a [GlassCard], iOS grouped-list style, or SmallTitle in MIUIX mode. */
 @Composable
@@ -289,7 +289,7 @@ fun SettingsDropdownRow(
 ) {
     val componentStyle = LocalComponentStyle.current
     if (componentStyle == ComponentStyle.MIUIX) {
-        OverlayDropdownPreference(
+        WindowDropdownPreference(
             items = options,
             selectedIndex = selectedIndex,
             title = title,
@@ -351,26 +351,73 @@ fun SettingsSliderRow(
     val componentStyle = LocalComponentStyle.current
     val customValueHost = dev.joseph.hyperbounce.ui.glass.LocalCustomValueHost.current
     if (componentStyle == ComponentStyle.MIUIX) {
+        val isModified = abs(value - defaultValue) > 0.0001f
         SliderPreference(
             value = value,
             onValueChange = onValueChange,
             title = title,
             summary = subtitle,
             valueRange = valueRange,
-            valueText = valueLabel(value),
             enabled = enabled,
-            onClick = if (allowCustomInput) {
-                {
-                    customValueHost.show(
-                        title = title,
-                        currentValue = value,
-                        defaultValue = defaultValue,
-                        valueRange = valueRange,
-                        onApply = onValueChange
+            onClick = null,
+            endActions = {
+                // Circular Reset Button (resets to defaultValue in real time)
+                Box(
+                    modifier = Modifier
+                        .size(24.dp)
+                        .clip(CircleShape)
+                        .background(
+                            if (isModified) colors.accentBlue.copy(alpha = 0.2f)
+                            else colors.separator.copy(alpha = 0.25f)
+                        )
+                        .clickable(enabled = enabled) {
+                            onValueChange(defaultValue)
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    ResetArrowIcon(
+                        color = if (isModified) colors.accentBlue else colors.secondaryLabel.copy(alpha = 0.5f),
+                        size = 11.dp,
+                        strokeWidth = 1.6.dp
                     )
                 }
-            } else null,
-            modifier = modifier.searchHighlight(searchKey ?: title, colors)
+                Spacer(Modifier.width(8.dp))
+                // Numeric Value Label: Click to enter custom value
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(6.dp))
+                        .clickable(enabled = enabled && allowCustomInput) {
+                            customValueHost.show(
+                                title = title,
+                                currentValue = value,
+                                defaultValue = defaultValue,
+                                valueRange = valueRange,
+                                onApply = onValueChange
+                            )
+                        }
+                        .padding(horizontal = 4.dp, vertical = 2.dp)
+                ) {
+                    BasicText(
+                        valueLabel(value),
+                        style = HyperBounceType.monoValue.copy(color = colors.secondaryLabel)
+                    )
+                }
+            },
+            modifier = modifier
+                .searchHighlight(searchKey ?: title, colors)
+                .then(
+                    if (allowCustomInput && enabled) {
+                        Modifier.clickable {
+                            customValueHost.show(
+                                title = title,
+                                currentValue = value,
+                                defaultValue = defaultValue,
+                                valueRange = valueRange,
+                                onApply = onValueChange
+                            )
+                        }
+                    } else Modifier
+                )
         )
     } else {
         val displayAlpha = if (enabled) 1f else 0.35f

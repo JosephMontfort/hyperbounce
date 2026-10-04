@@ -388,7 +388,7 @@ fun GlassDialogHost(
                 Modifier
                     .fillMaxSize()
                     .then(
-                        if (animProgress > 0.001f && componentStyle != dev.joseph.hyperbounce.ui.state.ComponentStyle.MIUIX) {
+                        if (animProgress > 0.001f) {
                             Modifier.blur((24.dp * animProgress))
                         } else {
                             Modifier

@@ -40,7 +40,7 @@ class DropdownOverlayHostState {
 }
 
 val LocalDropdownOverlayHost = compositionLocalOf<DropdownOverlayHostState> {
-    error("No DropdownOverlayHostState provided")
+    DropdownOverlayHostState()
 }
 
 @Composable

@@ -72,13 +72,21 @@ import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import dev.joseph.hyperbounce.ui.state.ComponentStyle
 import dev.joseph.hyperbounce.ui.state.LocalComponentStyle
+import top.yukonga.miuix.kmp.basic.Scaffold
+import top.yukonga.miuix.kmp.basic.DropdownDefaults
+import top.yukonga.miuix.kmp.basic.DropdownEntry
+import top.yukonga.miuix.kmp.basic.DropdownItem
+import top.yukonga.miuix.kmp.popup.WindowDropdownPopup
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
 import top.yukonga.miuix.kmp.basic.TopAppBar
 import top.yukonga.miuix.kmp.basic.TopAppBarDefaults
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Back
+import top.yukonga.miuix.kmp.icon.extended.More
 import top.yukonga.miuix.kmp.theme.MiuixTheme
+import top.yukonga.miuix.kmp.utils.overScrollVertical
+import top.yukonga.miuix.kmp.utils.scrollEndHaptic
 import dev.joseph.hyperbounce.ui.theme.HyperBounceType
 import kotlinx.coroutines.launch
 
@@ -112,59 +120,116 @@ fun ScreenScaffold(
     val componentStyle = LocalComponentStyle.current
     if (componentStyle == ComponentStyle.MIUIX) {
         val scrollBehavior = MiuixScrollBehavior()
-        Box(
-            Modifier
-                .fillMaxSize()
-                .background(MiuixTheme.colorScheme.background)
-        ) {
-            LazyColumn(
+        val isDark = dev.joseph.hyperbounce.ui.theme.LocalIsDarkTheme.current
+        val glass = LocalGlassSettings.current
+        val dialogHost = dev.joseph.hyperbounce.ui.glass.LocalGlassDialogHost.current
+        var menuExpanded by remember { mutableStateOf(false) }
+
+        DropdownOverlayHost {
+            Scaffold(
                 modifier = Modifier
                     .fillMaxSize()
-                    .nestedScroll(scrollBehavior.nestedScrollConnection)
-                    .safeDrawingPadding(),
-                state = lazyListState
-            ) {
-                item {
-                    Spacer(Modifier.height(TopAppBarDefaults.CollapsedHeight + 36.dp))
+                    .background(if (isDark) Color.Black else MiuixTheme.colorScheme.background),
+                topBar = {
+                    TopAppBar(
+                        title = title,
+                        largeTitle = title,
+                        subtitle = subtitle ?: "",
+                        color = if (isDark) Color.Black else MiuixTheme.colorScheme.background,
+                        scrollBehavior = scrollBehavior,
+                        navigationIcon = {
+                            IconButton(onClick = onBack) {
+                                Image(
+                                    imageVector = MiuixIcons.Back,
+                                    contentDescription = "Back",
+                                    colorFilter = ColorFilter.tint(MiuixTheme.colorScheme.onSurface)
+                                )
+                            }
+                        },
+                        actions = {
+                            if (onResetPage != null || onRestartApp != null) {
+                                Box {
+                                    IconButton(onClick = { menuExpanded = true }) {
+                                        Image(
+                                            imageVector = MiuixIcons.More,
+                                            contentDescription = "More",
+                                            colorFilter = ColorFilter.tint(MiuixTheme.colorScheme.onSurface)
+                                        )
+                                    }
+                                    val menuItems = remember(onResetPage, onRestartApp, restartAppTitle) {
+                                        val items = mutableListOf<DropdownItem>()
+                                        if (onResetPage != null) {
+                                            items.add(
+                                                DropdownItem(
+                                                    text = "Reset All",
+                                                    onClick = {
+                                                        menuExpanded = false
+                                                        dialogHost.showConfirmation(
+                                                            title = "Reset All Settings?",
+                                                            message = "This will restore all switches, sliders, and animation curves on this screen back to their default values.",
+                                                            confirmText = "Reset",
+                                                            confirmColor = Color(0xFFFF453A),
+                                                            onConfirm = {
+                                                                onResetPage()
+                                                                android.widget.Toast.makeText(context, "Settings restored to defaults", android.widget.Toast.LENGTH_SHORT).show()
+                                                            }
+                                                        )
+                                                    }
+                                                )
+                                            )
+                                        }
+                                        if (onRestartApp != null && restartAppTitle != null) {
+                                            items.add(
+                                                DropdownItem(
+                                                    text = restartAppTitle,
+                                                    onClick = {
+                                                        menuExpanded = false
+                                                        dialogHost.showConfirmation(
+                                                            title = "${restartAppTitle}?",
+                                                            message = "This will force terminate and restart ${restartAppSubtitle ?: "the target process"}.",
+                                                            confirmText = "Restart",
+                                                            confirmColor = colors.accentBlue,
+                                                            onConfirm = {
+                                                                onRestartApp()
+                                                            }
+                                                        )
+                                                    }
+                                                )
+                                            )
+                                        }
+                                        DropdownEntry(items = items)
+                                    }
+                                    WindowDropdownPopup(
+                                        entry = menuItems,
+                                        show = menuExpanded,
+                                        onDismiss = { menuExpanded = false },
+                                        onDismissFinished = {},
+                                        maxHeight = 240.dp,
+                                        dropdownColors = DropdownDefaults.dropdownColors()
+                                    )
+                                }
+                            }
+                        }
+                    )
                 }
-                content(contentBackdrop)
-                item {
-                    Spacer(Modifier.height(56.dp))
+            ) { innerPadding ->
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(if (isDark) Color.Black else MiuixTheme.colorScheme.background)
+                        .then(if (glass.hapticsEnabled) Modifier.scrollEndHaptic() else Modifier)
+                        .overScrollVertical()
+                        .nestedScroll(scrollBehavior.nestedScrollConnection)
+                        .safeDrawingPadding(),
+                    state = lazyListState,
+                    contentPadding = PaddingValues(
+                        top = innerPadding.calculateTopPadding() + 8.dp,
+                        bottom = 64.dp
+                    )
+                ) {
+                    content(contentBackdrop)
                 }
             }
-
-            TopAppBar(
-                title = title,
-                largeTitle = title,
-                subtitle = subtitle ?: "",
-                color = MiuixTheme.colorScheme.background,
-                scrollBehavior = scrollBehavior,
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Image(
-                            imageVector = MiuixIcons.Back,
-                            contentDescription = "Back",
-                            colorFilter = ColorFilter.tint(MiuixTheme.colorScheme.onSurface)
-                        )
-                    }
-                },
-                actions = {
-                    if (onResetPage != null) {
-                        IconButton(
-                            onClick = {
-                                onResetPage()
-                                android.widget.Toast.makeText(context, "Settings restored to defaults", android.widget.Toast.LENGTH_SHORT).show()
-                            }
-                        ) {
-                            ResetArrowIcon(
-                                color = MiuixTheme.colorScheme.onSurface,
-                                size = 16.dp,
-                                strokeWidth = 2.dp
-                            )
-                        }
-                    }
-                }
-            )
         }
         return
     }

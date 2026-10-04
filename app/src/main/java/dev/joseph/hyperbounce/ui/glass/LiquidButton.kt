@@ -56,10 +56,8 @@ fun LiquidButton(
 ) {
     val componentStyle = dev.joseph.hyperbounce.ui.state.LocalComponentStyle.current
     if (componentStyle == dev.joseph.hyperbounce.ui.state.ComponentStyle.MIUIX) {
-        val btnColors = if (tint.isSpecified) {
-            top.yukonga.miuix.kmp.basic.ButtonDefaults.buttonColorsPrimary(color = tint)
-        } else if (surfaceColor.isSpecified) {
-            top.yukonga.miuix.kmp.basic.ButtonDefaults.buttonColors(color = surfaceColor)
+        val btnColors = if (tint.isSpecified && tint != Color.Unspecified) {
+            top.yukonga.miuix.kmp.basic.ButtonDefaults.buttonColorsPrimary()
         } else {
             top.yukonga.miuix.kmp.basic.ButtonDefaults.buttonColors()
         }

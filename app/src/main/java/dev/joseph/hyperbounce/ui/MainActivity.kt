@@ -100,12 +100,18 @@ import dev.joseph.hyperbounce.ui.theme.HyperBounceType
 import dev.joseph.hyperbounce.ui.theme.LocalIsDarkTheme
 import dev.joseph.hyperbounce.ui.theme.hyperBounceColors
 import kotlinx.coroutines.launch
+import androidx.compose.foundation.shape.RoundedCornerShape
+import dev.joseph.hyperbounce.ui.glass.DropdownOverlayHost
 import top.yukonga.miuix.kmp.basic.FloatingNavigationBar
 import top.yukonga.miuix.kmp.basic.FloatingNavigationBarItem
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Home
 import top.yukonga.miuix.kmp.icon.extended.Info
 import top.yukonga.miuix.kmp.icon.extended.Settings
+import top.yukonga.miuix.kmp.blur.BlendColorEntry
+import top.yukonga.miuix.kmp.blur.BlurDefaults
+import top.yukonga.miuix.kmp.blur.highlight.Highlight
+import top.yukonga.miuix.kmp.blur.textureBlur
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.theme.darkColorScheme
 import top.yukonga.miuix.kmp.theme.lightColorScheme
@@ -167,7 +173,17 @@ private fun HyperiOSApp(repository: SettingsRepository) {
         keyboardController?.hide()
     }
 
-    val miuixColors = if (isDark) darkColorScheme() else lightColorScheme()
+    val miuixColors = if (isDark) {
+        darkColorScheme(
+            background = Color.Black,
+            surface = Color.Black,
+            surfaceContainer = Color(0xFF242424),
+            surfaceContainerHigh = Color(0xFF2E2E2E),
+            surfaceVariant = Color(0xFF1E1E1E)
+        )
+    } else {
+        lightColorScheme()
+    }
     MiuixTheme(colors = miuixColors) {
         CompositionLocalProvider(
             LocalComponentStyle provides repository.componentStyle,
@@ -175,8 +191,9 @@ private fun HyperiOSApp(repository: SettingsRepository) {
             LocalGlassSettings provides repository.globalGlass.snapshot(),
             dev.joseph.hyperbounce.ui.glass.LocalMorphPhysics provides repository.morphPhysics.snapshot()
         ) {
-            dev.joseph.hyperbounce.ui.glass.CustomValueDialogHost(colors) {
-            BoxWithConstraints(Modifier.fillMaxSize()) {
+            DropdownOverlayHost {
+                dev.joseph.hyperbounce.ui.glass.CustomValueDialogHost(colors) {
+                    BoxWithConstraints(Modifier.fillMaxSize()) {
                 val screenWidth = constraints.maxWidth.toFloat()
                 val dragOffset = remember { Animatable(0f) }
                 var isPopping by remember { mutableStateOf(false) }
@@ -427,17 +444,27 @@ private fun HyperiOSApp(repository: SettingsRepository) {
                             Box(
                                 Modifier
                                     .align(Alignment.BottomCenter)
-                                    .navigationBarsPadding()
-                                    .padding(bottom = 16.dp)
                                     .graphicsLayer {
                                         alpha = barProgress
                                         translationY = (1f - barProgress) * 72.dp.toPx()
                                     }
                             ) {
                                 FloatingNavigationBar(
-                                    color = if (isDark) Color(0xFF242424) else Color(0xFFF6F6F6),
+                                    color = Color.Transparent,
                                     horizontalAlignment = Alignment.CenterHorizontally,
-                                    modifier = Modifier.padding(bottom = 16.dp)
+                                    modifier = Modifier.textureBlur(
+                                        backdrop = navBackdrop,
+                                        shape = RoundedCornerShape(26.dp),
+                                        blurRadius = 25f,
+                                        colors = BlurDefaults.blurColors(
+                                            blendColors = listOf(
+                                                BlendColorEntry(
+                                                    color = (if (isDark) Color(0xFF242424) else Color(0xFFF6F6F6)).copy(alpha = 0.7f)
+                                                )
+                                            )
+                                        ),
+                                        highlight = if (isDark) Highlight.GlassStrokeMiddleDark else Highlight.GlassStrokeMiddleLight
+                                    )
                                 ) {
                                     FloatingNavigationBarItem(
                                         selected = pagerState.targetPage == 0,
@@ -513,6 +540,7 @@ private fun HyperiOSApp(repository: SettingsRepository) {
                     }
                 }
             }
+        }
         }
         }
     }

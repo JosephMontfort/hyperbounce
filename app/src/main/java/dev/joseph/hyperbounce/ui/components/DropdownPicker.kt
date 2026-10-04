@@ -45,6 +45,54 @@ fun DropdownPicker(
     backdrop: Backdrop,
     modifier: Modifier = Modifier
 ) {
+    val componentStyle = dev.joseph.hyperbounce.ui.state.LocalComponentStyle.current
+    if (componentStyle == dev.joseph.hyperbounce.ui.state.ComponentStyle.MIUIX) {
+        var expanded by remember { mutableStateOf(false) }
+        val entry = remember(options, selectedIndex) {
+            top.yukonga.miuix.kmp.basic.DropdownEntry(
+                items = options.mapIndexed { idx, opt ->
+                    top.yukonga.miuix.kmp.basic.DropdownItem(
+                        text = opt,
+                        selected = idx == selectedIndex,
+                        onClick = {
+                            onSelect(idx)
+                            expanded = false
+                        }
+                    )
+                }
+            )
+        }
+        Row(
+            modifier = modifier
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = { expanded = !expanded }
+                )
+                .padding(horizontal = 8.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            top.yukonga.miuix.kmp.basic.Text(
+                text = options.getOrElse(selectedIndex) { "" },
+                fontSize = top.yukonga.miuix.kmp.theme.MiuixTheme.textStyles.body2.fontSize,
+                color = top.yukonga.miuix.kmp.theme.MiuixTheme.colorScheme.onSurfaceVariantActions
+            )
+            top.yukonga.miuix.kmp.basic.DropdownArrowEndAction(
+                actionColor = top.yukonga.miuix.kmp.theme.MiuixTheme.colorScheme.onSurfaceVariantActions
+            )
+            top.yukonga.miuix.kmp.popup.WindowDropdownPopup(
+                entry = entry,
+                show = expanded,
+                onDismiss = { expanded = false },
+                onDismissFinished = {},
+                maxHeight = 280.dp,
+                dropdownColors = top.yukonga.miuix.kmp.basic.DropdownDefaults.dropdownColors()
+            )
+        }
+        return
+    }
+
     val isDark = dev.joseph.hyperbounce.ui.theme.LocalIsDarkTheme.current
     val overlayHost = LocalDropdownOverlayHost.current
     val ownerId = remember { Any() }

@@ -90,7 +90,13 @@ import dev.joseph.hyperbounce.ui.components.RowDivider
 import dev.joseph.hyperbounce.ui.components.SectionHeader
 import dev.joseph.hyperbounce.ui.components.TrashIcon
 import dev.joseph.hyperbounce.ui.glass.LiquidButton
-import dev.joseph.hyperbounce.ui.state.SettingsRepository
+import androidx.compose.foundation.Image
+import androidx.compose.ui.graphics.ColorFilter
+import top.yukonga.miuix.kmp.basic.IconButton
+import top.yukonga.miuix.kmp.icon.MiuixIcons
+import top.yukonga.miuix.kmp.icon.extended.Edit
+import top.yukonga.miuix.kmp.icon.extended.Delete
+import top.yukonga.miuix.kmp.theme.MiuixTheme
 import dev.joseph.hyperbounce.ui.theme.HyperBounceColors
 import dev.joseph.hyperbounce.ui.theme.HyperBounceType
 import kotlinx.coroutines.launch
@@ -784,61 +790,121 @@ fun HapticStudioScreen(
                                             )
                                         }
 
-                                        Row(
-                                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            modifier = Modifier.graphicsLayer { clip = false }
-                                        ) {
-                                            // Rename Circular Glass Button
-                                            LiquidButton(
-                                                onClick = {
-                                                    dialogHost.showTextInput(
-                                                        title = "Rename Preset",
-                                                        message = "Enter a new title for this audio preset.",
-                                                        initialValue = preset.title,
-                                                        confirmText = "Save",
-                                                        confirmColor = colors.accentBlue,
-                                                        onConfirm = { newTitle ->
-                                                            val trimmed = newTitle.trim()
-                                                            if (trimmed.isNotBlank() && trimmed != preset.title) {
-                                                                val success = HapticPresetStorage.renamePreset(context, preset.id, trimmed)
-                                                                if (success) {
-                                                                    savedPresets = HapticPresetStorage.listPresets(context)
-                                                                    Toast.makeText(context, "Renamed preset to \"$trimmed\"", Toast.LENGTH_SHORT).show()
-                                                                } else {
-                                                                    Toast.makeText(context, "Failed to rename preset", Toast.LENGTH_SHORT).show()
+                                        val itemComponentStyle = dev.joseph.hyperbounce.ui.state.LocalComponentStyle.current
+                                        if (itemComponentStyle == dev.joseph.hyperbounce.ui.state.ComponentStyle.MIUIX) {
+                                            Row(
+                                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                IconButton(
+                                                    onClick = {
+                                                        dialogHost.showTextInput(
+                                                            title = "Rename Preset",
+                                                            message = "Enter a new title for this audio preset.",
+                                                            initialValue = preset.title,
+                                                            confirmText = "Save",
+                                                            confirmColor = colors.accentBlue,
+                                                            onConfirm = { newTitle ->
+                                                                val trimmed = newTitle.trim()
+                                                                if (trimmed.isNotBlank() && trimmed != preset.title) {
+                                                                    val success = HapticPresetStorage.renamePreset(context, preset.id, trimmed)
+                                                                    if (success) {
+                                                                        savedPresets = HapticPresetStorage.listPresets(context)
+                                                                        Toast.makeText(context, "Renamed preset to \"$trimmed\"", Toast.LENGTH_SHORT).show()
+                                                                    } else {
+                                                                        Toast.makeText(context, "Failed to rename preset", Toast.LENGTH_SHORT).show()
+                                                                    }
                                                                 }
                                                             }
-                                                        }
+                                                        )
+                                                    }
+                                                ) {
+                                                    Image(
+                                                        imageVector = MiuixIcons.Edit,
+                                                        contentDescription = "Rename",
+                                                        colorFilter = ColorFilter.tint(MiuixTheme.colorScheme.onSurface)
                                                     )
-                                                },
-                                                backdrop = backdrop,
-                                                tint = colors.accentBlue,
-                                                size = 36.dp
-                                            ) {
-                                                PencilIcon(color = Color.White, size = 15.dp)
-                                            }
+                                                }
 
-                                            // Delete Circular Glass Button
-                                            LiquidButton(
-                                                onClick = {
-                                                    dialogHost.showConfirmation(
-                                                        title = "Delete Preset?",
-                                                        message = "Are you sure you want to delete \"${preset.title}\"? This action cannot be undone.",
-                                                        confirmText = "Delete",
-                                                        confirmColor = colors.accentRed,
-                                                        onConfirm = {
-                                                            HapticPresetStorage.deletePreset(context, preset.id)
-                                                            savedPresets = HapticPresetStorage.listPresets(context)
-                                                            Toast.makeText(context, "Deleted \"${preset.title}\"", Toast.LENGTH_SHORT).show()
-                                                        }
+                                                IconButton(
+                                                    onClick = {
+                                                        dialogHost.showConfirmation(
+                                                            title = "Delete Preset?",
+                                                            message = "Are you sure you want to delete \"${preset.title}\"? This action cannot be undone.",
+                                                            confirmText = "Delete",
+                                                            confirmColor = colors.accentRed,
+                                                            onConfirm = {
+                                                                HapticPresetStorage.deletePreset(context, preset.id)
+                                                                savedPresets = HapticPresetStorage.listPresets(context)
+                                                                Toast.makeText(context, "Deleted \"${preset.title}\"", Toast.LENGTH_SHORT).show()
+                                                            }
+                                                        )
+                                                    }
+                                                ) {
+                                                    Image(
+                                                        imageVector = MiuixIcons.Delete,
+                                                        contentDescription = "Delete",
+                                                        colorFilter = ColorFilter.tint(MiuixTheme.colorScheme.error)
                                                     )
-                                                },
-                                                backdrop = backdrop,
-                                                tint = colors.accentRed,
-                                                size = 36.dp
+                                                }
+                                            }
+                                        } else {
+                                            Row(
+                                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                modifier = Modifier.graphicsLayer { clip = false }
                                             ) {
-                                                TrashIcon(color = Color.White, size = 15.dp)
+                                                // Rename Circular Glass Button
+                                                LiquidButton(
+                                                    onClick = {
+                                                        dialogHost.showTextInput(
+                                                            title = "Rename Preset",
+                                                            message = "Enter a new title for this audio preset.",
+                                                            initialValue = preset.title,
+                                                            confirmText = "Save",
+                                                            confirmColor = colors.accentBlue,
+                                                            onConfirm = { newTitle ->
+                                                                val trimmed = newTitle.trim()
+                                                                if (trimmed.isNotBlank() && trimmed != preset.title) {
+                                                                    val success = HapticPresetStorage.renamePreset(context, preset.id, trimmed)
+                                                                    if (success) {
+                                                                        savedPresets = HapticPresetStorage.listPresets(context)
+                                                                        Toast.makeText(context, "Renamed preset to \"$trimmed\"", Toast.LENGTH_SHORT).show()
+                                                                    } else {
+                                                                        Toast.makeText(context, "Failed to rename preset", Toast.LENGTH_SHORT).show()
+                                                                    }
+                                                                }
+                                                            }
+                                                        )
+                                                    },
+                                                    backdrop = backdrop,
+                                                    tint = colors.accentBlue,
+                                                    size = 36.dp
+                                                ) {
+                                                    PencilIcon(color = Color.White, size = 15.dp)
+                                                }
+
+                                                // Delete Circular Glass Button
+                                                LiquidButton(
+                                                    onClick = {
+                                                        dialogHost.showConfirmation(
+                                                            title = "Delete Preset?",
+                                                            message = "Are you sure you want to delete \"${preset.title}\"? This action cannot be undone.",
+                                                            confirmText = "Delete",
+                                                            confirmColor = colors.accentRed,
+                                                            onConfirm = {
+                                                                HapticPresetStorage.deletePreset(context, preset.id)
+                                                                savedPresets = HapticPresetStorage.listPresets(context)
+                                                                Toast.makeText(context, "Deleted \"${preset.title}\"", Toast.LENGTH_SHORT).show()
+                                                            }
+                                                        )
+                                                    },
+                                                    backdrop = backdrop,
+                                                    tint = colors.accentRed,
+                                                    size = 36.dp
+                                                ) {
+                                                    TrashIcon(color = Color.White, size = 15.dp)
+                                                }
                                             }
                                         }
                                     }

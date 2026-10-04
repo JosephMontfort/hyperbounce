@@ -90,6 +90,16 @@ import dev.joseph.hyperbounce.ui.state.SettingsRepository
 import dev.joseph.hyperbounce.ui.theme.HyperBounceColors
 import dev.joseph.hyperbounce.ui.theme.HyperBounceType
 import dev.joseph.hyperbounce.ui.utils.RootUtils
+import top.yukonga.miuix.kmp.basic.DropdownDefaults
+import top.yukonga.miuix.kmp.basic.DropdownEntry
+import top.yukonga.miuix.kmp.basic.DropdownItem
+import top.yukonga.miuix.kmp.popup.WindowDropdownPopup
+import top.yukonga.miuix.kmp.basic.IconButton
+import top.yukonga.miuix.kmp.icon.MiuixIcons
+import top.yukonga.miuix.kmp.icon.extended.More
+import top.yukonga.miuix.kmp.theme.MiuixTheme
+import top.yukonga.miuix.kmp.utils.overScrollVertical
+import top.yukonga.miuix.kmp.utils.scrollEndHaptic
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -112,6 +122,7 @@ fun RootScaffold(
     val context = LocalContext.current
     val glass = LocalGlassSettings.current
     val clipboard = LocalClipboardManager.current
+    val componentStyle = dev.joseph.hyperbounce.ui.state.LocalComponentStyle.current
     val menuAnimationScope = rememberCoroutineScope()
     val menuProgress = remember { Animatable(0f) }
     val menuExpanded = menuProgress.value > 0.05f || menuProgress.targetValue > 0.5f
@@ -163,6 +174,13 @@ fun RootScaffold(
                 .fillMaxSize()
                 .layerBackdrop(contentBackdrop)
                 .safeDrawingPadding()
+                .then(
+                    if (componentStyle == dev.joseph.hyperbounce.ui.state.ComponentStyle.MIUIX) {
+                        Modifier
+                            .then(if (glass.hapticsEnabled) Modifier.scrollEndHaptic() else Modifier)
+                            .overScrollVertical()
+                    } else Modifier
+                )
                 .verticalScroll(scrollState)
         ) {
             Spacer(Modifier.height(56.dp))
@@ -239,149 +257,230 @@ fun RootScaffold(
         val menuSecondaryColor = menuContentColor.copy(alpha = 0.7f)
         
         if (showTopAction) {
-            ExpandableGlassMenu(
-                animatableProgress = menuProgress,
-                animationPreset = MenuAnimationPreset.Bouncy,
-                alignment = MenuAlignment.TopTrailing,
-                backdrop = rememberCombinedBackdrop(backdrop, contentBackdrop),
-                isGlassEnabled = true,
-                isHapticsEnabled = glass.hapticsEnabled,
-                cornerRadius = 22.dp,
-                blurRadius = glass.blurDp,
-                refractionHeight = glass.refractionHeightDp,
-                refractionAmount = glass.refractionAmountDp,
-                chromaticAberration = glass.chromaticAberration,
-                horizontalOffset = 0f,
-                verticalOffset = 10f,
-                modifier = Modifier.fillMaxSize().zIndex(10f),
-                contentPadding = PaddingValues(top = 8.dp, end = 20.dp),
-                labelSize = Size(44f, 44f),
-                onDialogProgressChange = { dialogProgress = it },
-                onRowSelected = { index, showDialog ->
-                    when (index) {
-                        0 -> {
-                            showDialog(
-                                dev.joseph.hyperbounce.ui.glass.MenuDialogData(
-                                    title = "Restart System UI?",
-                                    message = "This will terminate and restart com.android.systemui.",
-                                    confirmText = "Restart",
-                                    confirmColor = colors.accentBlue,
-                                    onConfirm = {
-                                        RootUtils.restartSystemUI(context)
-                                    }
-                                )
-                            )
-                            false
-                        }
-                        1 -> {
-                            showDialog(
-                                dev.joseph.hyperbounce.ui.glass.MenuDialogData(
-                                    title = "Restart Launcher?",
-                                    message = "This will terminate and restart com.miui.home.",
-                                    confirmText = "Restart",
-                                    confirmColor = colors.accentPurple,
-                                    onConfirm = {
-                                        RootUtils.restartLauncher(context)
-                                    }
-                                )
-                            )
-                            false
-                        }
-                        2 -> {
-                            showDialog(
-                                dev.joseph.hyperbounce.ui.glass.MenuDialogData(
-                                    title = "Reboot Device?",
-                                    message = "This will perform a reboot of your device using root permissions. Any unsaved progress in active apps will be lost.",
-                                    confirmText = "Reboot",
-                                    confirmColor = Color(0xFFFF453A),
-                                    onConfirm = {
-                                        RootUtils.rebootDevice(context)
-                                    }
-                                )
-                            )
-                            false
-                        }
-                        else -> true
-                    }
-                },
-                label = {
-                    ResetArrowIcon(color = menuContentColor, size = 18.dp, strokeWidth = 2.dp)
-                }
-            ) { globalTouch, closeMenuFromRow, hoveredIndex, setHovered, showDialog ->
-                Column(
-                    modifier = Modifier.padding(vertical = 4.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
+            if (componentStyle == dev.joseph.hyperbounce.ui.state.ComponentStyle.MIUIX) {
+                var miuixMenuExpanded by remember { mutableStateOf(false) }
+                val dialogHost = dev.joseph.hyperbounce.ui.glass.LocalGlassDialogHost.current
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .statusBarsPadding()
+                        .padding(top = 8.dp, end = 20.dp)
+                        .zIndex(10f),
+                    contentAlignment = Alignment.TopEnd
                 ) {
-                    MenuRow(
-                        title = "Restart System UI",
-                        contentColor = menuContentColor,
-                        secondaryColor = menuSecondaryColor,
-                        isHovered = hoveredIndex == 0,
-                        onHoverChange = { hovering -> if (hovering) setHovered(0) else if (hoveredIndex == 0) setHovered(null) },
-                        globalTouchPosition = globalTouch,
-                        onClick = {
-                            setHovered(null)
-                            showDialog(
-                                dev.joseph.hyperbounce.ui.glass.MenuDialogData(
-                                    title = "Restart System UI?",
-                                    message = "This will terminate and restart com.android.systemui.",
-                                    confirmText = "Restart",
-                                    confirmColor = colors.accentBlue,
-                                    onConfirm = {
-                                        RootUtils.restartSystemUI(context)
-                                    }
-                                )
+                    IconButton(onClick = { miuixMenuExpanded = true }) {
+                        Image(
+                            imageVector = MiuixIcons.More,
+                            contentDescription = "More",
+                            colorFilter = ColorFilter.tint(MiuixTheme.colorScheme.onSurface)
+                        )
+                    }
+                    val menuItems = remember {
+                        listOf(
+                            DropdownItem(
+                                text = "Restart System UI",
+                                onClick = {
+                                    miuixMenuExpanded = false
+                                    dialogHost.showConfirmation(
+                                        title = "Restart System UI?",
+                                        message = "This will terminate and restart com.android.systemui.",
+                                        confirmText = "Restart",
+                                        confirmColor = colors.accentBlue,
+                                        onConfirm = { RootUtils.restartSystemUI(context) }
+                                    )
+                                }
+                            ),
+                            DropdownItem(
+                                text = "Restart System Launcher",
+                                onClick = {
+                                    miuixMenuExpanded = false
+                                    dialogHost.showConfirmation(
+                                        title = "Restart System Launcher?",
+                                        message = "This will terminate and restart com.miui.home.",
+                                        confirmText = "Restart",
+                                        confirmColor = colors.accentPurple,
+                                        onConfirm = { RootUtils.restartLauncher(context) }
+                                    )
+                                }
+                            ),
+                            DropdownItem(
+                                text = "System Reboot",
+                                onClick = {
+                                    miuixMenuExpanded = false
+                                    dialogHost.showConfirmation(
+                                        title = "Reboot Device?",
+                                        message = "This will perform a reboot of your device using root permissions. Any unsaved progress in active apps will be lost.",
+                                        confirmText = "Reboot",
+                                        confirmColor = Color(0xFFFF453A),
+                                        onConfirm = { RootUtils.rebootDevice(context) }
+                                    )
+                                }
+                            ),
+                            DropdownItem(
+                                text = "Copy Debug Info",
+                                onClick = {
+                                    miuixMenuExpanded = false
+                                    copyDebugInfo()
+                                }
                             )
-                        },
-                        enabled = true
-                    )
-                    MenuRow(
-                        title = "Restart System Launcher",
-                        contentColor = menuContentColor,
-                        secondaryColor = menuSecondaryColor,
-                        isHovered = hoveredIndex == 1,
-                        onHoverChange = { hovering -> if (hovering) setHovered(1) else if (hoveredIndex == 1) setHovered(null) },
-                        globalTouchPosition = globalTouch,
-                        onClick = {
-                            setHovered(null)
-                            showDialog(
-                                dev.joseph.hyperbounce.ui.glass.MenuDialogData(
-                                    title = "Restart System Launcher?",
-                                    message = "This will terminate and restart com.miui.home.",
-                                    confirmText = "Restart",
-                                    confirmColor = colors.accentPurple,
-                                    onConfirm = {
-                                        RootUtils.restartLauncher(context)
-                                    }
-                                )
-                            )
-                        },
-                        enabled = true
-                    )
-                    MenuRow(
-                        title = "System Reboot",
-                        contentColor = menuContentColor,
-                        secondaryColor = menuSecondaryColor,
-                        isHovered = hoveredIndex == 2,
-                        onHoverChange = { hovering -> if (hovering) setHovered(2) else if (hoveredIndex == 2) setHovered(null) },
-                        globalTouchPosition = globalTouch,
-                        onClick = {
-                            setHovered(null)
-                            showDialog(
-                                dev.joseph.hyperbounce.ui.glass.MenuDialogData(
-                                    title = "Reboot Device?",
-                                    message = "This will perform a reboot of your device using root permissions. Any unsaved progress in active apps will be lost.",
-                                    confirmText = "Reboot",
-                                    confirmColor = Color(0xFFFF453A),
-                                    onConfirm = {
-                                        RootUtils.rebootDevice(context)
-                                    }
-                                )
-                            )
-                        },
-                        enabled = true
+                        )
+                    }
+                    WindowDropdownPopup(
+                        entry = DropdownEntry(items = menuItems),
+                        show = miuixMenuExpanded,
+                        onDismiss = { miuixMenuExpanded = false },
+                        onDismissFinished = {},
+                        maxHeight = 240.dp,
+                        dropdownColors = DropdownDefaults.dropdownColors()
                     )
                 }
+            } else {
+                ExpandableGlassMenu(
+                    animatableProgress = menuProgress,
+                    animationPreset = MenuAnimationPreset.Bouncy,
+                    alignment = MenuAlignment.TopTrailing,
+                    backdrop = rememberCombinedBackdrop(backdrop, contentBackdrop),
+                    isGlassEnabled = true,
+                    isHapticsEnabled = glass.hapticsEnabled,
+                    cornerRadius = 22.dp,
+                    blurRadius = glass.blurDp,
+                    refractionHeight = glass.refractionHeightDp,
+                    refractionAmount = glass.refractionAmountDp,
+                    chromaticAberration = glass.chromaticAberration,
+                    horizontalOffset = 0f,
+                    verticalOffset = 10f,
+                    modifier = Modifier.fillMaxSize().zIndex(10f),
+                    contentPadding = PaddingValues(top = 8.dp, end = 20.dp),
+                    labelSize = Size(44f, 44f),
+                    onDialogProgressChange = { dialogProgress = it },
+                    onRowSelected = { index, showDialog ->
+                        when (index) {
+                            0 -> {
+                                showDialog(
+                                    dev.joseph.hyperbounce.ui.glass.MenuDialogData(
+                                        title = "Restart System UI?",
+                                        message = "This will terminate and restart com.android.systemui.",
+                                        confirmText = "Restart",
+                                        confirmColor = colors.accentBlue,
+                                        onConfirm = {
+                                            RootUtils.restartSystemUI(context)
+                                        }
+                                    )
+                                )
+                                false
+                            }
+                            1 -> {
+                                showDialog(
+                                    dev.joseph.hyperbounce.ui.glass.MenuDialogData(
+                                        title = "Restart System Launcher?",
+                                        message = "This will terminate and restart com.miui.home.",
+                                        confirmText = "Restart",
+                                        confirmColor = colors.accentPurple,
+                                        onConfirm = {
+                                            RootUtils.restartLauncher(context)
+                                        }
+                                    )
+                                )
+                                false
+                            }
+                            2 -> {
+                                showDialog(
+                                    dev.joseph.hyperbounce.ui.glass.MenuDialogData(
+                                        title = "Reboot Device?",
+                                        message = "This will perform a reboot of your device using root permissions. Any unsaved progress in active apps will be lost.",
+                                        confirmText = "Reboot",
+                                        confirmColor = Color(0xFFFF453A),
+                                        onConfirm = {
+                                            RootUtils.rebootDevice(context)
+                                        }
+                                    )
+                                )
+                                false
+                            }
+                            else -> true
+                        }
+                    },
+                    label = {
+                        ResetArrowIcon(color = menuContentColor, size = 18.dp, strokeWidth = 2.dp)
+                    }
+                ) { globalTouch, closeMenuFromRow, hoveredIndex, setHovered, showDialog ->
+                    Column(
+                        modifier = Modifier.padding(vertical = 4.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        MenuRow(
+                            title = "Restart System UI",
+                            contentColor = menuContentColor,
+                            secondaryColor = menuSecondaryColor,
+                            isHovered = hoveredIndex == 0,
+                            onHoverChange = { hovering -> if (hovering) setHovered(0) else if (hoveredIndex == 0) setHovered(null) },
+                            globalTouchPosition = globalTouch,
+                            onClick = {
+                                setHovered(null)
+                                showDialog(
+                                    dev.joseph.hyperbounce.ui.glass.MenuDialogData(
+                                        title = "Restart System UI?",
+                                        message = "This will terminate and restart com.android.systemui.",
+                                        confirmText = "Restart",
+                                        confirmColor = colors.accentBlue,
+                                        onConfirm = {
+                                            RootUtils.restartSystemUI(context)
+                                        }
+                                    )
+                                )
+                            },
+                            enabled = true
+                        )
+                        MenuRow(
+                            title = "Restart System Launcher",
+                            contentColor = menuContentColor,
+                            secondaryColor = menuSecondaryColor,
+                            isHovered = hoveredIndex == 1,
+                            onHoverChange = { hovering -> if (hovering) setHovered(1) else if (hoveredIndex == 1) setHovered(null) },
+                            globalTouchPosition = globalTouch,
+                            onClick = {
+                                setHovered(null)
+                                showDialog(
+                                    dev.joseph.hyperbounce.ui.glass.MenuDialogData(
+                                        title = "Restart System Launcher?",
+                                        message = "This will terminate and restart com.miui.home.",
+                                        confirmText = "Restart",
+                                        confirmColor = colors.accentPurple,
+                                        onConfirm = {
+                                            RootUtils.restartLauncher(context)
+                                        }
+                                    )
+                                )
+                            },
+                            enabled = true
+                        )
+                        MenuRow(
+                            title = "System Reboot",
+                            contentColor = menuContentColor,
+                            secondaryColor = menuSecondaryColor,
+                            isHovered = hoveredIndex == 2,
+                            onHoverChange = { hovering -> if (hovering) setHovered(2) else if (hoveredIndex == 2) setHovered(null) },
+                            globalTouchPosition = globalTouch,
+                            onClick = {
+                                setHovered(null)
+                                showDialog(
+                                    dev.joseph.hyperbounce.ui.glass.MenuDialogData(
+                                        title = "Reboot Device?",
+                                        message = "This will perform a reboot of your device using root permissions. Any unsaved progress in active apps will be lost.",
+                                        confirmText = "Reboot",
+                                        confirmColor = Color(0xFFFF453A),
+                                        onConfirm = {
+                                            RootUtils.rebootDevice(context)
+                                        }
+                                    )
+                                )
+                            },
+                            enabled = true
+                        )
+                    }
+                }
+            }
+        }
 
                 /*
                  * PRESERVED BACKEND CODE: Multi-page submenu transition & morphing system
