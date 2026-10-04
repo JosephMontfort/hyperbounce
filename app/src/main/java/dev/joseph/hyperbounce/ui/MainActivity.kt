@@ -79,6 +79,9 @@ import dev.joseph.hyperbounce.ui.screens.LockScreenSheetLightingScreen
 import dev.joseph.hyperbounce.ui.screens.LockScreenSheetHomeIndicatorScreen
 import dev.joseph.hyperbounce.ui.screens.LockscreenStuffsScreen
 import dev.joseph.hyperbounce.ui.screens.NotificationCenterSheetScreen
+import dev.joseph.hyperbounce.ui.screens.NotificationCenterSheetGlassTuningScreen
+import dev.joseph.hyperbounce.ui.screens.NotificationCenterSheetLightingScreen
+import dev.joseph.hyperbounce.ui.screens.NotificationCenterSheetHomeIndicatorScreen
 import dev.joseph.hyperbounce.ui.screens.ScreenUnlockCascadeBounceScreen
 import dev.joseph.hyperbounce.ui.screens.ScreenUnlockCascadeDockScreen
 import dev.joseph.hyperbounce.ui.screens.ScreenUnlockCascadeGlobalsScreen
