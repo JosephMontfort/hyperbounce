@@ -32,7 +32,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
-import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.derivedStateOf
@@ -41,7 +40,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -93,22 +91,6 @@ import dev.joseph.hyperbounce.ui.glass.deadEndHaptic
 import dev.joseph.hyperbounce.ui.theme.HyperBounceType
 import kotlinx.coroutines.launch
 
-object SubpageScrollRegistry {
-    private val scrollPositions = java.util.concurrent.ConcurrentHashMap<String, Pair<Int, Int>>()
-
-    fun getSavedPosition(key: String): Pair<Int, Int> {
-        return scrollPositions[key] ?: Pair(0, 0)
-    }
-
-    fun savePosition(key: String, index: Int, offset: Int) {
-        scrollPositions[key] = Pair(index, offset)
-    }
-
-    fun clear() {
-        scrollPositions.clear()
-    }
-}
-
 @Composable
 fun ScreenScaffold(
     title: String,
@@ -123,30 +105,7 @@ fun ScreenScaffold(
     content: LazyListScope.(contentBackdrop: Backdrop) -> Unit
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
-    val scrollKey = remember(title, subtitle) { "subpage_${title}_${subtitle ?: ""}" }
-    val savedPos = remember(scrollKey) { SubpageScrollRegistry.getSavedPosition(scrollKey) }
-    val lazyListState = rememberSaveable(scrollKey, saver = LazyListState.Saver) {
-        LazyListState(savedPos.first, savedPos.second)
-    }
-
-    androidx.compose.runtime.LaunchedEffect(lazyListState.firstVisibleItemIndex, lazyListState.firstVisibleItemScrollOffset) {
-        SubpageScrollRegistry.savePosition(
-            scrollKey,
-            lazyListState.firstVisibleItemIndex,
-            lazyListState.firstVisibleItemScrollOffset
-        )
-    }
-
-    androidx.compose.runtime.DisposableEffect(scrollKey, lazyListState) {
-        onDispose {
-            SubpageScrollRegistry.savePosition(
-                scrollKey,
-                lazyListState.firstVisibleItemIndex,
-                lazyListState.firstVisibleItemScrollOffset
-            )
-        }
-    }
-
+    val lazyListState = rememberLazyListState()
     val targetIndex = dev.joseph.hyperbounce.ui.search.SearchHighlightState.targetScrollIndex
     androidx.compose.runtime.LaunchedEffect(targetIndex) {
         if (targetIndex != null && targetIndex >= 0) {
@@ -157,7 +116,6 @@ fun ScreenScaffold(
         }
     }
 
-    val scope = rememberCoroutineScope()
     val contentBackdrop = rememberLayerBackdrop()
     val glass = LocalGlassSettings.current
 
@@ -221,8 +179,6 @@ fun ScreenScaffold(
                                                                 confirmText = "Reset",
                                                                 confirmColor = Color(0xFFFF453A),
                                                                 onConfirm = {
-                                                                    SubpageScrollRegistry.savePosition(scrollKey, 0, 0)
-                                                                    scope.launch { lazyListState.scrollToItem(0) }
                                                                     onResetPage()
                                                                     android.widget.Toast.makeText(context, "Settings restored to defaults", android.widget.Toast.LENGTH_SHORT).show()
                                                                 }
@@ -489,8 +445,6 @@ fun ScreenScaffold(
                                                 confirmText = "Reset",
                                                 confirmColor = Color(0xFFFF453A),
                                                 onConfirm = {
-                                                    SubpageScrollRegistry.savePosition(scrollKey, 0, 0)
-                                                    scope.launch { lazyListState.scrollToItem(0) }
                                                     onResetPage()
                                                     android.widget.Toast.makeText(context, "Settings restored to defaults", android.widget.Toast.LENGTH_SHORT).show()
                                                 }
