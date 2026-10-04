@@ -117,12 +117,12 @@ fun ScreenScaffold(
     }
 
     val contentBackdrop = rememberLayerBackdrop()
+    val glass = LocalGlassSettings.current
 
     val componentStyle = LocalComponentStyle.current
     if (componentStyle == ComponentStyle.MIUIX) {
         val scrollBehavior = MiuixScrollBehavior()
         val isDark = dev.joseph.hyperbounce.ui.theme.LocalIsDarkTheme.current
-        val glass = LocalGlassSettings.current
         val dialogHost = dev.joseph.hyperbounce.ui.glass.LocalGlassDialogHost.current
         var menuExpanded by remember { mutableStateOf(false) }
 
