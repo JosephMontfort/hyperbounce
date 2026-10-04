@@ -501,8 +501,6 @@ fun RootScaffold(
                  *     Column(Modifier.graphicsLayer { translationX = (1f - pageTransition) * 32.dp.toPx() }) { ... }
                  * }
                  */
-            }
-        }
         }
     }
 }

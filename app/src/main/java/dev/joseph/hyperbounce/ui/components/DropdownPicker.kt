@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
+import top.yukonga.miuix.kmp.basic.DropdownArrowEndAction
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -78,7 +79,7 @@ fun DropdownPicker(
                 fontSize = top.yukonga.miuix.kmp.theme.MiuixTheme.textStyles.body2.fontSize,
                 color = top.yukonga.miuix.kmp.theme.MiuixTheme.colorScheme.onSurfaceVariantActions
             )
-            top.yukonga.miuix.kmp.basic.DropdownArrowEndAction(
+            DropdownArrowEndAction(
                 actionColor = top.yukonga.miuix.kmp.theme.MiuixTheme.colorScheme.onSurfaceVariantActions
             )
             top.yukonga.miuix.kmp.popup.WindowDropdownPopup(

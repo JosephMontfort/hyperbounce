@@ -104,5 +104,6 @@ dependencies {
     implementation("top.yukonga.miuix.kmp:miuix-ui:0.9.4")
     implementation("top.yukonga.miuix.kmp:miuix-preference:0.9.4")
     implementation("top.yukonga.miuix.kmp:miuix-icons:0.9.4")
+    implementation("top.yukonga.miuix.kmp:miuix-blur:0.9.4")
 }
 
