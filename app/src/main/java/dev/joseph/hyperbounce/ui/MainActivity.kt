@@ -112,6 +112,7 @@ import top.yukonga.miuix.kmp.blur.BlendColorEntry
 import top.yukonga.miuix.kmp.blur.BlurDefaults
 import top.yukonga.miuix.kmp.blur.highlight.Highlight
 import top.yukonga.miuix.kmp.blur.textureBlur
+import top.yukonga.miuix.kmp.blur.layerBackdrop as miuixLayerBackdrop
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.theme.darkColorScheme
 import top.yukonga.miuix.kmp.theme.lightColorScheme
@@ -151,6 +152,7 @@ private fun HyperiOSApp(repository: SettingsRepository) {
     val colors = hyperBounceColors(repository.appTheme)
     val backdrop = rememberLayerBackdrop()
     val navBackdrop = rememberLayerBackdrop()
+    val miuixNavBackdrop = top.yukonga.miuix.kmp.blur.rememberLayerBackdrop()
 
     val pagerState = rememberPagerState(initialPage = 0) { 3 }
     val pagerScope = rememberCoroutineScope()
@@ -235,7 +237,12 @@ private fun HyperiOSApp(repository: SettingsRepository) {
 
                 BackHandler(enabled = backStack.isNotEmpty()) { pop() }
 
-                Box(Modifier.fillMaxSize().layerBackdrop(navBackdrop)) {
+                val rootBoxModifier = if (repository.componentStyle == ComponentStyle.MIUIX) {
+                    Modifier.fillMaxSize().miuixLayerBackdrop(miuixNavBackdrop)
+                } else {
+                    Modifier.fillMaxSize().layerBackdrop(navBackdrop)
+                }
+                Box(rootBoxModifier) {
                     Box(
                         Modifier
                             .fillMaxSize()
@@ -453,7 +460,7 @@ private fun HyperiOSApp(repository: SettingsRepository) {
                                     color = Color.Transparent,
                                     horizontalAlignment = Alignment.CenterHorizontally,
                                     modifier = Modifier.textureBlur(
-                                        backdrop = navBackdrop,
+                                        backdrop = miuixNavBackdrop,
                                         shape = RoundedCornerShape(26.dp),
                                         blurRadius = 25f,
                                         colors = BlurDefaults.blurColors(
