@@ -154,7 +154,7 @@ fun EngineScreen(
             GlassCard(backdrop, Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
                 SettingsToggleRow(
                     title = "MIUIX App Hooking",
-                    subtitle = "Auto-detect and replace toggles and sliders in third-party apps",
+                    subtitle = "Auto-detect and replace toggles and sliders in third-party apps using miuix-kmp library",
                     colors = colors,
                     backdrop = backdrop,
                     checked = repository.miuixAppsHookingEnabled,

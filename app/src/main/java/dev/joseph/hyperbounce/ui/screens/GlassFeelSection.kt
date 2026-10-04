@@ -101,7 +101,7 @@ fun GlassOpticsSection(
 
 @Composable
 fun DragPhysicsSection(
-    sectionTitle: String = "Drag Physics",
+    sectionTitle: String? = "Drag Physics",
     holder: SettingsRepository.GlassFeelHolder,
     colors: HyperBounceColors,
     backdrop: Backdrop,
@@ -109,7 +109,9 @@ fun DragPhysicsSection(
 ) {
     val feel = holder.snapshot()
 
-    SectionHeader(sectionTitle, colors)
+    if (!sectionTitle.isNullOrEmpty()) {
+        SectionHeader(sectionTitle, colors)
+    }
     GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
         SettingsSliderRow(
             title = "Drag Sensitivity",

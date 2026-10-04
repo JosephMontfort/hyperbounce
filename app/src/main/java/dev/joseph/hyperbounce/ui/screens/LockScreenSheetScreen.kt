@@ -42,7 +42,7 @@ fun LockScreenSheetScreen(
             GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
                 SettingsToggleRow(
                     title = "Lock Screen Liquid Glass Sheet",
-                    subtitle = if (sheet.enabled) "Liquid Glass 2.0 lens refraction & dispersion active" else "Disabled (Stock)",
+                    subtitle = null,
                     colors = colors,
                     backdrop = backdrop,
                     checked = sheet.enabled,
@@ -56,7 +56,7 @@ fun LockScreenSheetScreen(
             GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
                 SettingsSliderRow(
                     title = "Side Edges Glass Bevel",
-                    subtitle = "Thickness of glass refraction band on left & right borders",
+                    subtitle = "Thickness of glass refraction band on left & right edges",
                     colors = colors,
                     backdrop = backdrop,
                     value = sheet.leftBevelWidth,
@@ -69,7 +69,7 @@ fun LockScreenSheetScreen(
                 RowDivider(colors.separator)
                 SettingsSliderRow(
                     title = "Bottom Edge Glass Bevel",
-                    subtitle = "Thickness of glass refraction band on bottom border",
+                    subtitle = "Thickness of glass refraction band on bottom edge",
                     colors = colors,
                     backdrop = backdrop,
                     value = sheet.bottomBevelWidth,
@@ -87,7 +87,7 @@ fun LockScreenSheetScreen(
         }
 
         item {
-            SectionHeader("Subpages", colors)
+            SectionHeader("Optics & Components", colors)
             GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
                 SettingsNavRow(
                     title = "Liquid Glass Tuning",

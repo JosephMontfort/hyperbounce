@@ -43,7 +43,7 @@ fun SystemLauncherStuffsScreen(
             GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
                 FeatureCategoryRow(
                     title = "App Transitions",
-                    description = "Activity launch scale, swipe dismiss & stretch physics",
+                    description = "App Open, close animations tuning",
                     colors = colors,
                     onClick = { onNavigate(Destination.AppTransitions) },
                     icon = {
@@ -59,7 +59,7 @@ fun SystemLauncherStuffsScreen(
 
                 FeatureCategoryRow(
                     title = "Screen Unlock Animation",
-                    description = "Unlock launch velocity, radial settle & Z-depth bounce",
+                    description = "Velocity coupled screen unlock animation & tuning",
                     colors = colors,
                     onClick = { onNavigate(Destination.ScreenUnlock) },
                     icon = {

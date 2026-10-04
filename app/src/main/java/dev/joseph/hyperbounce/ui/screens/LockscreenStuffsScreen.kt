@@ -43,7 +43,7 @@ fun LockscreenStuffsScreen(
             GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
                 FeatureCategoryRow(
                     title = "Lock Screen Sheet",
-                    description = "Curvature refraction, bevel dispersion & bottom edge lift",
+                    description = "Curvature refraction, bevel dispersion & home bar pill",
                     colors = colors,
                     onClick = { onNavigate(Destination.LockScreenSheet) },
                     icon = {
@@ -58,14 +58,14 @@ fun LockscreenStuffsScreen(
                 RowDivider(colors.separator, insetStart = 72.dp)
 
                 FeatureCategoryRow(
-                    title = "PIN Pad Physics",
+                    title = "PIN Pad",
                     description = "Radial bloom kinetics, lens keycaps & custom grid lift",
                     colors = colors,
                     onClick = { onNavigate(Destination.Keypad) },
                     icon = {
                         Image(
                             painter = painterResource(R.drawable.ic_sub_pinpad),
-                            contentDescription = "PIN Pad Physics",
+                            contentDescription = "PIN Pad",
                             modifier = Modifier.fillMaxSize()
                         )
                     }

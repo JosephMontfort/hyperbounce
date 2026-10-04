@@ -70,18 +70,13 @@ fun ToggleAppearanceScreen(
         item {
             SectionHeader("Accent Color", colors)
             GlassCard(backdrop, Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
-                Column(Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 12.dp)) {
+                Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)) {
                     BasicText(
                         "Toggle Switch Accent",
                         style = HyperBounceType.headline.copy(color = colors.label, fontWeight = FontWeight.SemiBold)
                     )
-                    BasicText(
-                        "Active state color for toggle switches across the system",
-                        style = HyperBounceType.footnote.copy(color = colors.secondaryLabel),
-                        modifier = Modifier.padding(top = 2.dp, bottom = 8.dp)
-                    )
                     Row(
-                        Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp),
+                        Modifier.fillMaxWidth().padding(top = 8.dp),
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         presets.forEach { preset ->

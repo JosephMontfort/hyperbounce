@@ -41,11 +41,10 @@ fun AppTransitionsScreen(
     ) { _ ->
         // 1. MASTER SWITCH
         item {
-            SectionHeader("MASTER SWITCH", colors)
             GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
                 SettingsToggleRow(
                     title = "Enable App Transitions Engine",
-                    subtitle = "Master switch for custom transition physics and ballistic flight curves",
+                    subtitle = null,
                     colors = colors,
                     backdrop = backdrop,
                     checked = trans.enabled,
@@ -60,7 +59,7 @@ fun AppTransitionsScreen(
             GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
                 SettingsSliderRow(
                     title = "Animation Speed",
-                    subtitle = "Higher = snappier & faster, Lower = more relaxed & fluid",
+                    subtitle = null,
                     colors = colors,
                     backdrop = backdrop,
                     value = trans.animSpeed,
@@ -73,7 +72,7 @@ fun AppTransitionsScreen(
                 RowDivider(colors.separator)
                 SettingsSliderRow(
                     title = "Opening Spring Damping",
-                    subtitle = "Settling elasticity for opening apps (Higher = smoother, critically damped)",
+                    subtitle = "Lower = more bounce, Higher = smoother settling",
                     colors = colors,
                     backdrop = backdrop,
                     value = trans.openSpringDamping,
@@ -86,7 +85,7 @@ fun AppTransitionsScreen(
                 RowDivider(colors.separator)
                 SettingsSliderRow(
                     title = "Closing Spring Damping",
-                    subtitle = "Settling elasticity for closing apps (Lower = responsive bounce, Higher = controlled)",
+                    subtitle = "Lower = more bounce, Higher = smoother settling",
                     colors = colors,
                     backdrop = backdrop,
                     value = trans.closeSpringDamping,
@@ -105,7 +104,7 @@ fun AppTransitionsScreen(
             GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
                 SettingsToggleRow(
                     title = "1:1 Folder Icon Trajectories",
-                    subtitle = "Desktop preview icons track 1:1 into open folder positions with zero outline border",
+                    subtitle = "Desktop preview icons track 1:1 into open folder positions",
                     colors = colors,
                     backdrop = backdrop,
                     checked = trans.folderTracking,
@@ -137,11 +136,11 @@ fun AppTransitionsScreen(
 
         // 4. TACTILE HAPTICS
         item {
-            SectionHeader("TACTILE HAPTICS", colors)
+            SectionHeader("Haptics", colors)
             GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
                 SettingsToggleRow(
                     title = "Refined Tactile Haptics",
-                    subtitle = "Crisp elastic pop on back gestures and tactile latch tick on Recents",
+                    subtitle = "AOSP style crisp haptics for back and recents swipe up gesture",
                     colors = colors,
                     backdrop = backdrop,
                     checked = trans.refinedHaptics,
@@ -151,7 +150,7 @@ fun AppTransitionsScreen(
                 RowDivider(colors.separator)
                 SettingsToggleRow(
                     title = "Haptics for Sliding Cards",
-                    subtitle = "Light mechanical clock tick as each app card crosses the screen center line in Stack recents",
+                    subtitle = "Mild haptic feedback during horizontal swiping in recent apps page",
                     colors = colors,
                     backdrop = backdrop,
                     checked = trans.stackRecentsHaptics,

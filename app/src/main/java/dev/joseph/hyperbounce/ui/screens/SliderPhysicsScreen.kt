@@ -32,7 +32,7 @@ fun SliderPhysicsScreen(
     ) { _ ->
         item {
             DragPhysicsSection(
-                sectionTitle = "Slider Drag Physics",
+                sectionTitle = null,
                 holder = repository.sliderGlass,
                 colors = colors,
                 backdrop = backdrop,

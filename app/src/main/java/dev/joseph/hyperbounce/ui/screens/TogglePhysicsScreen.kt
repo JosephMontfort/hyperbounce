@@ -32,7 +32,7 @@ fun TogglePhysicsScreen(
     ) { _ ->
         item {
             DragPhysicsSection(
-                sectionTitle = "Toggle Drag Physics",
+                sectionTitle = null,
                 holder = repository.toggleGlass,
                 colors = colors,
                 backdrop = backdrop,

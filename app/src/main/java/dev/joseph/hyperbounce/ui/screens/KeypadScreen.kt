@@ -29,7 +29,7 @@ fun KeypadScreen(
     val context = androidx.compose.ui.platform.LocalContext.current
 
     ScreenScaffold(
-        title = "PIN Pad Physics",
+        title = "PIN Pad",
         colors = colors,
         backdrop = backdrop,
         onBack = onBack,
@@ -42,7 +42,7 @@ fun KeypadScreen(
             GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
                 SettingsToggleRow(
                     title = "Liquid Glass PIN Pad",
-                    subtitle = if (keypad.enabled) "Liquid Glass 2.0 lens buttons & layout physics active" else "Disabled (Stock)",
+                    subtitle = null,
                     colors = colors,
                     backdrop = backdrop,
                     checked = keypad.enabled,

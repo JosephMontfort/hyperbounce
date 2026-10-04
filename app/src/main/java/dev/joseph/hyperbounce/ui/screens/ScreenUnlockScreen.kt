@@ -54,11 +54,10 @@ fun ScreenUnlockScreen(
         onRestartApp = { dev.joseph.hyperbounce.ui.utils.RootUtils.restartLauncher(context) }
     ) { _ ->
         item {
-            SectionHeader("MASTER SWITCH", colors)
             GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
                 SettingsToggleRow(
                     title = "Enable Unlock Kinetics",
-                    subtitle = "Custom spring physics on MIUI Launcher when unlocking",
+                    subtitle = null,
                     colors = colors,
                     backdrop = backdrop,
                     checked = unlock.enabled,
@@ -133,7 +132,7 @@ fun ScreenUnlockScreen(
 
         if (unlock.animMode == 0) {
             item {
-                SectionHeader("MODE 0: IOS RADIAL SUBPAGES", colors)
+                SectionHeader("Fine Tuning", colors)
                 GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
                     SettingsNavRow(
                         title = "Radial Spring Kinetics",
@@ -156,7 +155,7 @@ fun ScreenUnlockScreen(
             }
         } else {
             item {
-                SectionHeader("MODE 1: Y-AXIS CASCADE SUBPAGES", colors)
+                SectionHeader("Fine Tuning", colors)
                 GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
                     SettingsNavRow(
                         title = "Global Kinetics & Velocity",
