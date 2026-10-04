@@ -30,6 +30,7 @@ import dev.joseph.hyperbounce.ui.components.ResetArrowIcon
 import dev.joseph.hyperbounce.ui.components.RowDivider
 import dev.joseph.hyperbounce.ui.components.SectionHeader
 import dev.joseph.hyperbounce.ui.components.SettingsClickableRow
+import dev.joseph.hyperbounce.ui.components.SettingsDropdownRow
 import dev.joseph.hyperbounce.ui.components.SettingsSliderRow
 import dev.joseph.hyperbounce.ui.components.SettingsToggleRow
 import dev.joseph.hyperbounce.ui.components.SlidersIcon
@@ -96,36 +97,16 @@ fun ControlCenterScreen(
                 }
 
                 RowDivider(colors.separator)
-                Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 12.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(
-                        Modifier
-                            .weight(1f)
-                            .padding(end = 8.dp)
-                    ) {
-                        BasicText(
-                            "Animation Engine",
-                            style = HyperBounceType.body.copy(color = colors.label)
-                        )
-                        Spacer(Modifier.height(2.dp))
-                        val detectedText = if (DevicePipelineDetector.isNativeLowEnd()) "Default: Low-End" else "Default: High-End"
-                        BasicText(
-                            "Control center & shade motion ($detectedText)",
-                            style = HyperBounceType.subhead.copy(color = colors.secondaryLabel)
-                        )
-                    }
-                    DropdownPicker(
-                        options = listOf("High-End", "Low-End"),
-                        selectedIndex = cc.animEngineMode.coerceIn(0, 1),
-                        onSelect = { cc.setAnimEngineMode(it) },
-                        backdrop = backdrop
-                    )
-                }
+                val detectedText = if (DevicePipelineDetector.isNativeLowEnd()) "Default: Low-End" else "Default: High-End"
+                SettingsDropdownRow(
+                    title = "Animation Engine",
+                    subtitle = "Control center & shade motion ($detectedText)",
+                    options = listOf("High-End", "Low-End"),
+                    selectedIndex = cc.animEngineMode.coerceIn(0, 1),
+                    onSelect = { cc.setAnimEngineMode(it) },
+                    colors = colors,
+                    backdrop = backdrop
+                )
 
                 RowDivider(colors.separator)
                 SettingsToggleRow(

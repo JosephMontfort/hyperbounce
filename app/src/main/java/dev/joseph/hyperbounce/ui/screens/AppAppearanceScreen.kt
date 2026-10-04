@@ -20,6 +20,7 @@ import dev.joseph.hyperbounce.ui.components.DropdownPicker
 import dev.joseph.hyperbounce.ui.components.GlassCard
 import dev.joseph.hyperbounce.ui.components.RowDivider
 import dev.joseph.hyperbounce.ui.components.SectionHeader
+import dev.joseph.hyperbounce.ui.components.SettingsDropdownRow
 import dev.joseph.hyperbounce.ui.components.SettingsSliderRow
 import dev.joseph.hyperbounce.ui.components.SettingsToggleRow
 import dev.joseph.hyperbounce.ui.components.SlidersIcon
@@ -161,19 +162,14 @@ fun AppAppearanceScreen(
         item {
             SectionHeader("Theme & Accent", colors)
             GlassCard(backdrop, Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
-                Row(
-                    Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    BasicText("Theme", style = HyperBounceType.body.copy(color = colors.label))
-                    DropdownPicker(
-                        options = listOf("Default", "Light", "Dark"),
-                        selectedIndex = ThemeMode.entries.indexOf(s.themeMode),
-                        onSelect = { holder.setThemeMode(ThemeMode.entries[it]) },
-                        backdrop = backdrop
-                    )
-                }
+                SettingsDropdownRow(
+                    title = "Theme",
+                    options = listOf("Default", "Light", "Dark"),
+                    selectedIndex = ThemeMode.entries.indexOf(s.themeMode),
+                    onSelect = { holder.setThemeMode(ThemeMode.entries[it]) },
+                    colors = colors,
+                    backdrop = backdrop
+                )
                 RowDivider(colors.separator, insetStart = 16.dp)
 
                 BasicText(

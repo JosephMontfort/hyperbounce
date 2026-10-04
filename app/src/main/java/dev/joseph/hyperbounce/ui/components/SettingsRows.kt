@@ -1,5 +1,6 @@
 package dev.joseph.hyperbounce.ui.components
 
+import android.view.HapticFeedbackConstants
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -30,6 +31,8 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -41,6 +44,7 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -59,12 +63,17 @@ import dev.joseph.hyperbounce.ui.theme.HyperBounceType
 import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.roundToInt
+import dev.joseph.hyperbounce.ui.glass.LocalGlassSettings
 import top.yukonga.miuix.kmp.basic.BasicComponent
+import top.yukonga.miuix.kmp.basic.Slider
+import top.yukonga.miuix.kmp.basic.SliderDefaults
 import top.yukonga.miuix.kmp.basic.SmallTitle
+import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.preference.ArrowPreference
 import top.yukonga.miuix.kmp.preference.SliderPreference
 import top.yukonga.miuix.kmp.preference.SwitchPreference
 import top.yukonga.miuix.kmp.preference.WindowDropdownPreference
+import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 /** Small caps-style section label above a [GlassCard], iOS grouped-list style, or SmallTitle in MIUIX mode. */
 @Composable
@@ -362,14 +371,30 @@ fun SettingsSliderRow(
     val customValueHost = dev.joseph.hyperbounce.ui.glass.LocalCustomValueHost.current
     if (componentStyle == ComponentStyle.MIUIX) {
         val isModified = abs(value - defaultValue) > 0.0001f
-        SliderPreference(
-            value = value,
-            onValueChange = onValueChange,
+        val view = LocalView.current
+        val glass = LocalGlassSettings.current
+        var lastTickTime by remember { mutableLongStateOf(0L) }
+        var lastTickValue by remember { mutableFloatStateOf(value) }
+        val tickStep = remember(valueRange) {
+            (valueRange.endInclusive - valueRange.start) / 60f
+        }
+
+        val debouncedOnValueChange: (Float) -> Unit = { newValue ->
+            val now = android.os.SystemClock.uptimeMillis()
+            val isAtEdge = newValue <= valueRange.start || newValue >= valueRange.endInclusive
+            val crossedStep = abs(newValue - lastTickValue) >= tickStep
+            if (glass.hapticsEnabled && (now - lastTickTime >= 35L) && (crossedStep || isAtEdge)) {
+                view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                lastTickTime = now
+                lastTickValue = newValue
+            }
+            onValueChange(newValue)
+        }
+
+        BasicComponent(
+            modifier = modifier.searchHighlight(searchKey ?: title, colors),
             title = title,
             summary = subtitle,
-            valueRange = valueRange,
-            enabled = enabled,
-            onClick = null,
             endActions = {
                 // Circular Reset Button (resets to defaultValue in real time)
                 Box(
@@ -392,43 +417,69 @@ fun SettingsSliderRow(
                     )
                 }
                 Spacer(Modifier.width(8.dp))
-                // Numeric Value Label: Click to enter custom value
+                // Numeric Value Label: Tap OR Long-press to enter custom value
                 Box(
                     modifier = Modifier
                         .clip(RoundedCornerShape(6.dp))
-                        .clickable(enabled = enabled && allowCustomInput) {
-                            customValueHost.show(
-                                title = title,
-                                currentValue = value,
-                                defaultValue = defaultValue,
-                                valueRange = valueRange,
-                                onApply = onValueChange
-                            )
-                        }
-                        .padding(horizontal = 4.dp, vertical = 2.dp)
+                        .combinedClickable(
+                            enabled = enabled && allowCustomInput,
+                            onClick = {
+                                if (allowCustomInput) {
+                                    customValueHost.show(
+                                        title = title,
+                                        currentValue = value,
+                                        defaultValue = defaultValue,
+                                        valueRange = valueRange,
+                                        onApply = onValueChange
+                                    )
+                                }
+                            },
+                            onLongClick = {
+                                if (allowCustomInput) {
+                                    customValueHost.show(
+                                        title = title,
+                                        currentValue = value,
+                                        defaultValue = defaultValue,
+                                        valueRange = valueRange,
+                                        onApply = onValueChange
+                                    )
+                                }
+                            }
+                        )
+                        .padding(horizontal = 6.dp, vertical = 2.dp)
                 ) {
-                    BasicText(
-                        valueLabel(value),
-                        style = HyperBounceType.monoValue.copy(color = colors.secondaryLabel)
+                    Text(
+                        text = valueLabel(value),
+                        fontSize = MiuixTheme.textStyles.body2.fontSize,
+                        fontWeight = FontWeight.Medium,
+                        color = if (enabled) MiuixTheme.colorScheme.onSurfaceVariantActions else MiuixTheme.colorScheme.disabledOnSecondaryVariant
                     )
                 }
             },
-            modifier = modifier
-                .sliderImmune()
-                .searchHighlight(searchKey ?: title, colors)
-                .then(
-                    if (allowCustomInput && enabled) {
-                        Modifier.clickable {
-                            customValueHost.show(
-                                title = title,
-                                currentValue = value,
-                                defaultValue = defaultValue,
-                                valueRange = valueRange,
-                                onApply = onValueChange
-                            )
-                        }
-                    } else Modifier
+            bottomAction = {
+                Slider(
+                    value = value,
+                    onValueChange = debouncedOnValueChange,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .sliderImmune(),
+                    enabled = enabled,
+                    valueRange = valueRange,
+                    hapticEffect = SliderDefaults.SliderHapticEffect.None
                 )
+            },
+            onClick = if (allowCustomInput && enabled) {
+                {
+                    customValueHost.show(
+                        title = title,
+                        currentValue = value,
+                        defaultValue = defaultValue,
+                        valueRange = valueRange,
+                        onApply = onValueChange
+                    )
+                }
+            } else null,
+            enabled = enabled
         )
     } else {
         val displayAlpha = if (enabled) 1f else 0.35f
@@ -447,6 +498,19 @@ fun SettingsSliderRow(
                     modifier = Modifier
                         .weight(1f, fill = false)
                         .padding(end = 12.dp)
+                        .then(
+                            if (allowCustomInput && enabled) {
+                                Modifier.clickable {
+                                    customValueHost.show(
+                                        title = title,
+                                        currentValue = value,
+                                        defaultValue = defaultValue,
+                                        valueRange = valueRange,
+                                        onApply = onValueChange
+                                    )
+                                }
+                            } else Modifier
+                        )
                 ) {
                     BasicText(
                         title,
@@ -487,13 +551,23 @@ fun SettingsSliderRow(
                         )
                     }
 
-                    // Numeric Value Label (Long-press to enter custom value if allowed)
+                    // Numeric Value Label: Tap OR Long-press to enter custom value
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(6.dp))
                             .combinedClickable(
                                 enabled = enabled && allowCustomInput,
-                                onClick = {},
+                                onClick = {
+                                    if (allowCustomInput) {
+                                        customValueHost.show(
+                                            title = title,
+                                            currentValue = value,
+                                            defaultValue = defaultValue,
+                                            valueRange = valueRange,
+                                            onApply = onValueChange
+                                        )
+                                    }
+                                },
                                 onLongClick = {
                                     if (allowCustomInput) {
                                         customValueHost.show(
@@ -506,7 +580,7 @@ fun SettingsSliderRow(
                                     }
                                 }
                             )
-                            .padding(horizontal = 4.dp, vertical = 2.dp)
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
                     ) {
                         BasicText(
                             valueLabel(value),

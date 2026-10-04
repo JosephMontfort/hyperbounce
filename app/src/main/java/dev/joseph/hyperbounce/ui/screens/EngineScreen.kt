@@ -33,6 +33,7 @@ import dev.joseph.hyperbounce.ui.components.DropdownPicker
 import dev.joseph.hyperbounce.ui.components.GlassCard
 import dev.joseph.hyperbounce.ui.components.RowDivider
 import dev.joseph.hyperbounce.ui.components.SectionHeader
+import dev.joseph.hyperbounce.ui.components.SettingsDropdownRow
 import dev.joseph.hyperbounce.ui.components.SettingsNavRow
 import dev.joseph.hyperbounce.ui.components.SettingsToggleRow
 import dev.joseph.hyperbounce.ui.components.SlidersIcon
@@ -182,17 +183,12 @@ internal fun EngineRow(
     selected: RenderEngine,
     onSelect: (RenderEngine) -> Unit
 ) {
-    Row(
-        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        BasicText(title, style = HyperBounceType.body.copy(color = colors.label))
-        DropdownPicker(
-            options = RenderEngine.entries.map { it.label },
-            selectedIndex = RenderEngine.entries.indexOf(selected),
-            onSelect = { onSelect(RenderEngine.entries[it]) },
-            backdrop = backdrop
-        )
-    }
+    SettingsDropdownRow(
+        title = title,
+        options = RenderEngine.entries.map { it.label },
+        selectedIndex = RenderEngine.entries.indexOf(selected),
+        onSelect = { onSelect(RenderEngine.entries[it]) },
+        colors = colors,
+        backdrop = backdrop
+    )
 }

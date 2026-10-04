@@ -16,10 +16,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.unit.dp
+import dev.joseph.hyperbounce.ui.state.ComponentStyle
+import dev.joseph.hyperbounce.ui.state.LocalComponentStyle
 import dev.joseph.hyperbounce.ui.theme.HyperBounceColors
 import kotlinx.coroutines.delay
+import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 object SearchHighlightState {
     var activeHighlightKey by mutableStateOf<String?>(null)
@@ -57,7 +61,12 @@ fun Modifier.searchHighlight(
     val activeKey = SearchHighlightState.activeHighlightKey
     val isMatch = activeKey != null && SearchHighlightState.isMatch(key)
     val requester = remember { BringIntoViewRequester() }
-    val animAlpha = remember { Animatable(0f) }
+    val componentStyle = LocalComponentStyle.current
+    val highlightColor = if (componentStyle == ComponentStyle.MIUIX) {
+        MiuixTheme.colorScheme.primary
+    } else {
+        colors.accentBlue
+    }
 
     LaunchedEffect(isMatch) {
         if (isMatch) {
@@ -66,7 +75,7 @@ fun Modifier.searchHighlight(
                 requester.bringIntoView()
             } catch (_: Exception) {}
             repeat(2) {
-                animAlpha.animateTo(0.32f, tween(300))
+                animAlpha.animateTo(0.28f, tween(300))
                 animAlpha.animateTo(0f, tween(300))
             }
             SearchHighlightState.clear()
@@ -79,7 +88,7 @@ fun Modifier.searchHighlight(
             if (animAlpha.value > 0.001f) {
                 Modifier
                     .clip(shape)
-                    .background(colors.accentBlue.copy(alpha = animAlpha.value))
+                    .background(highlightColor.copy(alpha = animAlpha.value))
             } else {
                 Modifier
             }

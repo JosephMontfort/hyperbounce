@@ -26,8 +26,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import dev.joseph.hyperbounce.ui.state.ComponentStyle
+import dev.joseph.hyperbounce.ui.state.LocalComponentStyle
 import dev.joseph.hyperbounce.ui.theme.HyperBounceColors
 import dev.joseph.hyperbounce.ui.theme.HyperBounceType
+import top.yukonga.miuix.kmp.preference.ArrowPreference
 
 val XiaomiSquircleShape = androidx.compose.foundation.shape.GenericShape { size, _ ->
     val sx = size.width / 28f
@@ -63,6 +66,26 @@ fun FeatureCategoryRow(
     onClick: () -> Unit,
     icon: @Composable () -> Unit
 ) {
+    val componentStyle = LocalComponentStyle.current
+    if (componentStyle == ComponentStyle.MIUIX) {
+        ArrowPreference(
+            title = title,
+            summary = description,
+            startAction = {
+                Box(
+                    modifier = Modifier
+                        .size(42.dp)
+                        .clip(XiaomiSquircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    icon()
+                }
+            },
+            onClick = onClick
+        )
+        return
+    }
+
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val bgAlpha by animateFloatAsState(if (isPressed) 0.12f else 0.0f, label = "rowPress")

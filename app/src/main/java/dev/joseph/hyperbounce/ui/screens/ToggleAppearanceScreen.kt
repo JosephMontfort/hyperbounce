@@ -12,6 +12,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.kyant.backdrop.Backdrop
 import dev.joseph.hyperbounce.ui.components.ColorPickerDialog
@@ -73,7 +74,7 @@ fun ToggleAppearanceScreen(
                 Column(Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 12.dp)) {
                     BasicText(
                         "Toggle Switch Accent",
-                        style = HyperBounceType.body.copy(color = colors.label)
+                        style = HyperBounceType.headline.copy(color = colors.label, fontWeight = FontWeight.SemiBold)
                     )
                     BasicText(
                         "Active state color for toggle switches across the system",

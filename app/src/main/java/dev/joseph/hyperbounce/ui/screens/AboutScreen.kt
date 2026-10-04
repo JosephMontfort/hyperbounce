@@ -48,7 +48,12 @@ import dev.joseph.hyperbounce.ui.components.RowDivider
 import dev.joseph.hyperbounce.ui.components.SectionHeader
 import dev.joseph.hyperbounce.ui.theme.HyperBounceColors
 import dev.joseph.hyperbounce.ui.theme.HyperBounceType
+import dev.joseph.hyperbounce.ui.state.ComponentStyle
+import dev.joseph.hyperbounce.ui.state.LocalComponentStyle
 import dev.joseph.hyperbounce.ui.state.SettingsRepository
+import top.yukonga.miuix.kmp.basic.BasicComponent
+import top.yukonga.miuix.kmp.basic.Text
+import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 @Composable
 fun AboutScreen(
@@ -255,29 +260,41 @@ private fun SystemInfoRow(
     value: String,
     colors: HyperBounceColors
 ) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 14.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        BasicText(
-            text = label,
-            style = HyperBounceType.body.copy(
-                color = colors.label,
-                fontWeight = FontWeight.Normal,
-                fontSize = 16.sp
-            )
+    val componentStyle = LocalComponentStyle.current
+    if (componentStyle == ComponentStyle.MIUIX) {
+        BasicComponent(
+            title = label,
+            endActions = {
+                Text(
+                    text = value,
+                    style = MiuixTheme.textStyles.body2,
+                    color = MiuixTheme.colorScheme.onSurfaceVariant
+                )
+            }
         )
-        BasicText(
-            text = value,
-            style = HyperBounceType.body.copy(
-                color = colors.secondaryLabel,
-                fontWeight = FontWeight.Normal,
-                fontSize = 15.sp
+    } else {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 14.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            BasicText(
+                text = label,
+                style = HyperBounceType.headline.copy(
+                    color = colors.label,
+                    fontWeight = FontWeight.Normal
+                )
             )
-        )
+            BasicText(
+                text = value,
+                style = HyperBounceType.subhead.copy(
+                    color = colors.secondaryLabel,
+                    fontWeight = FontWeight.Normal
+                )
+            )
+        }
     }
 }
 
