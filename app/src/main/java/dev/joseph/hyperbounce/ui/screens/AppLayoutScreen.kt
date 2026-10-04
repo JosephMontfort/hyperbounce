@@ -32,7 +32,7 @@ fun AppLayoutScreen(
 
     ScreenScaffold(
         title = "Layout",
-        subtitle = "${app.displayName} dimensions & geometry",
+        subtitle = null,
         colors = colors,
         backdrop = backdrop,
         onBack = onBack

@@ -12,7 +12,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.kyant.backdrop.Backdrop
 import dev.joseph.hyperbounce.ui.components.ColorPickerDialog
@@ -60,7 +60,7 @@ fun AppAppearanceScreen(
 
     ScreenScaffold(
         title = "Appearance",
-        subtitle = "${app.displayName} visual styling",
+        subtitle = null,
         colors = colors,
         backdrop = backdrop,
         onBack = onBack
@@ -70,7 +70,7 @@ fun AppAppearanceScreen(
             GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
                 SettingsToggleRow(
                     title = "Liquid Glass Engine",
-                    subtitle = if (s.liquidGlass) "Dynamic liquid refraction, lens and blur" else "Translucent iOS-style bar (zero backdrop lag)",
+                    subtitle = null,
                     colors = colors,
                     backdrop = backdrop,
                     checked = s.liquidGlass,
@@ -175,10 +175,10 @@ fun AppAppearanceScreen(
                 BasicText(
                     "Accent Color",
                     modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 10.dp),
-                    style = HyperBounceType.footnote.copy(color = colors.secondaryLabel)
+                    style = HyperBounceType.headline.copy(color = colors.label, fontWeight = FontWeight.SemiBold)
                 )
                 Row(
-                    Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+                    Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 16.dp),
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     AccentPreset.entries.forEach { preset ->

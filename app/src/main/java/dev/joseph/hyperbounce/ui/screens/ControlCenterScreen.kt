@@ -23,7 +23,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.kyant.backdrop.Backdrop
-import dev.joseph.hyperbounce.controlcenter.DevicePipelineDetector
 import dev.joseph.hyperbounce.ui.components.DropdownPicker
 import dev.joseph.hyperbounce.ui.components.GlassCard
 import dev.joseph.hyperbounce.ui.components.ResetArrowIcon
@@ -61,7 +60,7 @@ fun ControlCenterScreen(
         onRestartApp = { dev.joseph.hyperbounce.ui.utils.RootUtils.restartSystemUI(context) }
     ) { _ ->
         item {
-            SectionHeader("MASTER SWITCHES", colors)
+            SectionHeader("Modular Control Center Edit", colors)
             GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
                 SettingsToggleRow(
                     title = "Unlock Control Center Edit Page",
@@ -82,8 +81,7 @@ fun ControlCenterScreen(
                         onValueChange = { cc.setLandscapeRightMaxRows(it.roundToInt()) },
                         valueRange = 1f..6f,
                         defaultValue = 3f,
-                        valueLabel = { "${it.roundToInt()} Rows" },
-                        allowCustomInput = false
+                        valueLabel = { "${it.roundToInt()} Rows" }
                     )
                     RowDivider(colors.separator)
                     SettingsToggleRow(
@@ -95,12 +93,15 @@ fun ControlCenterScreen(
                         onCheckedChange = cc::setFluidResizeEnabled
                     )
                 }
+            }
+        }
 
-                RowDivider(colors.separator)
-                val detectedText = if (DevicePipelineDetector.isNativeLowEnd()) "Default: Low-End" else "Default: High-End"
+        item {
+            SectionHeader("Animations", colors)
+            GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
                 SettingsDropdownRow(
                     title = "Animation Engine",
-                    subtitle = "Control center & shade motion ($detectedText)",
+                    subtitle = "Control center & shade motion",
                     options = listOf("High-End", "Low-End"),
                     selectedIndex = cc.animEngineMode.coerceIn(0, 1),
                     onSelect = { cc.setAnimEngineMode(it) },
@@ -126,7 +127,12 @@ fun ControlCenterScreen(
                     checked = cc.jellyEnabled,
                     onCheckedChange = cc::setJellyEnabled
                 )
-                RowDivider(colors.separator)
+            }
+        }
+
+        item {
+            SectionHeader("Flashlight Unlock", colors)
+            GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
                 SettingsToggleRow(
                     title = "Unlock Flashlight Brightness Control",
                     subtitle = "Unlocks flashlight brightness control for low-end devices",
@@ -147,15 +153,14 @@ fun ControlCenterScreen(
                         onValueChange = { cc.setFlashlightMaxBrightness(it.roundToInt()) },
                         valueRange = 100f..hwMax.toFloat(),
                         defaultValue = 100f,
-                        valueLabel = { "${it.roundToInt()}" },
-                        allowCustomInput = false
+                        valueLabel = { "${it.roundToInt()}" }
                     )
                 }
             }
         }
 
         item {
-            SectionHeader("LAYOUT ACTIONS", colors)
+            SectionHeader("Layout Actions", colors)
             GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
                 SettingsClickableRow(
                     title = "Reset Layout to Stock",

@@ -49,7 +49,7 @@ fun AppDetailScreen(
 
     ScreenScaffold(
         title = app.displayName,
-        subtitle = app.packageName,
+        subtitle = null,
         colors = colors,
         backdrop = backdrop,
         onBack = onBack,
@@ -64,8 +64,8 @@ fun AppDetailScreen(
         item {
             GlassCard(backdrop, Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
                 SettingsToggleRow(
-                    title = "Floating Nav Bar",
-                    subtitle = if (s.enabled) "Liquid glass replaces the stock bar" else "Stock nav bar restored",
+                    title = "Floating Bottom Bar",
+                    subtitle = null,
                     colors = colors,
                     backdrop = backdrop,
                     checked = s.enabled,
@@ -192,6 +192,8 @@ internal fun AccentSwatch(
 ) {
     val color = accentColorFor(preset, customColor, colors)
     val isCustom = preset == AccentPreset.Custom
+    val isAutoOrWhite = preset == AccentPreset.Auto || color == Color.White
+    val checkmarkColor = if (isAutoOrWhite) Color.Black else Color.White
     val rainbowBrush = Brush.sweepGradient(
         listOf(
             Color.Red,
@@ -215,6 +217,11 @@ internal fun AccentSwatch(
                     Modifier.background(color)
                 }
             )
+            .then(
+                if (isAutoOrWhite) {
+                    Modifier.border(0.8.dp, colors.separator.copy(alpha = 0.45f), CircleShape)
+                } else Modifier
+            )
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
@@ -236,7 +243,7 @@ internal fun AccentSwatch(
                 }
             }
         } else if (selected) {
-            CheckmarkIcon(color = Color.White, size = 14.dp, strokeWidth = 2.dp)
+            CheckmarkIcon(color = checkmarkColor, size = 14.dp, strokeWidth = 2.dp)
         }
     }
 }
@@ -244,6 +251,6 @@ internal fun AccentSwatch(
 internal fun accentColorFor(preset: AccentPreset, customColor: Long, colors: HyperBounceColors): Color =
     when (preset) {
         AccentPreset.Custom -> Color(customColor)
-        AccentPreset.Auto -> colors.accentBlue
-        else -> preset.argb?.let { Color(it) } ?: colors.accentBlue
+        AccentPreset.Auto -> Color.White
+        else -> preset.argb?.let { Color(it) } ?: Color.White
     }

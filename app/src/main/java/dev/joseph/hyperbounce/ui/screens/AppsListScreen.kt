@@ -35,7 +35,7 @@ fun AppsListScreen(
             GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
                 FeatureCategoryRow(
                     title = "Instagram",
-                    description = "Liquid Glass dock & navigation bar for Instagram",
+                    description = "Liquid Glass Floating Bottom Bar in Instagram",
                     colors = colors,
                     onClick = { onNavigate(Destination.AppDetail(NavApp.Instagram)) },
                     icon = {
@@ -51,7 +51,7 @@ fun AppsListScreen(
 
                 FeatureCategoryRow(
                     title = "WhatsApp",
-                    description = "Liquid Glass floating tabs & gestures for WhatsApp",
+                    description = "Liquid Glass Floating Bottom Bar in WhatsApp",
                     colors = colors,
                     onClick = { onNavigate(Destination.AppDetail(NavApp.WhatsApp)) },
                     icon = {
@@ -67,7 +67,7 @@ fun AppsListScreen(
 
                 FeatureCategoryRow(
                     title = "YouTube",
-                    description = "Liquid Glass bottom navigation bar for YouTube",
+                    description = "Liquid Glass Floating Bottom Bar in YouTube",
                     colors = colors,
                     onClick = { onNavigate(Destination.AppDetail(NavApp.YouTube)) },
                     icon = {

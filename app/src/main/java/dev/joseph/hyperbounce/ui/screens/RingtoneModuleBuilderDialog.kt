@@ -71,9 +71,15 @@ import dev.joseph.hyperbounce.ui.components.CheckmarkIcon
 import dev.joseph.hyperbounce.ui.components.GlassCard
 import dev.joseph.hyperbounce.ui.components.PencilIcon
 import dev.joseph.hyperbounce.ui.components.RowDivider
+import dev.joseph.hyperbounce.ui.state.ComponentStyle
+import dev.joseph.hyperbounce.ui.state.LocalComponentStyle
 import dev.joseph.hyperbounce.ui.theme.HyperBounceColors
 import dev.joseph.hyperbounce.ui.theme.HyperBounceType
 import kotlinx.coroutines.launch
+import top.yukonga.miuix.kmp.basic.ButtonDefaults
+import top.yukonga.miuix.kmp.basic.TextButton
+import top.yukonga.miuix.kmp.theme.MiuixTheme
+import top.yukonga.miuix.kmp.window.WindowDialog
 import java.io.File
 import java.util.Locale
 
@@ -158,6 +164,101 @@ fun RingtoneModuleBuilderDialog(
 
     val isDark = dev.joseph.hyperbounce.ui.theme.LocalIsDarkTheme.current
     val cardBg = if (isDark) Color(0xFF1E1E20) else Color(0xFFFFFFFF)
+
+    val componentStyle = LocalComponentStyle.current
+    if (componentStyle == ComponentStyle.MIUIX) {
+        val miuixTitle = when (step) {
+            ModuleBuilderStep.SELECT -> "Build Ringtone Module"
+            ModuleBuilderStep.CONFIRM -> "Hardware Slot Allocation"
+            ModuleBuilderStep.SUCCESS -> "Module Packaged"
+        }
+        val miuixSummary = when (step) {
+            ModuleBuilderStep.SELECT -> "Select saved presets to bundle into flashable ringtones."
+            ModuleBuilderStep.CONFIRM -> "Allocating non-overlapping LRA effect IDs and system mounting paths."
+            ModuleBuilderStep.SUCCESS -> "${buildResult?.items?.size ?: 0} ringtone(s) ready to flash via Magisk or KernelSU"
+        }
+        val dialogBgColor = if (isDark) Color(0xFF242424) else MiuixTheme.colorScheme.surfaceContainer
+
+        WindowDialog(
+            show = isVisible,
+            title = miuixTitle,
+            summary = miuixSummary,
+            backgroundColor = dialogBgColor,
+            onDismissRequest = {
+                if (!isBuilding) onDismiss()
+            },
+            onDismissFinished = {
+                displayedOpen = false
+                isClosing = false
+            },
+            content = {
+                when (step) {
+                    ModuleBuilderStep.SELECT -> {
+                        MiuixStepSelectionContent(
+                            presets = savedPresets,
+                            selectedIds = selectedIds,
+                            colors = colors,
+                            onToggle = { id ->
+                                if (selectedIds.contains(id)) selectedIds.remove(id) else selectedIds.add(id)
+                            },
+                            onSelectAll = {
+                                selectedIds.clear()
+                                selectedIds.addAll(savedPresets.map { it.id })
+                            },
+                            onDeselectAll = { selectedIds.clear() },
+                            onCancel = onDismiss,
+                            onNext = {
+                                if (selectedIds.isNotEmpty()) step = ModuleBuilderStep.CONFIRM
+                            }
+                        )
+                    }
+                    ModuleBuilderStep.CONFIRM -> {
+                        MiuixStepConfirmationContent(
+                            items = packageItems.toList(),
+                            isBuilding = isBuilding,
+                            errorMessage = errorMessage,
+                            colors = colors,
+                            onBack = { step = ModuleBuilderStep.SELECT },
+                            onRenameItem = { presetId, newTitle ->
+                                val idx = packageItems.indexOfFirst { it.presetId == presetId }
+                                if (idx != -1) {
+                                    val old = packageItems[idx]
+                                    val clean = newTitle.filter { it.isLetterOrDigit() }.ifBlank { "CustomRingtone" }
+                                    packageItems[idx] = old.copy(title = newTitle, cleanName = clean)
+                                }
+                            },
+                            onConfirm = {
+                                scope.launch {
+                                    isBuilding = true
+                                    errorMessage = null
+                                    val result = RingtoneModuleBuilder.buildModule(
+                                        context = context,
+                                        selectedPresets = selectedPresets,
+                                        customItems = packageItems.toList()
+                                    )
+                                    isBuilding = false
+                                    if (result.success) {
+                                        buildResult = result
+                                        step = ModuleBuilderStep.SUCCESS
+                                    } else {
+                                        errorMessage = result.errorMessage ?: "Failed to generate module"
+                                    }
+                                }
+                            }
+                        )
+                    }
+                    ModuleBuilderStep.SUCCESS -> {
+                        MiuixStepSuccessContent(
+                            result = buildResult,
+                            colors = colors,
+                            onDone = onDismiss
+                        )
+                    }
+                }
+            }
+        )
+        return
+    }
 
     Box(
         modifier = Modifier
@@ -1042,4 +1143,495 @@ private fun InstructionBullet(colors: HyperBounceColors, text: String) {
         )
     }
 }
+
+@Composable
+private fun MiuixStepSelectionContent(
+    presets: List<SavedHapticPreset>,
+    selectedIds: List<String>,
+    colors: HyperBounceColors,
+    onToggle: (String) -> Unit,
+    onSelectAll: () -> Unit,
+    onDeselectAll: () -> Unit,
+    onCancel: () -> Unit,
+    onNext: () -> Unit
+) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        if (presets.isEmpty()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 24.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    BasicText(
+                        text = "No Saved Presets Yet",
+                        style = HyperBounceType.body.copy(
+                            color = colors.label,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    BasicText(
+                        text = "Import an audio track in Studio above and tap \"Save Preset\" to add it to your library.",
+                        style = HyperBounceType.caption.copy(
+                            color = colors.secondaryLabel,
+                            fontSize = 12.sp,
+                            textAlign = TextAlign.Center
+                        )
+                    )
+                }
+            }
+            Spacer(Modifier.height(14.dp))
+            top.yukonga.miuix.kmp.basic.TextButton(
+                text = "Close",
+                onClick = onCancel,
+                modifier = Modifier.fillMaxWidth()
+            )
+        } else {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(MiuixTheme.colorScheme.primary.copy(alpha = 0.12f))
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                ) {
+                    BasicText(
+                        text = "${selectedIds.size} of ${presets.size} selected",
+                        style = HyperBounceType.caption.copy(
+                            color = MiuixTheme.colorScheme.primary,
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 11.5.sp
+                        )
+                    )
+                }
+
+                val allSelected = selectedIds.size == presets.size
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(colors.separator.copy(alpha = 0.15f))
+                        .clickable { if (allSelected) onDeselectAll() else onSelectAll() }
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                ) {
+                    BasicText(
+                        text = if (allSelected) "Deselect All" else "Select All",
+                        style = HyperBounceType.caption.copy(
+                            color = colors.label,
+                            fontWeight = FontWeight.Medium,
+                            fontSize = 11.sp
+                        )
+                    )
+                }
+            }
+
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 280.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(presets, key = { it.id }) { preset ->
+                    val isChecked = selectedIds.contains(preset.id)
+                    val pipeName = preset.pipelines.getOrNull(preset.selectedPipelineIndex)?.pipelineType?.title
+                        ?: "Melodic Crisp"
+
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(
+                                if (isChecked) MiuixTheme.colorScheme.primary.copy(alpha = 0.10f)
+                                else colors.separator.copy(alpha = 0.08f)
+                            )
+                            .border(
+                                width = 1.dp,
+                                color = if (isChecked) MiuixTheme.colorScheme.primary.copy(alpha = 0.45f)
+                                else colors.separator.copy(alpha = 0.18f),
+                                shape = RoundedCornerShape(12.dp)
+                            )
+                            .clickable { onToggle(preset.id) }
+                            .padding(12.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(20.dp)
+                                    .clip(CircleShape)
+                                    .background(if (isChecked) MiuixTheme.colorScheme.primary else Color.Transparent)
+                                    .border(
+                                        width = 1.5.dp,
+                                        color = if (isChecked) MiuixTheme.colorScheme.primary else colors.secondaryLabel.copy(alpha = 0.4f),
+                                        shape = CircleShape
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                if (isChecked) {
+                                    CheckmarkIcon(
+                                        color = Color.White,
+                                        size = 12.dp,
+                                        strokeWidth = 2.dp
+                                    )
+                                }
+                            }
+
+                            Column(modifier = Modifier.weight(1f)) {
+                                BasicText(
+                                    text = preset.title,
+                                    style = HyperBounceType.body.copy(
+                                        color = colors.label,
+                                        fontWeight = FontWeight.SemiBold,
+                                        fontSize = 14.sp
+                                    )
+                                )
+                                Spacer(Modifier.height(2.dp))
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    BasicText(
+                                        text = pipeName,
+                                        style = HyperBounceType.caption.copy(
+                                            color = MiuixTheme.colorScheme.primary,
+                                            fontWeight = FontWeight.Medium,
+                                            fontSize = 11.sp
+                                        )
+                                    )
+                                    BasicText(
+                                        text = "•",
+                                        style = HyperBounceType.caption.copy(color = colors.secondaryLabel)
+                                    )
+                                    BasicText(
+                                        text = formatTimeMs(preset.durationMs.toInt()),
+                                        style = HyperBounceType.caption.copy(
+                                            color = colors.secondaryLabel,
+                                            fontSize = 11.sp
+                                        )
+                                    )
+                                    if (preset.trimEndMs > preset.trimStartMs) {
+                                        BasicText(
+                                            text = "•",
+                                            style = HyperBounceType.caption.copy(color = colors.secondaryLabel)
+                                        )
+                                        BasicText(
+                                            text = "Trimmed",
+                                            style = HyperBounceType.caption.copy(
+                                                color = colors.secondaryLabel,
+                                                fontWeight = FontWeight.Medium,
+                                                fontSize = 11.sp
+                                            )
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(16.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                top.yukonga.miuix.kmp.basic.TextButton(
+                    text = "Cancel",
+                    onClick = onCancel,
+                    modifier = Modifier.weight(1f)
+                )
+                Spacer(Modifier.width(16.dp))
+                val hasSelection = selectedIds.isNotEmpty()
+                top.yukonga.miuix.kmp.basic.TextButton(
+                    text = "Review Pack (${selectedIds.size})",
+                    onClick = onNext,
+                    enabled = hasSelection,
+                    colors = top.yukonga.miuix.kmp.basic.ButtonDefaults.textButtonColorsPrimary(),
+                    modifier = Modifier.weight(1f)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun MiuixStepConfirmationContent(
+    items: List<RingtoneModuleBuilder.RingtonePackageItem>,
+    isBuilding: Boolean,
+    errorMessage: String?,
+    colors: HyperBounceColors,
+    onBack: () -> Unit,
+    onRenameItem: (presetId: String, newTitle: String) -> Unit,
+    onConfirm: () -> Unit
+) {
+    val context = LocalContext.current
+    val dialogHost = dev.joseph.hyperbounce.ui.glass.LocalGlassDialogHost.current
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(max = 260.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            items(items, key = { it.presetId }) { item ->
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(colors.separator.copy(alpha = 0.08f))
+                        .border(0.5.dp, colors.separator.copy(alpha = 0.15f), RoundedCornerShape(12.dp))
+                        .padding(horizontal = 12.dp, vertical = 10.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            BasicText(
+                                text = item.title,
+                                style = HyperBounceType.body.copy(
+                                    color = colors.label,
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 14.sp
+                                )
+                            )
+                            Spacer(Modifier.height(2.dp))
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                BasicText(
+                                    text = "${item.cleanName}.ogg",
+                                    style = HyperBounceType.caption.copy(
+                                        color = colors.secondaryLabel,
+                                        fontSize = 11.sp
+                                    )
+                                )
+                                BasicText(
+                                    text = "•",
+                                    style = HyperBounceType.caption.copy(color = colors.secondaryLabel.copy(alpha = 0.5f))
+                                )
+                                BasicText(
+                                    text = "Slot #${item.effectId}",
+                                    style = HyperBounceType.caption.copy(
+                                        color = colors.secondaryLabel,
+                                        fontWeight = FontWeight.Medium,
+                                        fontSize = 11.sp
+                                    )
+                                )
+                            }
+                        }
+
+                        Box(
+                            modifier = Modifier
+                                .size(32.dp)
+                                .clip(CircleShape)
+                                .background(MiuixTheme.colorScheme.primary)
+                                .clickable {
+                                    val cleanAudioName = item.title.filter { it.isLetterOrDigit() }.ifBlank { "CustomRingtone" }
+                                    dialogHost.showTextInput(
+                                        title = "Rename Ringtone",
+                                        message = "Customize ringtone title for this pack. Target audio: ${cleanAudioName}.ogg",
+                                        initialValue = item.title,
+                                        confirmText = "Done",
+                                        confirmColor = colors.accentBlue,
+                                        onConfirm = { newTitle ->
+                                            val trimmed = newTitle.trim()
+                                            if (trimmed.isNotBlank()) {
+                                                onRenameItem(item.presetId, trimmed)
+                                            }
+                                        }
+                                    )
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            PencilIcon(color = Color.White, size = 14.dp)
+                        }
+                    }
+                }
+            }
+        }
+
+        if (errorMessage != null) {
+            Spacer(Modifier.height(8.dp))
+            BasicText(
+                text = "Error: $errorMessage",
+                style = HyperBounceType.caption.copy(
+                    color = colors.accentRed,
+                    fontWeight = FontWeight.Medium,
+                    fontSize = 11.sp
+                )
+            )
+        }
+
+        Spacer(Modifier.height(16.dp))
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            top.yukonga.miuix.kmp.basic.TextButton(
+                text = "Back",
+                onClick = onBack,
+                modifier = Modifier.weight(1f)
+            )
+            Spacer(Modifier.width(16.dp))
+            top.yukonga.miuix.kmp.basic.TextButton(
+                text = if (isBuilding) "Generating..." else "Confirm & Build (${items.size})",
+                onClick = {
+                    if (!RingtoneModuleBuilder.hasStoragePermission(context)) {
+                        RingtoneModuleBuilder.requestStoragePermission(context)
+                    } else {
+                        onConfirm()
+                    }
+                },
+                enabled = !isBuilding,
+                colors = top.yukonga.miuix.kmp.basic.ButtonDefaults.textButtonColorsPrimary(),
+                modifier = Modifier.weight(1f)
+            )
+        }
+    }
+}
+
+@Composable
+private fun MiuixStepSuccessContent(
+    result: RingtoneModuleBuilder.BuildResult?,
+    colors: HyperBounceColors,
+    onDone: () -> Unit
+) {
+    val context = LocalContext.current
+    val zipFile = result?.zipFile
+    val zipPath = zipFile?.absolutePath ?: "/storage/emulated/0/Download/${RingtoneModuleBuilder.MODULE_NAME}"
+
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(14.dp))
+                .background(colors.separator.copy(alpha = 0.08f))
+                .padding(14.dp)
+        ) {
+            Column {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    BasicText(
+                        text = "SAVED ARCHIVE",
+                        style = HyperBounceType.caption.copy(
+                            color = colors.secondaryLabel,
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 11.sp
+                        )
+                    )
+                    BasicText(
+                        text = "Download/",
+                        style = HyperBounceType.caption.copy(
+                            color = MiuixTheme.colorScheme.primary,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 11.sp
+                        )
+                    )
+                }
+                Spacer(Modifier.height(4.dp))
+                BasicText(
+                    text = RingtoneModuleBuilder.MODULE_NAME,
+                    style = HyperBounceType.body.copy(
+                        color = colors.label,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 14.sp
+                    )
+                )
+                Spacer(Modifier.height(10.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    top.yukonga.miuix.kmp.basic.TextButton(
+                        text = "Copy Path",
+                        onClick = {
+                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                            val clip = ClipData.newPlainText("Module Path", zipPath)
+                            clipboard.setPrimaryClip(clip)
+                            Toast.makeText(context, "Path copied to clipboard", Toast.LENGTH_SHORT).show()
+                        },
+                        modifier = Modifier.weight(1f)
+                    )
+                    top.yukonga.miuix.kmp.basic.TextButton(
+                        text = "Share Zip",
+                        onClick = {
+                            try {
+                                val file = File(zipPath)
+                                val uri = FileProvider.getUriForFile(
+                                    context,
+                                    "${context.packageName}.fileprovider",
+                                    file
+                                )
+                                val intent = Intent(Intent.ACTION_SEND).apply {
+                                    type = "application/zip"
+                                    putExtra(Intent.EXTRA_STREAM, uri)
+                                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                }
+                                context.startActivity(Intent.createChooser(intent, "Share Ringtone Module"))
+                            } catch (e: Exception) {
+                                Toast.makeText(context, "Share failed: ${e.message}", Toast.LENGTH_SHORT).show()
+                            }
+                        },
+                        colors = top.yukonga.miuix.kmp.basic.ButtonDefaults.textButtonColorsPrimary(),
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
+        }
+
+        Spacer(Modifier.height(12.dp))
+
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .background(colors.separator.copy(alpha = 0.06f))
+                .padding(12.dp)
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                BasicText(
+                    text = "Installation Instructions",
+                    style = HyperBounceType.caption.copy(
+                        color = colors.label,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 11.5.sp
+                    )
+                )
+                InstructionBullet(colors, "1. Open Magisk, KernelSU, or APatch manager")
+                InstructionBullet(colors, "2. Go to Modules tab and tap Install from storage")
+                InstructionBullet(colors, "3. Select HyperiOS_Haptic_Ringtones_Module.zip in Download")
+                InstructionBullet(colors, "4. Reboot device to activate")
+            }
+        }
+
+        Spacer(Modifier.height(16.dp))
+
+        top.yukonga.miuix.kmp.basic.TextButton(
+            text = "Done",
+            onClick = onDone,
+            colors = top.yukonga.miuix.kmp.basic.ButtonDefaults.textButtonColorsPrimary(),
+            modifier = Modifier.fillMaxWidth()
+        )
+    }
+}
+
 

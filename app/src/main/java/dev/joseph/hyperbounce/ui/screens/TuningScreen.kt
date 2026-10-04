@@ -179,7 +179,7 @@ fun TuningScreen(
                 query = searchQuery,
                 onQueryChange = { searchQuery = it },
                 modifier = Modifier.padding(bottom = 12.dp),
-                placeholder = "Search settings..."
+                placeholder = "Search"
             )
         } else {
             // HyperLight-style Search Bar with increased bounce
@@ -187,7 +187,8 @@ fun TuningScreen(
                 query = searchQuery,
                 onQueryChange = { searchQuery = it },
                 colors = colors,
-                modifier = Modifier.padding(bottom = 12.dp)
+                modifier = Modifier.padding(bottom = 12.dp),
+                placeholder = "Search"
             )
         }
 

@@ -43,7 +43,6 @@ fun CallerScreenSettings(
         onRestartApp = { RootUtils.restartApp(context, "com.android.incallui", "InCallUI") }
     ) {
         item {
-            SectionHeader("MASTER SWITCH", colors)
             GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
                 SettingsToggleRow(
                     title = "Enable iOS Caller Screen",
@@ -57,7 +56,7 @@ fun CallerScreenSettings(
         }
 
         item {
-            SectionHeader("DIMENSIONS & POSITION", colors)
+            SectionHeader("Dimensions & Position", colors)
             GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
                 SettingsSliderRow(
                     title = "Button & Track Size",
@@ -88,7 +87,7 @@ fun CallerScreenSettings(
         }
 
         item {
-            SectionHeader("STOCK DIALER RECENTS", colors)
+            SectionHeader("Dialer App", colors)
             GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
                 SettingsToggleRow(
                     title = "Swipe Gestures in Dialer",

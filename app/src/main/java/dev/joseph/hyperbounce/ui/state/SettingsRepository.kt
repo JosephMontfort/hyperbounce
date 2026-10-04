@@ -311,9 +311,9 @@ class SettingsRepository(context: Context) {
         // current behavior — WhatsApp in particular used a taller/wider/more-rounded bar
         // (70/92/36) than Instagram and YouTube's shared defaults (64/64/32).
         private val defaults = when (app) {
-            NavApp.WhatsApp -> NavBarAppSettings(barHeight = 70f, tabWidth = 92f, cornerRadius = 36f, bottomMargin = 40f)
-            NavApp.YouTube -> NavBarAppSettings(bottomMargin = 28f)
-            NavApp.Instagram -> NavBarAppSettings(bottomMargin = 40f)
+            NavApp.WhatsApp -> NavBarAppSettings(barHeight = 70f, tabWidth = 92f, cornerRadius = 36f, bottomMargin = 40f, accent = AccentPreset.Green)
+            NavApp.YouTube -> NavBarAppSettings(bottomMargin = 28f, accent = AccentPreset.Auto)
+            NavApp.Instagram -> NavBarAppSettings(bottomMargin = 40f, accent = AccentPreset.Auto)
         }
 
         var enabled by prefsBooleanState("${prefix}_enabled", defaults.enabled)

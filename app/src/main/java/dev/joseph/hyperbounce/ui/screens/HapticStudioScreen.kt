@@ -88,6 +88,7 @@ import dev.joseph.hyperbounce.ui.components.GlassCard
 import dev.joseph.hyperbounce.ui.components.PencilIcon
 import dev.joseph.hyperbounce.ui.components.RowDivider
 import dev.joseph.hyperbounce.ui.components.SectionHeader
+import dev.joseph.hyperbounce.ui.components.SliderThumbTracker
 import dev.joseph.hyperbounce.ui.components.TrashIcon
 import dev.joseph.hyperbounce.ui.glass.LiquidButton
 import androidx.compose.foundation.Image
@@ -235,7 +236,7 @@ fun HapticStudioScreen(
                             )
                             Spacer(Modifier.height(4.dp))
                             BasicText(
-                                text = "Select an audio track to synthesize 5 synchronized tactile pipelines.",
+                                text = "Select an audio track to synthesize 5 synchronized haptics pipelines.",
                                 style = HyperBounceType.caption.copy(color = colors.secondaryLabel)
                             )
                             Spacer(Modifier.height(14.dp))
@@ -328,7 +329,7 @@ fun HapticStudioScreen(
 
                 item {
                     Spacer(Modifier.height(20.dp))
-                    SectionHeader("Tactile Pipelines", colors)
+                    SectionHeader("Haptics Pipelines", colors)
 
                     Row(
                         modifier = Modifier
@@ -474,7 +475,7 @@ fun HapticStudioScreen(
                                         )
                                     )
                                     BasicText(
-                                        text = "${currentHaptic.durationMs}ms duration • ${currentHaptic.peakCount} tactile beats",
+                                        text = "${currentHaptic.durationMs}ms duration • ${currentHaptic.peakCount} haptics beats",
                                         style = HyperBounceType.caption.copy(color = colors.secondaryLabel)
                                     )
                                 }
@@ -689,7 +690,7 @@ fun HapticStudioScreen(
             // Section: Saved Ringtone Library
             item {
                 Spacer(Modifier.height(24.dp))
-                SectionHeader("Saved Ringtones & Presets", colors)
+                SectionHeader("Saved Presets", colors)
 
                 if (savedPresets.isEmpty()) {
                     GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
@@ -1105,29 +1106,34 @@ private fun WaveformVisualizer(
                         currentOnSeek(downFrac)
                     }
 
-                    do {
-                        val event = awaitPointerEvent()
-                        val change = event.changes.firstOrNull() ?: break
-                        if (!change.pressed) break
-                        change.consume()
+                    try {
+                        SliderThumbTracker.isThumbTouched = true
+                        do {
+                            val event = awaitPointerEvent()
+                            val change = event.changes.firstOrNull() ?: break
+                            if (!change.pressed) break
+                            change.consume()
 
-                        val currentFrac = (change.position.x / width).coerceIn(0f, 1f)
-                        val posMs = (currentFrac * currentDuration).toInt()
+                            val currentFrac = (change.position.x / width).coerceIn(0f, 1f)
+                            val posMs = (currentFrac * currentDuration).toInt()
 
-                        when (target) {
-                            "start" -> {
-                                val newStart = posMs.coerceIn(0, currentEndMs - 500)
-                                currentOnTrimChange(newStart, currentEndMs)
+                            when (target) {
+                                "start" -> {
+                                    val newStart = posMs.coerceIn(0, currentEndMs - 500)
+                                    currentOnTrimChange(newStart, currentEndMs)
+                                }
+                                "end" -> {
+                                    val newEnd = posMs.coerceIn(currentStartMs + 500, currentDuration)
+                                    currentOnTrimChange(currentStartMs, newEnd)
+                                }
+                                "scrub" -> {
+                                    currentOnSeek(currentFrac)
+                                }
                             }
-                            "end" -> {
-                                val newEnd = posMs.coerceIn(currentStartMs + 500, currentDuration)
-                                currentOnTrimChange(currentStartMs, newEnd)
-                            }
-                            "scrub" -> {
-                                currentOnSeek(currentFrac)
-                            }
-                        }
-                    } while (true)
+                        } while (true)
+                    } finally {
+                        SliderThumbTracker.isThumbTouched = false
+                    }
                 }
             }
     ) {
