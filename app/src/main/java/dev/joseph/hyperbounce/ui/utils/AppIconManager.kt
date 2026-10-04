@@ -14,8 +14,8 @@ object AppIconManager {
             val pm = context.packageManager
             val pkg = context.packageName
 
-            val monetAlias = ComponentName(pkg, "$pkg.ui.MainActivityMonet")
-            val flatAlias = ComponentName(pkg, "$pkg.ui.MainActivityFlat")
+            val monetAlias = ComponentName(pkg, "dev.joseph.hyperbounce.ui.MainActivityMonet")
+            val flatAlias = ComponentName(pkg, "dev.joseph.hyperbounce.ui.MainActivityFlat")
 
             val (enableTarget, disableTarget) = when (style) {
                 AppIconStyle.Monet -> monetAlias to flatAlias
