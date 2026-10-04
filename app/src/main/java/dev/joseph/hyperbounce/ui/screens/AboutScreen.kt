@@ -268,7 +268,7 @@ private fun SystemInfoRow(
                 Text(
                     text = value,
                     style = MiuixTheme.textStyles.body2,
-                    color = MiuixTheme.colorScheme.onSurfaceVariant
+                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary
                 )
             }
         )

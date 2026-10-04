@@ -61,6 +61,7 @@ fun Modifier.searchHighlight(
     val activeKey = SearchHighlightState.activeHighlightKey
     val isMatch = activeKey != null && SearchHighlightState.isMatch(key)
     val requester = remember { BringIntoViewRequester() }
+    val animAlpha = remember { Animatable(0f) }
     val componentStyle = LocalComponentStyle.current
     val highlightColor = if (componentStyle == ComponentStyle.MIUIX) {
         MiuixTheme.colorScheme.primary
