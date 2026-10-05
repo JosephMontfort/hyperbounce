@@ -116,6 +116,7 @@ fun AppAppearanceScreen(
                         defaultValue = 1.0f,
                         valueLabel = { "${(it * 100).roundToInt()}%" },
                         enabled = s.enabled && s.liquidGlass
+                    )
                     RowDivider(colors.separator, insetStart = 16.dp)
                     SettingsToggleRow(
                         title = "Pill Chromatic Aberration",
