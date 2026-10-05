@@ -132,13 +132,16 @@ fun SettingsNavRow(
 ) {
     val componentStyle = LocalComponentStyle.current
     if (componentStyle == ComponentStyle.MIUIX) {
+        val displayAlpha = if (enabled) 1f else 0.35f
         ArrowPreference(
             title = title,
             summary = subtitle,
             enabled = enabled,
             startAction = icon?.let { { IconChip(iconTint ?: Color.Transparent) { icon() } } },
             onClick = { if (enabled) onClick() },
-            modifier = modifier.searchHighlight(searchKey ?: title, colors)
+            modifier = modifier
+                .searchHighlight(searchKey ?: title, colors)
+                .graphicsLayer { alpha = displayAlpha }
         )
     } else {
         val displayAlpha = if (enabled) 1f else 0.35f
@@ -191,13 +194,17 @@ fun SettingsClickableRow(
 ) {
     val componentStyle = LocalComponentStyle.current
     if (componentStyle == ComponentStyle.MIUIX) {
+        val displayAlpha = if (enabled) 1f else 0.35f
         BasicComponent(
             title = title,
             summary = subtitle,
+            enabled = enabled,
             startAction = icon?.let { { IconChip(iconTint ?: Color.Transparent) { icon() } } },
             endActions = trailing?.let { { trailing() } },
             onClick = { if (enabled) onClick() },
-            modifier = modifier.searchHighlight(searchKey ?: title, colors)
+            modifier = modifier
+                .searchHighlight(searchKey ?: title, colors)
+                .graphicsLayer { alpha = displayAlpha }
         )
     } else {
         val interactionSource = remember { MutableInteractionSource() }
@@ -258,6 +265,7 @@ fun SettingsToggleRow(
 ) {
     val componentStyle = LocalComponentStyle.current
     if (componentStyle == ComponentStyle.MIUIX) {
+        val displayAlpha = if (enabled) 1f else 0.35f
         SwitchPreference(
             checked = checked,
             onCheckedChange = onCheckedChange,
@@ -265,7 +273,9 @@ fun SettingsToggleRow(
             summary = subtitle,
             enabled = enabled,
             startAction = icon?.let { { IconChip(iconTint ?: Color.Transparent) { icon() } } },
-            modifier = modifier.searchHighlight(searchKey ?: title, colors)
+            modifier = modifier
+                .searchHighlight(searchKey ?: title, colors)
+                .graphicsLayer { alpha = displayAlpha }
         )
     } else {
         val displayAlpha = if (enabled) 1f else 0.35f
@@ -319,6 +329,7 @@ fun SettingsDropdownRow(
     val componentStyle = LocalComponentStyle.current
     val view = LocalView.current
     if (componentStyle == ComponentStyle.MIUIX) {
+        val displayAlpha = if (enabled) 1f else 0.35f
         WindowDropdownPreference(
             items = options,
             selectedIndex = selectedIndex,
@@ -332,7 +343,9 @@ fun SettingsDropdownRow(
                     onSelect(idx)
                 }
             },
-            modifier = modifier.searchHighlight(searchKey ?: title, colors)
+            modifier = modifier
+                .searchHighlight(searchKey ?: title, colors)
+                .graphicsLayer { alpha = displayAlpha }
         )
     } else {
         val displayAlpha = if (enabled) 1f else 0.35f
@@ -418,8 +431,11 @@ fun SettingsSliderRow(
             onValueChange(newValue)
         }
 
+        val displayAlpha = if (enabled) 1f else 0.35f
         BasicComponent(
-            modifier = modifier.searchHighlight(searchKey ?: title, colors),
+            modifier = modifier
+                .searchHighlight(searchKey ?: title, colors)
+                .graphicsLayer { alpha = displayAlpha },
             title = title,
             summary = subtitle,
             endActions = {

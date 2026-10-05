@@ -166,6 +166,7 @@ private fun HyperiOSApp(repository: SettingsRepository) {
     val coroutineScope = rememberCoroutineScope()
 
     val backStack = remember { mutableStateListOf<Destination>() }
+    val scrollStateHolder = remember { dev.joseph.hyperbounce.ui.state.SubpageScrollStateHolder() }
     val atRoot = backStack.isEmpty()
 
     val focusManager = LocalFocusManager.current
@@ -205,7 +206,8 @@ private fun HyperiOSApp(repository: SettingsRepository) {
             LocalComponentStyle provides repository.componentStyle,
             LocalIsDarkTheme provides isDark,
             LocalGlassSettings provides repository.globalGlass.snapshot(),
-            dev.joseph.hyperbounce.ui.glass.LocalMorphPhysics provides repository.morphPhysics.snapshot()
+            dev.joseph.hyperbounce.ui.glass.LocalMorphPhysics provides repository.morphPhysics.snapshot(),
+            dev.joseph.hyperbounce.ui.state.LocalSubpageScrollState provides scrollStateHolder
         ) {
             DropdownOverlayHost {
                 dev.joseph.hyperbounce.ui.glass.CustomValueDialogHost(colors) {
@@ -215,15 +217,20 @@ private fun HyperiOSApp(repository: SettingsRepository) {
                 var isPopping by remember { mutableStateOf(false) }
                 var activeAnimationJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
 
+                val popDestination: () -> Unit = {
+                    if (backStack.isNotEmpty()) {
+                        val removed = backStack.removeAt(backStack.lastIndex)
+                        scrollStateHolder.clear(removed.toString())
+                    }
+                }
+
                 val push: (Destination) -> Unit = { destination ->
                     focusManager.clearFocus()
                     keyboardController?.hide()
                     activeAnimationJob?.cancel()
                     if (isPopping || dragOffset.value > 0f) {
                         isPopping = false
-                        if (backStack.isNotEmpty()) {
-                            backStack.removeAt(backStack.lastIndex)
-                        }
+                        popDestination()
                     }
                     activeAnimationJob = coroutineScope.launch {
                         dragOffset.snapTo(screenWidth)
@@ -238,9 +245,7 @@ private fun HyperiOSApp(repository: SettingsRepository) {
                         activeAnimationJob = coroutineScope.launch {
                             try {
                                 dragOffset.animateTo(screenWidth, spring(dampingRatio = 0.88f, stiffness = 420f))
-                                if (backStack.isNotEmpty()) {
-                                    backStack.removeAt(backStack.lastIndex)
-                                }
+                                popDestination()
                                 dragOffset.snapTo(0f)
                             } finally {
                                 isPopping = false
@@ -360,7 +365,7 @@ private fun HyperiOSApp(repository: SettingsRepository) {
                                                 activeAnimationJob?.cancel()
                                                 isPopping = false
                                                 if (dragOffset.value > screenWidth * 0.25f && backStack.isNotEmpty()) {
-                                                    backStack.removeAt(backStack.lastIndex)
+                                                    popDestination()
                                                 }
                                                 coroutineScope.launch {
                                                     dragOffset.snapTo(0f)
@@ -430,9 +435,7 @@ private fun HyperiOSApp(repository: SettingsRepository) {
                                                                 screenWidth,
                                                                 spring(dampingRatio = 0.90f, stiffness = 380f)
                                                             )
-                                                            if (backStack.isNotEmpty()) {
-                                                                backStack.removeAt(backStack.lastIndex)
-                                                            }
+                                                            popDestination()
                                                             dragOffset.snapTo(0f)
                                                         } finally {
                                                             isPopping = false
@@ -634,7 +637,8 @@ private fun DestinationContent(
     onBack: () -> Unit,
     onNavigate: (Destination) -> Unit
 ) {
-    when (destination) {
+    CompositionLocalProvider(dev.joseph.hyperbounce.ui.state.LocalDestinationKey provides destination.toString()) {
+        when (destination) {
         Destination.AppsList -> dev.joseph.hyperbounce.ui.screens.AppsListScreen(
             repository = repository,
             colors = colors,
@@ -948,5 +952,6 @@ private fun DestinationContent(
             backdrop = backdrop,
             onBack = onBack
         )
+        }
     }
 }

@@ -81,6 +81,9 @@ import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
 import top.yukonga.miuix.kmp.basic.TopAppBar
 import top.yukonga.miuix.kmp.basic.TopAppBarDefaults
+import top.yukonga.miuix.kmp.basic.rememberTopAppBarState
+import dev.joseph.hyperbounce.ui.state.LocalSubpageScrollState
+import dev.joseph.hyperbounce.ui.state.LocalDestinationKey
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Back
 import top.yukonga.miuix.kmp.icon.extended.More
@@ -105,7 +108,14 @@ fun ScreenScaffold(
     content: LazyListScope.(contentBackdrop: Backdrop) -> Unit
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
-    val lazyListState = rememberLazyListState()
+    val scrollHolder = LocalSubpageScrollState.current
+    val screenKey = LocalDestinationKey.current ?: title
+    val initialScroll = remember(screenKey) { scrollHolder.get(screenKey) }
+
+    val lazyListState = rememberLazyListState(
+        initialFirstVisibleItemIndex = initialScroll.index,
+        initialFirstVisibleItemScrollOffset = initialScroll.offset
+    )
     val targetIndex = dev.joseph.hyperbounce.ui.search.SearchHighlightState.targetScrollIndex
     androidx.compose.runtime.LaunchedEffect(targetIndex) {
         if (targetIndex != null && targetIndex >= 0) {
@@ -121,7 +131,29 @@ fun ScreenScaffold(
 
     val componentStyle = LocalComponentStyle.current
     if (componentStyle == ComponentStyle.MIUIX) {
-        val scrollBehavior = MiuixScrollBehavior()
+        val topAppBarState = rememberTopAppBarState(
+            initialHeightOffset = initialScroll.miuixHeightOffset,
+            initialContentOffset = initialScroll.miuixContentOffset
+        )
+        val scrollBehavior = MiuixScrollBehavior(topAppBarState = topAppBarState)
+
+        androidx.compose.runtime.LaunchedEffect(screenKey, lazyListState, scrollBehavior) {
+            androidx.compose.runtime.snapshotFlow {
+                Triple(
+                    lazyListState.firstVisibleItemIndex,
+                    lazyListState.firstVisibleItemScrollOffset,
+                    scrollBehavior.state.heightOffset
+                )
+            }.collect { (index, offset, miuixHeight) ->
+                scrollHolder.update(
+                    screenKey,
+                    index,
+                    offset,
+                    miuixHeight,
+                    scrollBehavior.state.contentOffset
+                )
+            }
+        }
         val isDark = dev.joseph.hyperbounce.ui.theme.LocalIsDarkTheme.current
         val dialogHost = dev.joseph.hyperbounce.ui.glass.LocalGlassDialogHost.current
         var menuExpanded by remember { mutableStateOf(false) }
@@ -244,6 +276,24 @@ fun ScreenScaffold(
         }
         return
     }
+
+    androidx.compose.runtime.LaunchedEffect(screenKey, lazyListState) {
+        androidx.compose.runtime.snapshotFlow {
+            Pair(
+                lazyListState.firstVisibleItemIndex,
+                lazyListState.firstVisibleItemScrollOffset
+            )
+        }.collect { (index, offset) ->
+            scrollHolder.update(
+                screenKey,
+                index,
+                offset,
+                0f,
+                0f
+            )
+        }
+    }
+
     val collapseProgress by remember {
         derivedStateOf {
             if (lazyListState.firstVisibleItemIndex > 0) 1f

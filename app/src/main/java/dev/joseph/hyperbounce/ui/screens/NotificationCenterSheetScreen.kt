@@ -211,7 +211,7 @@ fun NotificationCenterSheetScreen(
                         value = sheet.iosHunSqueezeStrength,
                         onValueChange = sheet::setIosHunSqueezeStrength,
                         valueRange = 0.0f..4.0f,
-                        defaultValue = 3.0f,
+                        defaultValue = 1.0f,
                         valueLabel = { String.format(Locale.US, "%.0f%%", it * 100.0f) },
                         enabled = sheet.masterEnabled && sheet.iosHunAnimationEnabled
                     )
@@ -224,6 +224,7 @@ fun NotificationCenterSheetScreen(
         }
 
         item {
+            SectionHeader("Notification Center Sheet", colors)
             GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
                 SettingsToggleRow(
                     title = "Notification Center iOS Sheet",

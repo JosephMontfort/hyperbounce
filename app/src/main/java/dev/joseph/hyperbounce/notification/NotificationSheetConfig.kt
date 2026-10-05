@@ -44,7 +44,7 @@ data class NotificationSheetConfig(
     var iosHunAnimationEnabled: Boolean = true,
     var iosHunDurationMs: Float = 600.0f,
     var iosHunStartScale: Float = 0.25f,
-    var iosHunSqueezeStrength: Float = 3.0f
+    var iosHunSqueezeStrength: Float = 1.0f
 ) {
     /**
      * True only if master switch and sheet toggle are both on.
@@ -132,6 +132,6 @@ object NotificationSheetConfigHolder {
         sheet.iosHunAnimationEnabled = prefs.getBoolean("notif_ios_hun_animation_enabled", true)
         sheet.iosHunDurationMs = prefs.getFloat("notif_ios_hun_duration_ms", 600.0f)
         sheet.iosHunStartScale = prefs.getFloat("notif_ios_hun_start_scale", 0.25f)
-        sheet.iosHunSqueezeStrength = prefs.getFloat("notif_ios_hun_squeeze_strength", 3.0f)
+        sheet.iosHunSqueezeStrength = prefs.getFloat("notif_ios_hun_squeeze_strength", 1.0f)
     }
 }
