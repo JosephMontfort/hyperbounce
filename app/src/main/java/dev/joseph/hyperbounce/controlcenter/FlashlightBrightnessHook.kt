@@ -68,7 +68,7 @@ object FlashlightBrightnessHook {
                 c.isAccessible = true
                 module.hook(c).intercept { chain ->
                     val res = chain.proceed()
-                    if (ControlCenterConfigHolder.config.lowEndFlashlightEnabled) {
+                    if (ControlCenterConfigHolder.config.isFlashlightActive) {
                         try {
                             val maxField = managerClass.getDeclaredField("maxStrength")
                             maxField.isAccessible = true
@@ -84,7 +84,7 @@ object FlashlightBrightnessHook {
                 if (m.name == "isSupportStrengthLevel") {
                     m.isAccessible = true
                     module.hook(m).intercept { chain ->
-                        if (!ControlCenterConfigHolder.config.lowEndFlashlightEnabled) {
+                        if (!ControlCenterConfigHolder.config.isFlashlightActive) {
                             return@intercept chain.proceed()
                         }
                         val thisObj = chain.thisObject
@@ -105,7 +105,7 @@ object FlashlightBrightnessHook {
                 if (m.name == "getLogicStrength" && m.returnType == java.lang.Float.TYPE) {
                     m.isAccessible = true
                     module.hook(m).intercept { chain ->
-                        if (!ControlCenterConfigHolder.config.lowEndFlashlightEnabled) {
+                        if (!ControlCenterConfigHolder.config.isFlashlightActive) {
                             return@intercept chain.proceed()
                         }
                         getLogicStrength()
@@ -119,7 +119,7 @@ object FlashlightBrightnessHook {
                     m.isAccessible = true
                     module.hook(m).intercept { chain ->
                         val res = chain.proceed()
-                        if (ControlCenterConfigHolder.config.lowEndFlashlightEnabled) {
+                        if (ControlCenterConfigHolder.config.isFlashlightActive) {
                             val thisObj = chain.thisObject
                             if (thisObj != null) {
                                 try {
@@ -139,7 +139,7 @@ object FlashlightBrightnessHook {
                 if (m.name == "asyncToggleFlashLight") {
                     m.isAccessible = true
                     module.hook(m).intercept { chain ->
-                        if (ControlCenterConfigHolder.config.lowEndFlashlightEnabled) {
+                        if (ControlCenterConfigHolder.config.isFlashlightActive) {
                             val thisObj = chain.thisObject
                             if (thisObj != null) {
                                 try {
@@ -172,7 +172,7 @@ object FlashlightBrightnessHook {
                     if (m.name == "operateCamera" && m.parameterTypes.size == 4) {
                         m.isAccessible = true
                         module.hook(m).intercept { chain ->
-                            if (!ControlCenterConfigHolder.config.lowEndFlashlightEnabled) {
+                            if (!ControlCenterConfigHolder.config.isFlashlightActive) {
                                 return@intercept chain.proceed()
                             }
                             val rawArgs = chain.args
@@ -206,7 +206,7 @@ object FlashlightBrightnessHook {
                 if (m.name == "operateCamera" && m.parameterTypes.size == 2) {
                     m.isAccessible = true
                     module.hook(m).intercept { chain ->
-                        if (!ControlCenterConfigHolder.config.lowEndFlashlightEnabled) {
+                        if (!ControlCenterConfigHolder.config.isFlashlightActive) {
                             return@intercept chain.proceed()
                         }
                         val rawArgs = chain.args
@@ -304,7 +304,7 @@ object FlashlightBrightnessHook {
                 if (m.name == "setFlashlightStatus" && m.parameterTypes.size == 1 && m.parameterTypes[0] == java.lang.Float.TYPE) {
                     m.isAccessible = true
                     module.hook(m).intercept { chain ->
-                        if (!ControlCenterConfigHolder.config.lowEndFlashlightEnabled) {
+                        if (!ControlCenterConfigHolder.config.isFlashlightActive) {
                             return@intercept chain.proceed()
                         }
                         val rawArgs = chain.args
@@ -401,7 +401,7 @@ object FlashlightBrightnessHook {
                     m.isAccessible = true
                     module.hook(m).intercept { chain ->
                         val res = chain.proceed()
-                        if (ControlCenterConfigHolder.config.lowEndFlashlightEnabled) {
+                        if (ControlCenterConfigHolder.config.isFlashlightActive) {
                             val controller = chain.thisObject
                             if (controller != null) {
                                 resyncSwitchStatus(controllerClass, controller)
@@ -428,7 +428,7 @@ object FlashlightBrightnessHook {
                     m.isAccessible = true
                     module.hook(m).intercept { chain ->
                         val res = chain.proceed()
-                        if (ControlCenterConfigHolder.config.lowEndFlashlightEnabled) {
+                        if (ControlCenterConfigHolder.config.isFlashlightActive) {
                             val rawArgs = chain.args
                             val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as? Array<*>
                             val context = args?.getOrNull(0) as? Context
@@ -488,6 +488,7 @@ object FlashlightBrightnessHook {
     }
 
     fun getUserMaxBrightness(): Int {
+        if (!ControlCenterConfigHolder.config.isFlashlightActive) return NORMAL_BRIGHTNESS
         val hwMax = getHardwareMaxBrightness()
         return ControlCenterConfigHolder.config.flashlightMaxBrightness.coerceIn(NORMAL_BRIGHTNESS, hwMax)
     }

@@ -480,47 +480,31 @@ private fun StepSelectionContent(
         } else {
             // Quick select / count header
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 2.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(6.dp))
-                        .background(colors.accentBlue.copy(alpha = 0.12f))
-                        .padding(horizontal = 8.dp, vertical = 4.dp)
-                ) {
-                    BasicText(
-                        text = "${selectedIds.size} of ${presets.size} selected",
-                        style = HyperBounceType.caption.copy(
-                            color = colors.accentBlue,
-                            fontWeight = FontWeight.SemiBold,
-                            fontSize = 11.5.sp
-                        )
+                BasicText(
+                    text = "${selectedIds.size} of ${presets.size} selected",
+                    style = HyperBounceType.caption.copy(
+                        color = colors.accentBlue,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 12.sp
                     )
-                }
+                )
 
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    val allSelected = selectedIds.size == presets.size
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(6.dp))
-                            .background(colors.separator.copy(alpha = 0.2f))
-                            .clickable {
-                                if (allSelected) onDeselectAll() else onSelectAll()
-                            }
-                            .padding(horizontal = 8.dp, vertical = 4.dp)
-                    ) {
-                        BasicText(
-                            text = if (allSelected) "Deselect All" else "Select All",
-                            style = HyperBounceType.caption.copy(
-                                color = colors.label,
-                                fontWeight = FontWeight.Medium,
-                                fontSize = 11.sp
-                            )
-                        )
+                val allSelected = selectedIds.size == presets.size
+                BasicText(
+                    text = if (allSelected) "Deselect All" else "Select All",
+                    style = HyperBounceType.caption.copy(
+                        color = colors.accentBlue,
+                        fontWeight = FontWeight.Medium,
+                        fontSize = 12.sp
+                    ),
+                    modifier = Modifier.clickable {
+                        if (allSelected) onDeselectAll() else onSelectAll()
                     }
-                }
+                )
             }
 
             Spacer(Modifier.height(10.dp))
@@ -1190,43 +1174,29 @@ private fun MiuixStepSelectionContent(
             )
         } else {
             Row(
-                modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 2.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(6.dp))
-                        .background(MiuixTheme.colorScheme.primary.copy(alpha = 0.12f))
-                        .padding(horizontal = 8.dp, vertical = 4.dp)
-                ) {
-                    BasicText(
-                        text = "${selectedIds.size} of ${presets.size} selected",
-                        style = HyperBounceType.caption.copy(
-                            color = MiuixTheme.colorScheme.primary,
-                            fontWeight = FontWeight.SemiBold,
-                            fontSize = 11.5.sp
-                        )
+                BasicText(
+                    text = "${selectedIds.size} of ${presets.size} selected",
+                    style = HyperBounceType.caption.copy(
+                        color = MiuixTheme.colorScheme.primary,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 12.sp
                     )
-                }
+                )
 
                 val allSelected = selectedIds.size == presets.size
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(6.dp))
-                        .background(colors.separator.copy(alpha = 0.15f))
-                        .clickable { if (allSelected) onDeselectAll() else onSelectAll() }
-                        .padding(horizontal = 8.dp, vertical = 4.dp)
-                ) {
-                    BasicText(
-                        text = if (allSelected) "Deselect All" else "Select All",
-                        style = HyperBounceType.caption.copy(
-                            color = colors.label,
-                            fontWeight = FontWeight.Medium,
-                            fontSize = 11.sp
-                        )
-                    )
-                }
+                BasicText(
+                    text = if (allSelected) "Deselect All" else "Select All",
+                    style = HyperBounceType.caption.copy(
+                        color = MiuixTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Medium,
+                        fontSize = 12.sp
+                    ),
+                    modifier = Modifier.clickable { if (allSelected) onDeselectAll() else onSelectAll() }
+                )
             }
 
             LazyColumn(

@@ -30,7 +30,7 @@ fun CallerScreenSettings(
     val context = LocalContext.current
 
     ScreenScaffold(
-        title = "iOS Caller Screen",
+        title = "Dialer & Caller Screen",
         colors = colors,
         backdrop = backdrop,
         onBack = onBack,

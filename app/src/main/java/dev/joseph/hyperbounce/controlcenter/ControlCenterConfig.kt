@@ -26,6 +26,7 @@ import java.util.concurrent.CopyOnWriteArrayList
  * Configuration data class for Control Center Modular Layout, Motion Dynamics, and Jelly Physics.
  */
 data class ControlCenterConfig(
+    var masterEnabled: Boolean = true,
     var modularEditEnabled: Boolean = true,
     var animEnabled: Boolean = true,
     var jellyEnabled: Boolean = true,
@@ -53,6 +54,11 @@ data class ControlCenterConfig(
     var fluidResizeEnabled: Boolean = true,
     var landscapeRightMaxRows: Int = 3
 ) {
+    val isModularEditActive: Boolean get() = masterEnabled && modularEditEnabled
+    val isAnimActive: Boolean get() = masterEnabled && animEnabled
+    val isJellyActive: Boolean get() = masterEnabled && jellyEnabled
+    val isFlashlightActive: Boolean get() = masterEnabled && lowEndFlashlightEnabled
+    val isTrue2dGridActive: Boolean get() = isModularEditActive && true2dGridEnabled
     fun isLowEndAnim(): Boolean = animEngineMode == 1
 }
 
@@ -211,6 +217,7 @@ object ControlCenterConfigHolder {
             defaultMode
         }
         config = ControlCenterConfig(
+            masterEnabled = prefs.getBoolean("cc_master_enabled", true),
             modularEditEnabled = prefs.getBoolean("cc_modular_edit_enabled", true),
             animEnabled = prefs.getBoolean("cc_anim_enabled", true),
             jellyEnabled = prefs.getBoolean("cc_jelly_enabled", true),

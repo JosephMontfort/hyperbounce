@@ -82,6 +82,7 @@ fun AppDetailScreen(
                     title = "Appearance",
                     subtitle = "Glass engine, opacity, theme & accent",
                     colors = colors,
+                    enabled = s.enabled,
                     onClick = { onNavigate(Destination.AppAppearance(app)) }
                 )
                 RowDivider(colors.separator)
@@ -89,6 +90,7 @@ fun AppDetailScreen(
                     title = "Layout",
                     subtitle = "Corner radius, bar height, tab width & margin",
                     colors = colors,
+                    enabled = s.enabled,
                     onClick = { onNavigate(Destination.AppLayout(app)) }
                 )
             }

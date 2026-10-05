@@ -217,7 +217,7 @@ fun HapticStudioScreen(
                 )
         ) {
             ScreenScaffold(
-                title = "Ringtones & Haptics",
+                title = "Haptic Studio",
                 colors = colors,
                 backdrop = backdrop,
                 onBack = onBack
@@ -536,57 +536,64 @@ fun HapticStudioScreen(
                             }
 
                             if (isTrimMode) {
-                                Spacer(Modifier.height(10.dp))
-                                // Quick duration presets
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                ) {
-                                    listOf(15 to "15s", 20 to "20s", 30 to "30s").forEach { (sec, label) ->
-                                        val durMs = sec * 1000
-                                        val isCurActive = (trimEndMs - trimStartMs) == durMs
+                                val availablePresets = when {
+                                    activeDuration > 30_000 -> listOf(15 to "15s", 20 to "20s", 30 to "30s")
+                                    activeDuration > 20_000 -> listOf(15 to "15s", 20 to "20s")
+                                    else -> emptyList()
+                                }
+                                if (availablePresets.isNotEmpty()) {
+                                    Spacer(Modifier.height(10.dp))
+                                    // Quick duration presets
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        availablePresets.forEach { (sec, label) ->
+                                            val durMs = sec * 1000
+                                            val isCurActive = (trimEndMs - trimStartMs) == durMs
+                                            Box(
+                                                modifier = Modifier
+                                                    .weight(1f)
+                                                    .height(34.dp)
+                                                    .clip(RoundedCornerShape(8.dp))
+                                                    .background(if (isCurActive) colors.accentBlue.copy(alpha = 0.35f) else colors.separator.copy(alpha = 0.20f))
+                                                    .clickable {
+                                                        trimEndMs = (trimStartMs + durMs).coerceAtMost(activeDuration)
+                                                    },
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                BasicText(
+                                                    text = label,
+                                                    style = HyperBounceType.caption.copy(
+                                                        color = if (isCurActive) colors.accentBlue else colors.label,
+                                                        fontWeight = if (isCurActive) FontWeight.Bold else FontWeight.Medium,
+                                                        fontSize = 12.5.sp
+                                                    )
+                                                )
+                                            }
+                                        }
+                                        val isFullActive = trimStartMs == 0 && trimEndMs == activeDuration
                                         Box(
                                             modifier = Modifier
                                                 .weight(1f)
                                                 .height(34.dp)
                                                 .clip(RoundedCornerShape(8.dp))
-                                                .background(if (isCurActive) colors.accentBlue.copy(alpha = 0.35f) else colors.separator.copy(alpha = 0.20f))
-                                            .clickable {
-                                                trimEndMs = (trimStartMs + durMs).coerceAtMost(activeDuration)
-                                            },
+                                                .background(if (isFullActive) colors.accentBlue.copy(alpha = 0.35f) else colors.separator.copy(alpha = 0.20f))
+                                                .clickable {
+                                                    trimStartMs = 0
+                                                    trimEndMs = activeDuration
+                                                },
                                             contentAlignment = Alignment.Center
                                         ) {
                                             BasicText(
-                                                text = label,
+                                                text = "Full",
                                                 style = HyperBounceType.caption.copy(
-                                                    color = if (isCurActive) colors.accentBlue else colors.label,
-                                                    fontWeight = if (isCurActive) FontWeight.Bold else FontWeight.Medium,
+                                                    color = if (isFullActive) colors.accentBlue else colors.label,
+                                                    fontWeight = if (isFullActive) FontWeight.Bold else FontWeight.Medium,
                                                     fontSize = 12.5.sp
                                                 )
                                             )
                                         }
-                                    }
-                                    val isFullActive = trimStartMs == 0 && trimEndMs == activeDuration
-                                    Box(
-                                        modifier = Modifier
-                                            .weight(1f)
-                                            .height(34.dp)
-                                            .clip(RoundedCornerShape(8.dp))
-                                            .background(if (isFullActive) colors.accentBlue.copy(alpha = 0.35f) else colors.separator.copy(alpha = 0.20f))
-                                        .clickable {
-                                            trimStartMs = 0
-                                            trimEndMs = activeDuration
-                                        },
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        BasicText(
-                                            text = "Full",
-                                            style = HyperBounceType.caption.copy(
-                                                color = if (isFullActive) colors.accentBlue else colors.label,
-                                                fontWeight = if (isFullActive) FontWeight.Bold else FontWeight.Medium,
-                                                fontSize = 12.5.sp
-                                            )
-                                        )
                                     }
                                 }
                             }
@@ -919,40 +926,34 @@ fun HapticStudioScreen(
                                     val trimInfo = "${formatTimeMs(preset.trimStartMs)} – ${formatTimeMs(preset.trimEndMs)}"
 
                                     Row(
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp),
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Box(
-                                            modifier = Modifier
-                                                .clip(RoundedCornerShape(4.dp))
-                                                .background(colors.accentBlue.copy(alpha = 0.15f))
-                                                .padding(horizontal = 6.dp, vertical = 2.dp)
-                                        ) {
-                                            BasicText(
-                                                text = pipeName,
-                                                style = HyperBounceType.caption.copy(
-                                                    color = colors.accentBlue,
-                                                    fontWeight = FontWeight.SemiBold,
-                                                    fontSize = 10.sp
-                                                )
+                                        BasicText(
+                                            text = pipeName,
+                                            style = HyperBounceType.caption.copy(
+                                                color = colors.accentBlue,
+                                                fontWeight = FontWeight.SemiBold,
+                                                fontSize = 11.sp
                                             )
-                                        }
+                                        )
 
-                                        Box(
-                                            modifier = Modifier
-                                                .clip(RoundedCornerShape(4.dp))
-                                                .background(colors.separator.copy(alpha = 0.20f))
-                                                .padding(horizontal = 6.dp, vertical = 2.dp)
-                                        ) {
-                                            BasicText(
-                                                text = "Trim: $trimInfo",
-                                                style = HyperBounceType.caption.copy(
-                                                    color = colors.secondaryLabel,
-                                                    fontWeight = FontWeight.Medium,
-                                                    fontSize = 10.sp
-                                                )
+                                        BasicText(
+                                            text = "•",
+                                            style = HyperBounceType.caption.copy(
+                                                color = colors.secondaryLabel.copy(alpha = 0.5f),
+                                                fontSize = 11.sp
                                             )
-                                        }
+                                        )
+
+                                        BasicText(
+                                            text = "Trim: $trimInfo",
+                                            style = HyperBounceType.caption.copy(
+                                                color = colors.secondaryLabel,
+                                                fontWeight = FontWeight.Medium,
+                                                fontSize = 11.sp
+                                            )
+                                        )
                                     }
 
                                     Spacer(Modifier.height(12.dp))

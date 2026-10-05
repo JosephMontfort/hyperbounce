@@ -1219,6 +1219,7 @@ class SettingsRepository(context: Context) {
     inner class ControlCenterHolder {
         private val defaults = ControlCenterSettings()
 
+        var masterEnabled by prefsBooleanState("cc_master_enabled", defaults.masterEnabled); private set
         var modularEditEnabled by prefsBooleanState("cc_modular_edit_enabled", defaults.modularEditEnabled); private set
         var animEnabled by prefsBooleanState("cc_anim_enabled", defaults.animEnabled); private set
         var jellyEnabled by prefsBooleanState("cc_jelly_enabled", defaults.jellyEnabled); private set
@@ -1247,6 +1248,7 @@ class SettingsRepository(context: Context) {
         var landscapeRightMaxRows by prefsIntState("cc_landscape_right_max_rows", defaults.landscapeRightMaxRows); private set
 
         fun snapshot(): ControlCenterSettings = ControlCenterSettings(
+            masterEnabled,
             modularEditEnabled, animEnabled, jellyEnabled, animEngineMode,
             entryInitialScale, entryTranslationY, waterfallEnabled, waterfallDelayStep,
             spreadRatio, spreadResponse, spreadDamping, spreadReleaseResponse, spreadReleaseDamping,
@@ -1256,6 +1258,7 @@ class SettingsRepository(context: Context) {
             landscapeRightMaxRows
         )
 
+        @JvmName("setCcMasterEnabledPref") fun setMasterEnabled(v: Boolean) { masterEnabled = v }
         @JvmName("setCcLandscapeRightMaxRowsPref") fun setLandscapeRightMaxRows(v: Int) { landscapeRightMaxRows = v.coerceIn(1, 6) }
         @JvmName("setCcTrue2dGridEnabledPref") fun setTrue2dGridEnabled(v: Boolean) { true2dGridEnabled = v }
         @JvmName("setCcFluidResizeEnabledPref") fun setFluidResizeEnabled(v: Boolean) { fluidResizeEnabled = v }
@@ -1284,6 +1287,7 @@ class SettingsRepository(context: Context) {
         @JvmName("setCcFrictionMultiplierPref") fun setFrictionMultiplier(v: Float) { frictionMultiplier = v }
 
         fun reloadFromDefaults() {
+            masterEnabled = defaults.masterEnabled
             modularEditEnabled = defaults.modularEditEnabled
             true2dGridEnabled = defaults.true2dGridEnabled
             fluidResizeEnabled = defaults.fluidResizeEnabled

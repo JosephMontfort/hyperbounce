@@ -314,6 +314,7 @@ data class IOSTransitionSettings(
 
 /** Features 5, 6, 7, 8, 9: Control Center Modular Customization, Jelly Physics & Dynamics */
 data class ControlCenterSettings(
+    val masterEnabled: Boolean = true,
     val modularEditEnabled: Boolean = true,
     val animEnabled: Boolean = true,
     val jellyEnabled: Boolean = true,

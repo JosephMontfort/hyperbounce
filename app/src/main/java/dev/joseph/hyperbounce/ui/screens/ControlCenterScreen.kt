@@ -50,7 +50,7 @@ fun ControlCenterScreen(
     val dialogHost = dev.joseph.hyperbounce.ui.glass.LocalGlassDialogHost.current
 
     ScreenScaffold(
-        title = "Control Center",
+        title = "Control Centre",
         colors = colors,
         backdrop = backdrop,
         onBack = onBack,
@@ -60,6 +60,18 @@ fun ControlCenterScreen(
         onRestartApp = { dev.joseph.hyperbounce.ui.utils.RootUtils.restartSystemUI(context) }
     ) { _ ->
         item {
+            GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
+                SettingsToggleRow(
+                    title = "Enable Hook",
+                    colors = colors,
+                    backdrop = backdrop,
+                    checked = cc.masterEnabled,
+                    onCheckedChange = cc::setMasterEnabled
+                )
+            }
+        }
+
+        item {
             SectionHeader("Modular Control Center Edit", colors)
             GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
                 SettingsToggleRow(
@@ -68,7 +80,8 @@ fun ControlCenterScreen(
                     colors = colors,
                     backdrop = backdrop,
                     checked = cc.modularEditEnabled,
-                    onCheckedChange = cc::setModularEditEnabled
+                    onCheckedChange = cc::setModularEditEnabled,
+                    enabled = cc.masterEnabled
                 )
                 if (cc.modularEditEnabled) {
                     RowDivider(colors.separator)
@@ -81,7 +94,8 @@ fun ControlCenterScreen(
                         onValueChange = { cc.setLandscapeRightMaxRows(it.roundToInt()) },
                         valueRange = 1f..6f,
                         defaultValue = 3f,
-                        valueLabel = { "${it.roundToInt()} Rows" }
+                        valueLabel = { "${it.roundToInt()} Rows" },
+                        enabled = cc.masterEnabled
                     )
                     RowDivider(colors.separator)
                     SettingsToggleRow(
@@ -90,7 +104,8 @@ fun ControlCenterScreen(
                         colors = colors,
                         backdrop = backdrop,
                         checked = cc.fluidResizeEnabled,
-                        onCheckedChange = cc::setFluidResizeEnabled
+                        onCheckedChange = cc::setFluidResizeEnabled,
+                        enabled = cc.masterEnabled
                     )
                 }
             }
@@ -106,7 +121,8 @@ fun ControlCenterScreen(
                     selectedIndex = cc.animEngineMode.coerceIn(0, 1),
                     onSelect = { cc.setAnimEngineMode(it) },
                     colors = colors,
-                    backdrop = backdrop
+                    backdrop = backdrop,
+                    enabled = cc.masterEnabled
                 )
 
                 RowDivider(colors.separator)
@@ -116,7 +132,8 @@ fun ControlCenterScreen(
                     colors = colors,
                     backdrop = backdrop,
                     checked = cc.animEnabled,
-                    onCheckedChange = cc::setAnimEnabled
+                    onCheckedChange = cc::setAnimEnabled,
+                    enabled = cc.masterEnabled
                 )
                 RowDivider(colors.separator)
                 SettingsToggleRow(
@@ -125,7 +142,8 @@ fun ControlCenterScreen(
                     colors = colors,
                     backdrop = backdrop,
                     checked = cc.jellyEnabled,
-                    onCheckedChange = cc::setJellyEnabled
+                    onCheckedChange = cc::setJellyEnabled,
+                    enabled = cc.masterEnabled
                 )
             }
         }
@@ -139,7 +157,8 @@ fun ControlCenterScreen(
                     colors = colors,
                     backdrop = backdrop,
                     checked = cc.lowEndFlashlightEnabled,
-                    onCheckedChange = cc::setLowEndFlashlightEnabled
+                    onCheckedChange = cc::setLowEndFlashlightEnabled,
+                    enabled = cc.masterEnabled
                 )
                 if (cc.lowEndFlashlightEnabled) {
                     val hwMax = dev.joseph.hyperbounce.controlcenter.FlashlightBrightnessHook.getHardwareMaxBrightness()
@@ -150,10 +169,12 @@ fun ControlCenterScreen(
                         colors = colors,
                         backdrop = backdrop,
                         value = cc.flashlightMaxBrightness.toFloat().coerceIn(100f, hwMax.toFloat()),
-                        onValueChange = { cc.setFlashlightMaxBrightness(it.roundToInt()) },
+                        onValueChange = { cc.setFlashlightMaxBrightness((it.roundToInt() / 10 * 10).coerceIn(100, hwMax)) },
                         valueRange = 100f..hwMax.toFloat(),
                         defaultValue = 100f,
-                        valueLabel = { "${it.roundToInt()}" }
+                        step = 10f,
+                        valueLabel = { "${(it.roundToInt() / 10 * 10).coerceIn(100, hwMax)}" },
+                        enabled = cc.masterEnabled
                     )
                 }
             }
@@ -167,10 +188,11 @@ fun ControlCenterScreen(
                     subtitle = "Dissolves all tile groups and restores stock component positions",
                     colors = colors,
                     titleColor = Color(0xFFFF453A),
+                    enabled = cc.masterEnabled,
                     onClick = {
                         dialogHost.showConfirmation(
                             title = "Reset Layout to Stock?",
-                            message = "This will dissolve all 2x2, 2x1, and 1x2 tile groups, restore stock Wi-Fi/Mobile Data expansion, and reset all component positions to stock.",
+                            message = "This will reset the custom sizing of all tiles, media player and sliders, to stock, and dissolve all the dynamic groups.",
                             confirmText = "Reset",
                             confirmColor = Color(0xFFFF453A),
                             onConfirm = {

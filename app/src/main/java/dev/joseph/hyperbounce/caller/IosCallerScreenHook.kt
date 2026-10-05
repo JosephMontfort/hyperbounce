@@ -87,7 +87,9 @@ object IosCallerScreenHook {
                             val fragment = chain.thisObject
                             if (view != null && fragment != null) {
                                 registerSettingsReceiver(view.context, prefs)
-                                setupIosAnswerUi(view, fragment)
+                                if (IosCallerConfigHolder.config.enabled) {
+                                    setupIosAnswerUi(view, fragment)
+                                }
                             }
                         } catch (t: Throwable) {
                             Log.e(TAG, "Error in AnswerFragment.onViewCreated hook", t)
@@ -115,7 +117,7 @@ object IosCallerScreenHook {
                         val result = chain.proceed()
                         try {
                             val view = chain.args[0] as? View
-                            if (view != null) {
+                            if (view != null && IosCallerConfigHolder.config.enabled) {
                                 setupIosCallCardUi(view)
                             }
                         } catch (t: Throwable) {
@@ -136,6 +138,7 @@ object IosCallerScreenHook {
                 ) {
                     module.hook(m).intercept { chain ->
                         val result = chain.proceed()
+                        if (!IosCallerConfigHolder.config.enabled) return@intercept result
                         try {
                             val canReject = chain.args[0] as? Boolean ?: true
                             isMessageRejectAllowed = canReject
@@ -239,6 +242,7 @@ object IosCallerScreenHook {
             for (m: Method in callOvalImageButtonClass.declaredMethods) {
                 if (m.name == "onMeasure" && m.parameterTypes.size == 2 && m.parameterTypes[0] == Int::class.javaPrimitiveType) {
                     module.hook(m).intercept { chain ->
+                        if (!IosCallerConfigHolder.config.enabled) return@intercept chain.proceed()
                         val view = chain.thisObject as? View
                         val config = IosCallerConfigHolder.config
                         val d = view?.resources?.displayMetrics?.density ?: 3.0f
@@ -325,7 +329,7 @@ object IosCallerScreenHook {
                         if (m.name == "getDimensionPixelSize" || m.name == "getDimensionPixelOffset") {
                             module.hook(m).intercept { chain ->
                                 val id = chain.args[0] as? Int ?: 0
-                                if (id == callOvalItemSizeResId) {
+                                if (id == callOvalItemSizeResId && IosCallerConfigHolder.config.enabled) {
                                     val res = chain.thisObject as? android.content.res.Resources
                                     val d = res?.displayMetrics?.density ?: 3.0f
                                     return@intercept (IosCallerConfigHolder.config.buttonSize * d).toInt()
@@ -805,12 +809,20 @@ object IosCallerScreenHook {
     private fun setupIosAnswerUi(container: ViewGroup, fragment: Any) {
         val res = container.resources
 
-        // Hide Xiaomi's stock vertical sliding layout
         val slidingLayoutId = res.getIdentifier("sliding_layout", "id", "com.android.incallui")
-        if (slidingLayoutId != 0) {
-            val stockSliding = container.findViewById<View>(slidingLayoutId)
-            stockSliding?.visibility = View.INVISIBLE
+        val stockSliding = if (slidingLayoutId != 0) container.findViewById<View>(slidingLayoutId) else null
+
+        if (!IosCallerConfigHolder.config.enabled) {
+            val oldView = container.findViewWithTag<View>(TAG_IOS_VIEW)
+            if (oldView != null) {
+                container.removeView(oldView)
+            }
+            stockSliding?.visibility = View.VISIBLE
+            return
         }
+
+        // Hide Xiaomi's stock vertical sliding layout
+        stockSliding?.visibility = View.INVISIBLE
 
         // Remove old iOS view if already attached
         val oldView = container.findViewWithTag<View>(TAG_IOS_VIEW)
@@ -871,6 +883,7 @@ object IosCallerScreenHook {
     }
 
     private fun setupIosCallCardUi(view: View) {
+        if (!IosCallerConfigHolder.config.enabled) return
         val res = view.resources
 
         // 1. Hide stock middle message button (to prevent duplicate button clutter)
@@ -945,6 +958,7 @@ object IosCallerScreenHook {
 
     private fun handleCallButtonVisibleHandover(fragment: Any, show: Boolean) {
         val config = IosCallerConfigHolder.config
+        if (!config.enabled) return
         try {
             val rootViewField = fragment.javaClass.getDeclaredField("mRootView").apply { isAccessible = true }
             val rootView = rootViewField.get(fragment) as? View
@@ -1054,6 +1068,7 @@ object IosCallerScreenHook {
 
     internal fun applyCallButtonSize(view: View) {
         val config = IosCallerConfigHolder.config
+        if (!config.enabled) return
         val d = view.resources.displayMetrics.density
         val targetPx = (config.buttonSize * d).toInt()
         val iconScale = config.buttonSize / 68f
@@ -1173,6 +1188,7 @@ object IosCallerScreenHook {
 
     internal fun applyToolsButtonSize(view: View) {
         val config = IosCallerConfigHolder.config
+        if (!config.enabled) return
         val d = view.resources.displayMetrics.density
         val targetPx = (config.buttonSize * d).toInt()
         val iconScale = config.buttonSize / 68f
@@ -1215,6 +1231,7 @@ object IosCallerScreenHook {
 
     internal fun applyDialpadButtonSize(view: View) {
         val config = IosCallerConfigHolder.config
+        if (!config.enabled) return
         val d = view.resources.displayMetrics.density
         val targetPx = (config.buttonSize * d).toInt()
 
@@ -1259,6 +1276,7 @@ object IosCallerScreenHook {
 
     internal fun applyDialpadLayout(rootOrDialpadView: View) {
         val config = IosCallerConfigHolder.config
+        if (!config.enabled) return
         val d = rootOrDialpadView.resources.displayMetrics.density
         val targetPx = (config.buttonSize * d).toInt()
 
@@ -1324,6 +1342,20 @@ object IosCallerScreenHook {
                     try {
                         IosCallerConfigHolder.updateFromPrefs(prefs.prefs)
                         Log.d(TAG, "Updated IosCallerConfig from broadcast: ${IosCallerConfigHolder.config}")
+                        if (!IosCallerConfigHolder.config.enabled) {
+                            android.os.Handler(android.os.Looper.getMainLooper()).post {
+                                val activeView = activeIosCallView?.get()
+                                val parent = activeView?.parent as? ViewGroup
+                                if (activeView != null && parent != null) {
+                                    parent.removeView(activeView)
+                                    val res = parent.resources
+                                    val slidingLayoutId = res.getIdentifier("sliding_layout", "id", "com.android.incallui")
+                                    if (slidingLayoutId != 0) {
+                                        parent.findViewById<View>(slidingLayoutId)?.visibility = View.VISIBLE
+                                    }
+                                }
+                            }
+                        }
                     } catch (_: Throwable) {}
                 }
             }

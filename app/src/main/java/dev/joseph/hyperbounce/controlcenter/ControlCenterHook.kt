@@ -162,6 +162,7 @@ object ControlCenterHook {
                         module.hook(m).intercept { chain ->
                             val target = chain.thisObject
                             if (target == ControlCenterConfigHolder.sShadeLowEndAnimFlow) {
+                                if (!ControlCenterConfigHolder.config.masterEnabled) return@intercept chain.proceed()
                                 return@intercept java.lang.Boolean.valueOf(ControlCenterConfigHolder.config.isLowEndAnim())
                             }
                             chain.proceed()
@@ -371,6 +372,7 @@ object ControlCenterHook {
                     if (m.name == "getLowEndAnim") {
                         m.isAccessible = true
                         module.hook(m).intercept { chain ->
+                            if (!ControlCenterConfigHolder.config.masterEnabled) return@intercept chain.proceed()
                             ControlCenterConfigHolder.config.isLowEndAnim()
                         }
                     }
@@ -723,7 +725,7 @@ object ControlCenterHook {
                         m.isAccessible = true
                         module.hook(m).intercept { chain ->
                             val result = try { chain.proceed() } catch (t: Throwable) { null }
-                            if (ControlCenterConfigHolder.config.isLowEndAnim() || !ControlCenterConfigHolder.config.animEnabled) return@intercept result
+                            if (ControlCenterConfigHolder.config.isLowEndAnim() || !ControlCenterConfigHolder.config.isAnimActive) return@intercept result
 
                             try {
                                 val holder = chain.thisObject
@@ -765,6 +767,7 @@ object ControlCenterHook {
                         m.isAccessible = true
                         module.hook(m).intercept { chain ->
                             val result = try { chain.proceed() } catch (t: Throwable) { null }
+                            if (ControlCenterConfigHolder.config.isLowEndAnim() || !ControlCenterConfigHolder.config.isAnimActive) return@intercept result
                             try {
                                 val holder = chain.thisObject
 
@@ -777,7 +780,7 @@ object ControlCenterHook {
                                 releaseTransYEaseField.isAccessible = true
                                 releaseTransYEaseField.set(holder, bounceEase)
 
-                                if (!ControlCenterConfigHolder.config.isLowEndAnim() && ControlCenterConfigHolder.config.animEnabled) {
+                                if (!ControlCenterConfigHolder.config.isLowEndAnim() && ControlCenterConfigHolder.config.isAnimActive) {
                                     val showEaseField = holderClass.getDeclaredField("showEase")
                                     showEaseField.isAccessible = true
                                     val showEase = showEaseField.get(holder)
@@ -822,7 +825,7 @@ object ControlCenterHook {
                     if (m.name == "getDraggable") {
                         m.isAccessible = true
                         module.hook(m).intercept { chain ->
-                            if (ControlCenterConfigHolder.config.modularEditEnabled) {
+                            if (ControlCenterConfigHolder.config.isModularEditActive) {
                                 try {
                                     val holder = chain.thisObject
                                     val modeField = holderClass.getDeclaredField("mode")
@@ -841,7 +844,7 @@ object ControlCenterHook {
                         m.isAccessible = true
                         module.hook(m).intercept { chain ->
                             val result = chain.proceed()
-                            if (ControlCenterConfigHolder.config.jellyEnabled) {
+                            if (ControlCenterConfigHolder.config.isJellyActive) {
                                 try {
                                     val holder = chain.thisObject
                                     val ivField = holderClass.getField("itemView")
@@ -938,7 +941,7 @@ object ControlCenterHook {
                             m.isAccessible = true
                             module.hook(m).intercept { chain ->
                                 val orig = chain.proceed() as Boolean
-                                if (ControlCenterConfigHolder.config.modularEditEnabled && ControlCenterConfigHolder.sIsEditMode) {
+                                if (ControlCenterConfigHolder.config.isModularEditActive && ControlCenterConfigHolder.sIsEditMode) {
                                     true
                                 } else {
                                     orig
@@ -949,7 +952,7 @@ object ControlCenterHook {
                         if (m.name == "getPriority" && m.parameterTypes.isEmpty()) {
                             m.isAccessible = true
                             module.hook(m).intercept { chain ->
-                                if (ControlCenterConfigHolder.config.modularEditEnabled && ControlCenterConfigHolder.sComponentPriorities.containsKey(simpleName)) {
+                                if (ControlCenterConfigHolder.config.isModularEditActive && ControlCenterConfigHolder.sComponentPriorities.containsKey(simpleName)) {
                                     ControlCenterConfigHolder.sComponentPriorities[simpleName]
                                 } else {
                                     chain.proceed()
@@ -960,6 +963,9 @@ object ControlCenterHook {
                         if (m.name == "getSpanSize" && m.parameterTypes.isEmpty()) {
                             m.isAccessible = true
                             module.hook(m).intercept { chain ->
+                                if (!ControlCenterConfigHolder.config.isModularEditActive) {
+                                    return@intercept chain.proceed()
+                                }
                                 when (simpleName) {
                                     "BrightnessSliderController" -> if (ControlCenterConfigHolder.sBrightnessSliderHorizontal) ControlCenterConfigHolder.sBrightnessSliderWidth else 1
                                     "VolumeSliderController" -> if (ControlCenterConfigHolder.sVolumeSliderHorizontal) ControlCenterConfigHolder.sVolumeSliderWidth else 1
@@ -1012,7 +1018,7 @@ object ControlCenterHook {
                                     }
                                 }
                             }
-                            if (list != null && list.size >= 2) {
+                            if (ControlCenterConfigHolder.config.isModularEditActive && list != null && list.size >= 2) {
                                 val resultList = ArrayList(list)
                                 val first = list[0]
                                 val second = list[1]
@@ -1035,7 +1041,7 @@ object ControlCenterHook {
                         module.hook(m).intercept { chain ->
                             val rawArgs = chain.args
                             val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as? Array<*>
-                            if (args != null && args.size >= 2) {
+                            if (ControlCenterConfigHolder.config.isModularEditActive && args != null && args.size >= 2) {
                                 val parent = args[0] as ViewGroup
                                 val vt = args[1] as Int
                                 if (vt == 8399) {
@@ -1106,7 +1112,7 @@ object ControlCenterHook {
                                     }
                                 } catch (t: Throwable) {}
 
-                                if (ControlCenterConfigHolder.config.modularEditEnabled && ControlCenterConfigHolder.sIsEditMode) {
+                                if (ControlCenterConfigHolder.config.isModularEditActive && ControlCenterConfigHolder.sIsEditMode) {
                                     true
                                 } else {
                                     chain.proceed()
@@ -1124,14 +1130,14 @@ object ControlCenterHook {
                     if (m.name == "getPriority") {
                         m.isAccessible = true
                         module.hook(m).intercept { chain ->
-                            if (ControlCenterConfigHolder.config.modularEditEnabled) 5 else chain.proceed()
+                            if (ControlCenterConfigHolder.config.isModularEditActive) 5 else chain.proceed()
                         }
                     }
                     if (m.name == "onBindViewHolder") {
                         m.isAccessible = true
                         module.hook(m).intercept { chain ->
                             val result = chain.proceed()
-                            if (ControlCenterConfigHolder.config.modularEditEnabled) {
+                            if (ControlCenterConfigHolder.config.isModularEditActive) {
                                 try {
                                     val wordlessCtrl = chain.thisObject
                                     val getHolderMethod = wordlessClass.getMethod("getHolder")
@@ -1459,7 +1465,7 @@ object ControlCenterHook {
                         m.isAccessible = true
                         module.hook(m).intercept { chain ->
                             val result = chain.proceed()
-                            if (ControlCenterConfigHolder.config.modularEditEnabled) {
+                            if (ControlCenterConfigHolder.config.isModularEditActive) {
                                 try {
                                     val distributor = chain.thisObject
                                     val getCtxMethod = distributorClass.getMethod("getContext")
@@ -2833,7 +2839,7 @@ object ControlCenterHook {
                     if (m.name == "layoutChunk") {
                         m.isAccessible = true
                         module.hook(m).intercept { chain ->
-                            if (!ControlCenterConfigHolder.config.true2dGridEnabled) {
+                            if (!ControlCenterConfigHolder.config.isTrue2dGridActive) {
                                 return@intercept chain.proceed()
                             }
                             try {
@@ -2865,7 +2871,7 @@ object ControlCenterHook {
                     if (m.name == "getSpanGroupIndex" || m.name == "getCachedSpanGroupIndex") {
                         m.isAccessible = true
                         module.hook(m).intercept { chain ->
-                            if (ControlCenterConfigHolder.config.true2dGridEnabled) {
+                            if (ControlCenterConfigHolder.config.isTrue2dGridActive) {
                                 try {
                                     val rawArgs = chain.args
                                     val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as? Array<*>
@@ -2882,7 +2888,7 @@ object ControlCenterHook {
                     if (m.name == "getSpanIndex" || m.name == "getCachedSpanIndex") {
                         m.isAccessible = true
                         module.hook(m).intercept { chain ->
-                            if (ControlCenterConfigHolder.config.true2dGridEnabled) {
+                            if (ControlCenterConfigHolder.config.isTrue2dGridActive) {
                                 try {
                                     val rawArgs = chain.args
                                     val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as? Array<*>
@@ -2899,7 +2905,7 @@ object ControlCenterHook {
                     if (m.name == "getSpanSize") {
                         m.isAccessible = true
                         module.hook(m).intercept { chain ->
-                            if (ControlCenterConfigHolder.config.true2dGridEnabled) {
+                            if (ControlCenterConfigHolder.config.isTrue2dGridActive) {
                                 try {
                                     val rawArgs = chain.args
                                     val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as? Array<*>
@@ -2921,7 +2927,7 @@ object ControlCenterHook {
                         if (m.name == "getSpanSize") {
                             m.isAccessible = true
                             module.hook(m).intercept { chain ->
-                                if (ControlCenterConfigHolder.config.true2dGridEnabled) {
+                                if (ControlCenterConfigHolder.config.isTrue2dGridActive) {
                                     try {
                                         val rawArgs = chain.args
                                         val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as? Array<*>

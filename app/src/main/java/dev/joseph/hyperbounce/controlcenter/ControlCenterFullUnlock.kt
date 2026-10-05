@@ -1092,7 +1092,7 @@ object ControlCenterFullUnlock {
      * Intercepts and reorganizes MainPanelAdapter.contentMap.
      */
     fun reorganizeContentMap(adapter: Any, classLoader: ClassLoader) {
-        if (!ControlCenterConfigHolder.config.modularEditEnabled) return
+        if (!ControlCenterConfigHolder.config.isModularEditActive) return
 
         try {
             val adapterClass = adapter.javaClass
@@ -1870,7 +1870,7 @@ object ControlCenterFullUnlock {
 
                             val inLandscape = (chain.args.getOrNull(0) as? Boolean) ?: false
 
-                            if (inLandscape && ControlCenterConfigHolder.config.modularEditEnabled) {
+                            if (inLandscape && ControlCenterConfigHolder.config.isModularEditActive) {
                                 // In landscape, ensure both left and right panel contents receive all available controllers
                                 try {
                                     val rightPanelField = distributorClass.getDeclaredField("rightPanelContent")
@@ -1986,7 +1986,7 @@ object ControlCenterFullUnlock {
                                 }
                                 val helperCallback = chain.thisObject
                                 val isOurHelper = helperCallback != null && (helperCallback.javaClass.name.contains("MainPanelAdapter") || helperCallback.javaClass == helperClass)
-                                if (isOurHelper && ControlCenterConfigHolder.sIsEditMode && ControlCenterConfigHolder.config.modularEditEnabled) {
+                                if (isOurHelper && ControlCenterConfigHolder.sIsEditMode && ControlCenterConfigHolder.config.isModularEditActive) {
                                     val vh = chain.args.getOrNull(1)
                                     if (vh != null) {
                                         val getItemViewTypeMethod = vh.javaClass.getMethod("getItemViewType")
@@ -2049,7 +2049,7 @@ object ControlCenterFullUnlock {
                             try {
                                 val helperCallback = chain.thisObject
                                 val isOurHelper = helperCallback != null && (helperCallback.javaClass.name.contains("MainPanelAdapter") || helperCallback.javaClass == helperClass)
-                                if (isOurHelper && ControlCenterConfigHolder.sIsEditMode && ControlCenterConfigHolder.config.modularEditEnabled) {
+                                if (isOurHelper && ControlCenterConfigHolder.sIsEditMode && ControlCenterConfigHolder.config.isModularEditActive) {
                                     val rv = chain.args.getOrNull(0) as? androidx.recyclerview.widget.RecyclerView
                                     val viewSize = (chain.args.getOrNull(1) as? Int) ?: 0
                                     val viewSizeOutOfBounds = (chain.args.getOrNull(2) as? Int) ?: 0
@@ -2092,7 +2092,7 @@ object ControlCenterFullUnlock {
                             try {
                                 val helperCallback = chain.thisObject
                                 val isOurHelper = helperCallback != null && (helperCallback.javaClass.name.contains("MainPanelAdapter") || helperCallback.javaClass == helperClass)
-                                if (isOurHelper && ControlCenterConfigHolder.sIsEditMode && ControlCenterConfigHolder.config.modularEditEnabled) {
+                                if (isOurHelper && ControlCenterConfigHolder.sIsEditMode && ControlCenterConfigHolder.config.isModularEditActive) {
                                     val vh = chain.args.getOrNull(0)
                                     val slotId = getSlotIdFromViewHolder(vh)
                                     val slot = slotId?.let { sKnownSlots[it] }
@@ -2111,7 +2111,7 @@ object ControlCenterFullUnlock {
                             try {
                                 val helperCallback = chain.thisObject
                                 val isOurHelper = helperCallback != null && (helperCallback.javaClass.name.contains("MainPanelAdapter") || helperCallback.javaClass == helperClass)
-                                if (isOurHelper && ControlCenterConfigHolder.sIsEditMode && ControlCenterConfigHolder.config.modularEditEnabled) {
+                                if (isOurHelper && ControlCenterConfigHolder.sIsEditMode && ControlCenterConfigHolder.config.isModularEditActive) {
                                     val targetVh = chain.args.getOrNull(2)
                                     if (targetVh != null) {
                                         val getItemViewTypeMethod = targetVh.javaClass.getMethod("getItemViewType")
@@ -2143,7 +2143,7 @@ object ControlCenterFullUnlock {
                             try {
                                 val helperCallback = chain.thisObject
                                 val isOurHelper = helperCallback != null && (helperCallback.javaClass.name.contains("MainPanelAdapter") || helperCallback.javaClass == helperClass)
-                                if (isOurHelper && ControlCenterConfigHolder.sIsEditMode && ControlCenterConfigHolder.config.modularEditEnabled) {
+                                if (isOurHelper && ControlCenterConfigHolder.sIsEditMode && ControlCenterConfigHolder.config.isModularEditActive) {
                                     val selected = chain.args.getOrNull(0)
                                     val dropTargets = chain.args.getOrNull(1) as? List<*>
                                     val curX = (chain.args.getOrNull(2) as? Int) ?: 0
@@ -2240,7 +2240,7 @@ object ControlCenterFullUnlock {
                             try {
                                 val helperCallback = chain.thisObject
                                 val isOurHelper = helperCallback != null && (helperCallback.javaClass.name.contains("MainPanelAdapter") || helperCallback.javaClass == helperClass)
-                                if (isOurHelper && ControlCenterConfigHolder.sIsEditMode && ControlCenterConfigHolder.config.modularEditEnabled) {
+                                if (isOurHelper && ControlCenterConfigHolder.sIsEditMode && ControlCenterConfigHolder.config.isModularEditActive) {
                                     val adapter = try {
                                         val this0Field = helperClass.getDeclaredField("this$0")
                                         this0Field.isAccessible = true

@@ -139,7 +139,7 @@ fun NotificationCenterSheetScreen(
     }
 
     ScreenScaffold(
-        title = "Notification Center",
+        title = "Notification Centre",
         colors = colors,
         backdrop = backdrop,
         onBack = onBack,

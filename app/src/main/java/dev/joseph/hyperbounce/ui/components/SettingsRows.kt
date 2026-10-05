@@ -383,12 +383,21 @@ fun SettingsSliderRow(
     defaultValue: Float = valueRange.start,
     subtitle: String? = null,
     enabled: Boolean = true,
+    step: Float? = null,
     allowCustomInput: Boolean = true,
     modifier: Modifier = Modifier,
     searchKey: String? = null
 ) {
     val componentStyle = LocalComponentStyle.current
     val customValueHost = dev.joseph.hyperbounce.ui.glass.LocalCustomValueHost.current
+    val resolveSteppedValue: (Float) -> Float = { v ->
+        if (step != null && step > 0f) {
+            val stepsCount = Math.round((v - valueRange.start) / step)
+            (valueRange.start + stepsCount * step).coerceIn(valueRange.start, valueRange.endInclusive)
+        } else {
+            v
+        }
+    }
     if (componentStyle == ComponentStyle.MIUIX) {
         val context = androidx.compose.ui.platform.LocalContext.current
         val isModified = abs(value - defaultValue) > 0.0001f
@@ -397,7 +406,8 @@ fun SettingsSliderRow(
         var lastTickLabel by remember { mutableStateOf(valueLabel(value)) }
         var lastTickTime by remember { mutableLongStateOf(0L) }
 
-        val debouncedOnValueChange: (Float) -> Unit = { newValue ->
+        val debouncedOnValueChange: (Float) -> Unit = { rawValue ->
+            val newValue = resolveSteppedValue(rawValue)
             val newLabel = valueLabel(newValue)
             val now = android.os.SystemClock.uptimeMillis()
             if (glass.hapticsEnabled && newLabel != lastTickLabel && (now - lastTickTime >= 12L)) {
@@ -529,7 +539,8 @@ fun SettingsSliderRow(
         var lastTickLabel by remember { mutableStateOf(valueLabel(value)) }
         var lastTickTime by remember { mutableLongStateOf(0L) }
 
-        val debouncedOnValueChange: (Float) -> Unit = { newValue ->
+        val debouncedOnValueChange: (Float) -> Unit = { rawValue ->
+            val newValue = resolveSteppedValue(rawValue)
             val newLabel = valueLabel(newValue)
             val now = android.os.SystemClock.uptimeMillis()
             if (glass.hapticsEnabled && newLabel != lastTickLabel && (now - lastTickTime >= 12L)) {
