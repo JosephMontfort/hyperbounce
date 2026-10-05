@@ -116,20 +116,6 @@ fun AppAppearanceScreen(
                         defaultValue = 1.0f,
                         valueLabel = { "${(it * 100).roundToInt()}%" },
                         enabled = s.enabled && s.liquidGlass
-                    )
-                    RowDivider(colors.separator, insetStart = 16.dp)
-                    SettingsSliderRow(
-                        title = "Pill Blur Intensity",
-                        subtitle = "Backdrop blur intensity for the indicator pill on bloom (0% = pure refraction)",
-                        colors = colors,
-                        backdrop = backdrop,
-                        value = s.pillBlurIntensity,
-                        onValueChange = holder::setPillBlurIntensity,
-                        valueRange = 0f..2.0f,
-                        defaultValue = 1.0f,
-                        valueLabel = { "${(it * 100).roundToInt()}%" },
-                        enabled = s.enabled && s.liquidGlass
-                    )
                     RowDivider(colors.separator, insetStart = 16.dp)
                     SettingsToggleRow(
                         title = "Pill Chromatic Aberration",

@@ -75,7 +75,6 @@ data class NavBarAppSettings(
     val accent: AccentPreset = AccentPreset.Auto,
     val customAccentColor: Long = 0xFF0088FFL,
     val pillGlassIntensity: Float = 1.0f,
-    val pillBlurIntensity: Float = 1.0f,
     val pillContainerOpacity: Float = 1.0f,
     val pillChromaticAberration: Boolean = true,
     val pillShadow: Boolean = true,

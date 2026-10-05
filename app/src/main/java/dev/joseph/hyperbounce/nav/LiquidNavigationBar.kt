@@ -90,7 +90,6 @@ fun LiquidNavigationBar(
     tabWidth: Dp = 64.dp,
     cornerRadius: Dp = 32.dp,
     pillGlassIntensity: Float = 1f,
-    pillBlurIntensity: Float = 1f,
     pillContainerOpacity: Float = 1f,
     pillChromaticAberration: Boolean = true,
     pillShadow: Boolean = true,
@@ -467,7 +466,14 @@ fun LiquidNavigationBar(
                                     if (barBlurIntensity > 0.001f) {
                                         blur(8f.dp.toPx() * effectMultiplier * barBlurIntensity)
                                     }
-                                    lens(18f.dp.toPx() * effectMultiplier, 18f.dp.toPx() * effectMultiplier)
+                                    val barH = currentBarHeight.toPx()
+                                    val lensH = lerp(20f.dp.toPx(), barH / 2f, (1f - barBlurIntensity.coerceIn(0f, 1f))) * effectMultiplier
+                                    liquidLens(
+                                        refractionHeight = lensH,
+                                        refractionAmount = 18f.dp.toPx() * effectMultiplier,
+                                        depthEffect = (barBlurIntensity < 0.75f),
+                                        chromaticAberration = true
+                                    )
                                 },
                                 layerBlock = {
                                     val progress = dampedDragAnimation.pressProgress
@@ -534,9 +540,13 @@ fun LiquidNavigationBar(
                                         if (barBlurIntensity > 0.001f) {
                                             blur(8f.dp.toPx() * effectMultiplier * barBlurIntensity)
                                         }
-                                        lens(
-                                            18f.dp.toPx() * progress * effectMultiplier,
-                                            18f.dp.toPx() * progress * effectMultiplier,
+                                        val barH = currentBarHeight.toPx()
+                                        val lensH = lerp(20f.dp.toPx(), barH / 2f, (1f - barBlurIntensity.coerceIn(0f, 1f))) * effectMultiplier
+                                        liquidLens(
+                                            refractionHeight = lensH * progress,
+                                            refractionAmount = 18f.dp.toPx() * progress * effectMultiplier,
+                                            depthEffect = (barBlurIntensity < 0.75f),
+                                            chromaticAberration = true
                                         )
                                     },
                                     highlight = {
@@ -594,12 +604,9 @@ fun LiquidNavigationBar(
                                     shape = { pillShape },
                                     effects = {
                                         val progress = dampedDragAnimation.pressProgress
-                                        if (pillBlurIntensity > 0.001f) {
-                                            blur(8f.dp.toPx() * progress * pillBlurIntensity)
-                                        }
                                         liquidLens(
-                                            8f.dp.toPx() * progress * pillGlassIntensity,
-                                            11f.dp.toPx() * progress * pillGlassIntensity,
+                                            10f.dp.toPx() * progress * pillGlassIntensity,
+                                            14f.dp.toPx() * progress * pillGlassIntensity,
                                             chromaticAberration = pillChromaticAberration,
                                         )
                                     },

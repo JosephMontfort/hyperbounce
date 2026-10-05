@@ -2,6 +2,9 @@ package dev.joseph.hyperbounce.lockscreen
 
 import android.content.Context
 import android.content.Intent
+import android.graphics.Color
+import android.graphics.PorterDuff
+import android.graphics.PorterDuffColorFilter
 import android.graphics.drawable.GradientDrawable
 import android.os.Build
 import android.os.Handler
@@ -16,6 +19,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.animation.DecelerateInterpolator
 import android.widget.FrameLayout
+import android.widget.ImageView
 import dev.joseph.hyperbounce.lockscreen.glass.LockScreenGlassSheetOptimizedView
 import io.github.libxposed.api.XposedInterface
 import io.github.libxposed.api.XposedModule
@@ -83,9 +87,16 @@ object LockScreenSheetHook {
     private var lastExpansionTime: Long = 0L
     private var lockscreenVelocityTracker: VelocityTracker? = null
 
+    @Volatile private var hasSearchedDepthSubject = false
+    private var lastAppliedUpwardOffset = 0.0f
+    private var lastAppliedDimAlpha = 0.0f
+
     private fun onSleepOrDozeTriggered() {
         val resetUI = Runnable {
             isDismissAnimationRunning = false
+            hasSearchedDepthSubject = false
+            lastAppliedUpwardOffset = 0.0f
+            lastAppliedDimAlpha = 0.0f
             val rootView = cachedLockRootViewRef?.get()
             val sheet = cachedLockGlassSheetRef?.get() ?: rootView?.findViewWithTag<LockScreenGlassSheetOptimizedView>(TAG_LOCK_GLASS_SHEET)
             sheet?.visibility = View.GONE
@@ -100,11 +111,17 @@ object LockScreenSheetHook {
             if (notifView != null) {
                 notifView.animate().cancel()
                 notifView.translationY = 0.0f
+                if (notifView.translationZ == 2.0f) {
+                    notifView.translationZ = 0.0f
+                }
             }
             val depthView = cachedDepthSubjectViewRef?.get()
             if (depthView != null) {
                 depthView.animate().cancel()
                 depthView.translationY = 0.0f
+                if (depthView is ImageView) {
+                    depthView.clearColorFilter()
+                }
             }
             val dimLayer = cachedLockWallpaperDimRef?.get()
             if (dimLayer != null) {
@@ -186,6 +203,8 @@ object LockScreenSheetHook {
     private fun getDepthSubjectView(kpvc: Any, rootView: ViewGroup?): View? {
         val cached = cachedDepthSubjectViewRef?.get()
         if (cached != null && cached.isAttachedToWindow) return cached
+        if (hasSearchedDepthSubject) return null
+
         try {
             if (kpvcDeductedImageViewField == null) {
                 kpvcDeductedImageViewField = kpvc.javaClass.getDeclaredField("deductedImageView").apply { isAccessible = true }
@@ -193,6 +212,7 @@ object LockScreenSheetHook {
             val v = kpvcDeductedImageViewField?.get(kpvc) as? View
             if (v != null) {
                 cachedDepthSubjectViewRef = WeakReference(v)
+                hasSearchedDepthSubject = true
                 return v
             }
         } catch (_: Throwable) {}
@@ -203,10 +223,12 @@ object LockScreenSheetHook {
                 val name = child.javaClass.simpleName.lowercase()
                 if (name.contains("deducted") || name.contains("depth")) {
                     cachedDepthSubjectViewRef = WeakReference(child)
+                    hasSearchedDepthSubject = true
                     return child
                 }
             }
         }
+        hasSearchedDepthSubject = true
         return null
     }
 
@@ -319,10 +341,16 @@ object LockScreenSheetHook {
                                     if (finalNotifView != null && finalNotifView.translationY != 0.0f) {
                                         finalNotifView.translationY = 0.0f
                                     }
-                                    getDepthSubjectView(kpvc, rootView)?.translationY = 0.0f
+                                    val depthView = getDepthSubjectView(kpvc, rootView)
+                                    if (depthView != null) {
+                                        if (depthView.translationY != 0.0f) depthView.translationY = 0.0f
+                                        if (depthView is ImageView) depthView.clearColorFilter()
+                                    }
                                     val dimLayer = cachedLockWallpaperDimRef?.get() ?: (rootView?.parent as? ViewGroup)?.findViewWithTag<View>(TAG_LOCK_WALLPAPER_DIM)
                                     dimLayer?.visibility = View.GONE
                                     dimLayer?.alpha = 0.0f
+                                    lastAppliedUpwardOffset = 0.0f
+                                    lastAppliedDimAlpha = 0.0f
                                     return result
                                 }
 
@@ -349,12 +377,20 @@ object LockScreenSheetHook {
                                         val existingSheet = cachedLockGlassSheetRef?.get() ?: rootView.findViewWithTag<LockScreenGlassSheetOptimizedView>(TAG_LOCK_GLASS_SHEET)
                                         existingSheet?.visibility = View.GONE
                                         existingSheet?.swipeProgress = 0.0f
-                                        rootView.translationY = 0.0f
-                                        finalNotifView?.translationY = 0.0f
-                                        getDepthSubjectView(kpvc, rootView)?.translationY = 0.0f
+                                        if (rootView.translationY != 0.0f) rootView.translationY = 0.0f
+                                        if (finalNotifView != null && finalNotifView.translationY != 0.0f) finalNotifView.translationY = 0.0f
+                                        val depthView = getDepthSubjectView(kpvc, rootView)
+                                        if (depthView != null) {
+                                            if (depthView.translationY != 0.0f) depthView.translationY = 0.0f
+                                            if (depthView is ImageView) depthView.clearColorFilter()
+                                        }
                                         val dimLayer = cachedLockWallpaperDimRef?.get() ?: (rootView.parent as? ViewGroup)?.findViewWithTag<View>(TAG_LOCK_WALLPAPER_DIM)
-                                        dimLayer?.visibility = View.GONE
-                                        dimLayer?.alpha = 0.0f
+                                        if (dimLayer != null) {
+                                            dimLayer.visibility = View.GONE
+                                            dimLayer.alpha = 0.0f
+                                        }
+                                        lastAppliedUpwardOffset = 0.0f
+                                        lastAppliedDimAlpha = 0.0f
                                         if (!cfg.pillEnabled) {
                                             val pill = cachedLockPillRef?.get() ?: getBottomAreaView(kpvc)?.findViewWithTag<View>(TAG_HOME_PILL)
                                             pill?.visibility = View.GONE
@@ -366,25 +402,44 @@ object LockScreenSheetHook {
                                     if (viewHeight <= 0f) viewHeight = 2400f
                                     val upwardOffset = swipeProgress * -viewHeight
 
-                                    // 1. Move root lockscreen layer upward smoothly (120Hz native performance)
-                                    rootView.translationY = upwardOffset
-                                    if (rootView.scaleX != 1.0f) rootView.scaleX = 1.0f
-                                    if (rootView.scaleY != 1.0f) rootView.scaleY = 1.0f
-
-                                    // 1b. Counter-translate depth subject to remain stationary matching background wallpaper
                                     val depthSubjectView = getDepthSubjectView(kpvc, rootView)
-                                    if (depthSubjectView != null) {
-                                        depthSubjectView.translationY = -upwardOffset
+
+                                    // 1. Move root lockscreen layer and depth subject smoothly without micro-jitter overhead
+                                    if (abs(lastAppliedUpwardOffset - upwardOffset) >= 0.25f) {
+                                        lastAppliedUpwardOffset = upwardOffset
+                                        rootView.translationY = upwardOffset
+                                        if (rootView.scaleX != 1.0f) rootView.scaleX = 1.0f
+                                        if (rootView.scaleY != 1.0f) rootView.scaleY = 1.0f
+
+                                        if (depthSubjectView != null) {
+                                            depthSubjectView.translationY = -upwardOffset
+                                        }
                                     }
 
-                                    // 1c. Reveal dynamic dimming on underlying exposed wallpaper behind the sheet
-                                    val dimLayer = ensureWallpaperDimInjected(rootView)
-                                    if (dimLayer != null) {
-                                        dimLayer.visibility = View.VISIBLE
-                                        dimLayer.alpha = (swipeProgress * 0.45f).coerceIn(0.0f, 0.45f)
+                                    // 1b. Dynamic dimming up to 0.65f matching the pinpad screen
+                                    val targetDim = 0.65f
+                                    val dimAlpha = (swipeProgress * targetDim).coerceIn(0.0f, targetDim)
+                                    if (abs(lastAppliedDimAlpha - dimAlpha) >= 0.005f) {
+                                        lastAppliedDimAlpha = dimAlpha
+                                        val dimLayer = ensureWallpaperDimInjected(rootView)
+                                        if (dimLayer != null) {
+                                            dimLayer.visibility = View.VISIBLE
+                                            dimLayer.alpha = dimAlpha
+                                        }
+                                        if (depthSubjectView is ImageView) {
+                                            if (dimAlpha > 0.001f) {
+                                                val alphaInt = (dimAlpha * 255).toInt().coerceIn(0, 255)
+                                                depthSubjectView.colorFilter = PorterDuffColorFilter(
+                                                    Color.argb(alphaInt, 0, 0, 0),
+                                                    PorterDuff.Mode.SRC_ATOP
+                                                )
+                                            } else {
+                                                depthSubjectView.clearColorFilter()
+                                            }
+                                        }
                                     }
 
-                                    // 2. Ensure real-time AGSL Liquid Glass Sheet Card is at index 0
+                                    // 2. Ensure real-time AGSL Liquid Glass Sheet Card is rendered on top of depthSubjectView
                                     var sheet = cachedLockGlassSheetRef?.get()
                                     if (sheet == null || sheet.parent != rootView) {
                                         ensureInjected(kpvc, rootView)
@@ -395,12 +450,13 @@ object LockScreenSheetHook {
                                             sheet.visibility = View.VISIBLE
                                         }
                                         sheet.swipeProgress = swipeProgress
-                                        sheet.invalidate()
                                     }
 
                                     // 3. Move notification container upward in sync
                                     if (finalNotifView != null) {
-                                        finalNotifView.translationY = upwardOffset
+                                        if (finalNotifView.translationY != upwardOffset) {
+                                            finalNotifView.translationY = upwardOffset
+                                        }
                                         if (finalNotifView.scaleX != 1.0f) finalNotifView.scaleX = 1.0f
                                         if (finalNotifView.scaleY != 1.0f) finalNotifView.scaleY = 1.0f
                                     }
@@ -894,14 +950,32 @@ object LockScreenSheetHook {
                 val dimLayer = cachedLockWallpaperDimRef?.get() ?: (rootView.parent as? ViewGroup)?.findViewWithTag<View>(TAG_LOCK_WALLPAPER_DIM)
                 dimLayer?.visibility = View.GONE
                 dimLayer?.alpha = 0.0f
+                val finalNotif = getNotifView(kpvc)
+                if (finalNotif != null && finalNotif.translationZ == 2.0f) {
+                    finalNotif.translationZ = 0.0f
+                }
                 return
             }
+
+            val finalNotifView = getNotifView(kpvc)
+            val depthSubjectView = getDepthSubjectView(kpvc, rootView)
 
             if (glassSheet == null) {
                 val context = rootView.context
                 glassSheet = LockScreenGlassSheetOptimizedView(context).apply {
                     id = View.generateViewId()
                     tag = TAG_LOCK_GLASS_SHEET
+                    translationZ = 1.0f
+                }
+
+                val notifIndex = if (finalNotifView != null && finalNotifView.parent == rootView) {
+                    rootView.indexOfChild(finalNotifView)
+                } else -1
+
+                val insertIndex = if (notifIndex >= 0) {
+                    notifIndex
+                } else {
+                    rootView.childCount
                 }
 
                 var added = false
@@ -913,16 +987,27 @@ object LockScreenSheetHook {
                     clpClass.getField("bottomToBottom").set(clp, 0)
                     clpClass.getField("startToStart").set(clp, 0)
                     clpClass.getField("endToEnd").set(clp, 0)
-                    rootView.addView(glassSheet, 0, clp)
+                    rootView.addView(glassSheet, insertIndex, clp)
                     added = true
                 } catch (_: Throwable) {}
 
                 if (!added) {
                     try {
                         val flp = FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
-                        rootView.addView(glassSheet, 0, flp)
+                        rootView.addView(glassSheet, insertIndex, flp)
                     } catch (_: Throwable) {}
                 }
+            } else {
+                if (glassSheet.translationZ != 1.0f) {
+                    glassSheet.translationZ = 1.0f
+                }
+            }
+
+            if (finalNotifView != null && finalNotifView.translationZ < 2.0f) {
+                finalNotifView.translationZ = 2.0f
+            }
+            if (depthSubjectView != null && depthSubjectView.translationZ > 0.5f) {
+                depthSubjectView.translationZ = 0.0f
             }
 
             cachedLockGlassSheetRef = WeakReference(glassSheet)

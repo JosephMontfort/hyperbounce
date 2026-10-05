@@ -362,8 +362,6 @@ class SettingsRepository(context: Context) {
             private set
         var pillGlassIntensity by prefsFloatState("${prefix}_pill_glass_intensity", defaults.pillGlassIntensity)
             private set
-        var pillBlurIntensity by prefsFloatState("${prefix}_pill_blur_intensity", defaults.pillBlurIntensity)
-            private set
         var pillContainerOpacity by prefsFloatState("${prefix}_pill_container_opacity", defaults.pillContainerOpacity)
             private set
         var pillChromaticAberration by prefsBooleanState("${prefix}_pill_chromatic_aberration", defaults.pillChromaticAberration)
@@ -381,7 +379,7 @@ class SettingsRepository(context: Context) {
 
         fun snapshot(): NavBarAppSettings = NavBarAppSettings(
             enabled, liquidGlass, glassIntensity, barBlurIntensity, containerOpacity, cornerRadius, barHeight, tabWidth, bottomMargin,
-            themeMode, accent, customAccentColor, pillGlassIntensity, pillBlurIntensity, pillContainerOpacity, pillChromaticAberration, pillShadow,
+            themeMode, accent, customAccentColor, pillGlassIntensity, pillContainerOpacity, pillChromaticAberration, pillShadow,
             autoShrink, autoShrinkScale, autoShrinkSensitivity, reelsFullscreenZoom
         )
 
@@ -411,8 +409,6 @@ class SettingsRepository(context: Context) {
         fun setCustomAccentColor(v: Long) { customAccentColor = v }
         @JvmName("setPillGlassIntensityPref")
         fun setPillGlassIntensity(v: Float) { pillGlassIntensity = v }
-        @JvmName("setPillBlurIntensityPref")
-        fun setPillBlurIntensity(v: Float) { pillBlurIntensity = v }
         @JvmName("setPillContainerOpacityPref")
         fun setPillContainerOpacity(v: Float) { pillContainerOpacity = v }
         @JvmName("setPillChromaticAberrationPref")
@@ -446,7 +442,6 @@ class SettingsRepository(context: Context) {
             accent = defaults.accent
             customAccentColor = defaults.customAccentColor
             pillGlassIntensity = defaults.pillGlassIntensity
-            pillBlurIntensity = defaults.pillBlurIntensity
             pillContainerOpacity = defaults.pillContainerOpacity
             pillChromaticAberration = defaults.pillChromaticAberration
             pillShadow = defaults.pillShadow

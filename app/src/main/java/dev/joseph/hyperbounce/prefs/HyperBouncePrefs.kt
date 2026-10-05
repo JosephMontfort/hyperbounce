@@ -108,9 +108,6 @@ class HyperBouncePrefs(module: XposedInterface) {
     fun appPillGlassIntensity(appKey: String): Float =
         prefs.getFloat("app_${appKey}_pill_glass_intensity", 1.0f)
 
-    fun appPillBlurIntensity(appKey: String): Float =
-        prefs.getFloat("app_${appKey}_pill_blur_intensity", 1.0f)
-
     fun appPillContainerOpacity(appKey: String): Float =
         prefs.getFloat("app_${appKey}_pill_container_opacity", 1.0f)
 

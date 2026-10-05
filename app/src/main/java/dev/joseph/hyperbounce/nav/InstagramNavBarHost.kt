@@ -248,7 +248,6 @@ fun InstagramNavBarHost(stockBar: ViewGroup?, backdropSource: View, hyperBounceP
         barHeight = live.barHeight.dp,
         tabWidth = live.tabWidth.dp,
         pillGlassIntensity = live.pillGlassIntensity,
-        pillBlurIntensity = live.pillBlurIntensity,
         pillContainerOpacity = live.pillContainerOpacity,
         pillChromaticAberration = live.pillChromaticAberration,
         pillShadow = live.pillShadow,

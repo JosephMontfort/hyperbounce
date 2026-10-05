@@ -665,15 +665,6 @@ object SearchIndex {
             scrollIndex = 0,
             keywords = listOf("bar", "blur", "intensity", "navbar", "liquid glass")
         ),
-        SearchItem(
-            id = "nav_pill_blur",
-            title = "Pill Blur Intensity",
-            category = "Floating Navigation Bar > Appearance",
-            destination = Destination.AppAppearance(NavApp.Instagram),
-            highlightKey = "Pill Blur Intensity",
-            scrollIndex = 0,
-            keywords = listOf("pill", "blur", "intensity", "navbar", "liquid glass", "bloom")
-        ),
 
         // === Dialer and Caller Screen ===
         SearchItem(

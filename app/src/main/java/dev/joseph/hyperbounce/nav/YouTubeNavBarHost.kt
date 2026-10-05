@@ -169,7 +169,6 @@ fun YouTubeNavBarHost(
         tabWidth = live.tabWidth.dp,
         cornerRadius = live.cornerRadius.dp,
         pillGlassIntensity = live.pillGlassIntensity,
-        pillBlurIntensity = live.pillBlurIntensity,
         pillContainerOpacity = live.pillContainerOpacity,
         pillChromaticAberration = live.pillChromaticAberration,
         pillShadow = live.pillShadow,
