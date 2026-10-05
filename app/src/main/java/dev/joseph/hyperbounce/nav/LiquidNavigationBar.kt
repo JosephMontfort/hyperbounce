@@ -54,6 +54,7 @@ import com.kyant.shapes.Capsule
 import dev.joseph.hyperbounce.nav.glass.LiquidGlassDampedDragAnimation
 import dev.joseph.hyperbounce.nav.glass.LiquidGlassInteractiveHighlight
 import dev.joseph.hyperbounce.nav.glass.LiquidGlassViewBackdrop
+import dev.joseph.hyperbounce.nav.glass.liquidLens
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlin.math.abs
@@ -82,12 +83,14 @@ fun LiquidNavigationBar(
     forceDarkTheme: Boolean = false,
     containerAlpha: Float = 0.4f,
     effectMultiplier: Float = 1f,
+    barBlurIntensity: Float = 1f,
     labels: List<String> = emptyList(),
     customAccentColor: Color? = null,
     barHeight: Dp = 64.dp,
     tabWidth: Dp = 64.dp,
     cornerRadius: Dp = 32.dp,
     pillGlassIntensity: Float = 1f,
+    pillBlurIntensity: Float = 1f,
     pillContainerOpacity: Float = 1f,
     pillChromaticAberration: Boolean = true,
     pillShadow: Boolean = true,
@@ -461,7 +464,9 @@ fun LiquidNavigationBar(
                                 shape = { androidx.compose.foundation.shape.RoundedCornerShape(currentCornerRadius) },
                                 effects = {
                                     vibrancy()
-                                    blur(8f.dp.toPx() * effectMultiplier)
+                                    if (barBlurIntensity > 0.001f) {
+                                        blur(8f.dp.toPx() * effectMultiplier * barBlurIntensity)
+                                    }
                                     lens(18f.dp.toPx() * effectMultiplier, 18f.dp.toPx() * effectMultiplier)
                                 },
                                 layerBlock = {
@@ -517,7 +522,7 @@ fun LiquidNavigationBar(
                                 .clearAndSetSemantics {}
                                 .alpha(0f)
                                 .layerBackdrop(tabsBackdrop)
-                                .graphicsLayer {
+                            .graphicsLayer {
                                     translationX = panelOffset
                                 }
                                 .drawBackdrop(
@@ -526,7 +531,9 @@ fun LiquidNavigationBar(
                                     effects = {
                                         val progress = dampedDragAnimation.pressProgress
                                         vibrancy()
-                                        blur(8f.dp.toPx() * effectMultiplier)
+                                        if (barBlurIntensity > 0.001f) {
+                                            blur(8f.dp.toPx() * effectMultiplier * barBlurIntensity)
+                                        }
                                         lens(
                                             18f.dp.toPx() * progress * effectMultiplier,
                                             18f.dp.toPx() * progress * effectMultiplier,
@@ -587,7 +594,10 @@ fun LiquidNavigationBar(
                                     shape = { pillShape },
                                     effects = {
                                         val progress = dampedDragAnimation.pressProgress
-                                        lens(
+                                        if (pillBlurIntensity > 0.001f) {
+                                            blur(8f.dp.toPx() * progress * pillBlurIntensity)
+                                        }
+                                        liquidLens(
                                             8f.dp.toPx() * progress * pillGlassIntensity,
                                             11f.dp.toPx() * progress * pillGlassIntensity,
                                             chromaticAberration = pillChromaticAberration,

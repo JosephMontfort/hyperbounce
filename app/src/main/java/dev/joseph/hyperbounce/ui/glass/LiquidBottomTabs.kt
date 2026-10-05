@@ -69,6 +69,7 @@ import com.kyant.backdrop.drawBackdrop
 import com.kyant.backdrop.effects.blur
 import com.kyant.backdrop.effects.lens
 import com.kyant.backdrop.effects.vibrancy
+import dev.joseph.hyperbounce.nav.glass.liquidLens
 import com.kyant.backdrop.highlight.Highlight
 import com.kyant.backdrop.shadow.InnerShadow
 import com.kyant.backdrop.shadow.Shadow
@@ -212,13 +213,14 @@ fun LiquidBottomTabs(
                 }
         }
 
-        val interactiveHighlight = remember(animationScope) {
+        val interactiveHighlight = remember(animationScope, tabsCount) {
             InteractiveHighlight(
                 animationScope = animationScope,
-                position = { size, offset ->
+                position = { size, _ ->
+                    val curTabWidth = (size.width - 8f.dp.toPx()) / tabsCount
                     Offset(
-                        if (isLtr) (dampedDragAnimation.value + 0.5f) * tabWidth + panelOffset
-                        else size.width - (dampedDragAnimation.value + 0.5f) * tabWidth + panelOffset,
+                        if (isLtr) (dampedDragAnimation.value + 0.5f) * curTabWidth + panelOffset
+                        else size.width - (dampedDragAnimation.value + 0.5f) * curTabWidth + panelOffset,
                         size.height / 2f
                     )
                 }
@@ -311,9 +313,13 @@ fun LiquidBottomTabs(
                     shape = { Capsule() },
                     effects = {
                         val progress = dampedDragAnimation.pressProgress
-                        lens(
-                            (glass.refractionHeightDp * 0.4f).dp.toPx() * progress,
-                            (glass.refractionAmountDp * 0.6f).dp.toPx() * progress,
+                        vibrancy()
+                        if (glass.blurDp > 0f) {
+                            blur(glass.blurDp.dp.toPx() * progress)
+                        }
+                        liquidLens(
+                            10f.dp.toPx() * progress,
+                            14f.dp.toPx() * progress,
                             chromaticAberration = glass.chromaticAberration
                         )
                     },

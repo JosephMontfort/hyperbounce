@@ -93,12 +93,38 @@ fun AppAppearanceScreen(
                     )
                     RowDivider(colors.separator, insetStart = 16.dp)
                     SettingsSliderRow(
+                        title = "Bar Blur Intensity",
+                        subtitle = "Backdrop blur intensity for the nav bar container (0% = pure refraction)",
+                        colors = colors,
+                        backdrop = backdrop,
+                        value = s.barBlurIntensity,
+                        onValueChange = holder::setBarBlurIntensity,
+                        valueRange = 0f..2.0f,
+                        defaultValue = 1.0f,
+                        valueLabel = { "${(it * 100).roundToInt()}%" },
+                        enabled = s.enabled && s.liquidGlass
+                    )
+                    RowDivider(colors.separator, insetStart = 16.dp)
+                    SettingsSliderRow(
                         title = "Pill Glass Intensity",
                         subtitle = "Refraction lens strength for the moving tab indicator pill",
                         colors = colors,
                         backdrop = backdrop,
                         value = s.pillGlassIntensity,
                         onValueChange = holder::setPillGlassIntensity,
+                        valueRange = 0f..2.0f,
+                        defaultValue = 1.0f,
+                        valueLabel = { "${(it * 100).roundToInt()}%" },
+                        enabled = s.enabled && s.liquidGlass
+                    )
+                    RowDivider(colors.separator, insetStart = 16.dp)
+                    SettingsSliderRow(
+                        title = "Pill Blur Intensity",
+                        subtitle = "Backdrop blur intensity for the indicator pill on bloom (0% = pure refraction)",
+                        colors = colors,
+                        backdrop = backdrop,
+                        value = s.pillBlurIntensity,
+                        onValueChange = holder::setPillBlurIntensity,
                         valueRange = 0f..2.0f,
                         defaultValue = 1.0f,
                         valueLabel = { "${(it * 100).roundToInt()}%" },

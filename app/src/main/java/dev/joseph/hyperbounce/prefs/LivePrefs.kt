@@ -21,6 +21,7 @@ import androidx.compose.runtime.setValue
 data class NavBarLiveSettings(
     val liquidGlass: Boolean,
     val glassIntensity: Float,
+    val barBlurIntensity: Float,
     val containerOpacity: Float,
     val cornerRadius: Float,
     val barHeight: Float,
@@ -30,6 +31,7 @@ data class NavBarLiveSettings(
     val accent: String,
     val customAccentColor: Long,
     val pillGlassIntensity: Float,
+    val pillBlurIntensity: Float,
     val pillContainerOpacity: Float,
     val pillChromaticAberration: Boolean,
     val pillShadow: Boolean,
@@ -41,6 +43,7 @@ data class NavBarLiveSettings(
 private fun readNavBarSettings(hyperBouncePrefs: HyperBouncePrefs, appKey: String) = NavBarLiveSettings(
     liquidGlass = hyperBouncePrefs.appLiquidGlass(appKey),
     glassIntensity = hyperBouncePrefs.appGlassIntensity(appKey),
+    barBlurIntensity = hyperBouncePrefs.appBarBlurIntensity(appKey),
     containerOpacity = hyperBouncePrefs.appContainerOpacity(appKey),
     cornerRadius = hyperBouncePrefs.appCornerRadius(appKey),
     barHeight = hyperBouncePrefs.appBarHeight(appKey),
@@ -50,6 +53,7 @@ private fun readNavBarSettings(hyperBouncePrefs: HyperBouncePrefs, appKey: Strin
     accent = hyperBouncePrefs.appAccent(appKey),
     customAccentColor = hyperBouncePrefs.appCustomAccentColor(appKey),
     pillGlassIntensity = hyperBouncePrefs.appPillGlassIntensity(appKey),
+    pillBlurIntensity = hyperBouncePrefs.appPillBlurIntensity(appKey),
     pillContainerOpacity = hyperBouncePrefs.appPillContainerOpacity(appKey),
     pillChromaticAberration = hyperBouncePrefs.appPillChromaticAberration(appKey),
     pillShadow = hyperBouncePrefs.appPillShadow(appKey),

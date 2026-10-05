@@ -49,6 +49,7 @@ object LockScreenSheetHook {
     private const val TAG = "HyperBounce_LockSheet"
     private const val TAG_LOCK_GLASS_SHEET = "hyperbounce_lock_glass_sheet_opt"
     private const val TAG_HOME_PILL = "hyperbounce_home_pill_opt"
+    private const val TAG_LOCK_WALLPAPER_DIM = "hyperbounce_lock_wallpaper_dim"
 
     private val mainHandler = Handler(Looper.getMainLooper())
     private val bgExecutor = Executors.newSingleThreadExecutor()
@@ -58,12 +59,15 @@ object LockScreenSheetHook {
     private var kpvcNcpField: Field? = null
     private var kpvcBottomAreaField: Field? = null
     private var bottomAreaViewField: Field? = null
+    private var kpvcDeductedImageViewField: Field? = null
 
     private var cachedLockRootViewRef: WeakReference<ViewGroup>? = null
     private var cachedLockGlassSheetRef: WeakReference<LockScreenGlassSheetOptimizedView>? = null
     private var cachedLockNotifViewRef: WeakReference<View>? = null
     private var cachedLockPillRef: WeakReference<View>? = null
     private var cachedBottomAreaViewRef: WeakReference<ViewGroup>? = null
+    private var cachedDepthSubjectViewRef: WeakReference<View>? = null
+    private var cachedLockWallpaperDimRef: WeakReference<View>? = null
 
     // Event-driven state tracking (0ms reflection in hot path)
     @Volatile private var isKeyguardShowing: Boolean = true
@@ -96,6 +100,17 @@ object LockScreenSheetHook {
             if (notifView != null) {
                 notifView.animate().cancel()
                 notifView.translationY = 0.0f
+            }
+            val depthView = cachedDepthSubjectViewRef?.get()
+            if (depthView != null) {
+                depthView.animate().cancel()
+                depthView.translationY = 0.0f
+            }
+            val dimLayer = cachedLockWallpaperDimRef?.get()
+            if (dimLayer != null) {
+                dimLayer.animate().cancel()
+                dimLayer.visibility = View.GONE
+                dimLayer.alpha = 0.0f
             }
         }
         if (Looper.myLooper() == Looper.getMainLooper()) {
@@ -166,6 +181,70 @@ object LockScreenSheetHook {
             }
             bv
         } catch (_: Throwable) { null }
+    }
+
+    private fun getDepthSubjectView(kpvc: Any, rootView: ViewGroup?): View? {
+        val cached = cachedDepthSubjectViewRef?.get()
+        if (cached != null && cached.isAttachedToWindow) return cached
+        try {
+            if (kpvcDeductedImageViewField == null) {
+                kpvcDeductedImageViewField = kpvc.javaClass.getDeclaredField("deductedImageView").apply { isAccessible = true }
+            }
+            val v = kpvcDeductedImageViewField?.get(kpvc) as? View
+            if (v != null) {
+                cachedDepthSubjectViewRef = WeakReference(v)
+                return v
+            }
+        } catch (_: Throwable) {}
+
+        if (rootView != null) {
+            for (i in 0 until rootView.childCount) {
+                val child = rootView.getChildAt(i)
+                val name = child.javaClass.simpleName.lowercase()
+                if (name.contains("deducted") || name.contains("depth")) {
+                    cachedDepthSubjectViewRef = WeakReference(child)
+                    return child
+                }
+            }
+        }
+        return null
+    }
+
+    private fun ensureWallpaperDimInjected(rootView: ViewGroup): View? {
+        val parent = rootView.parent as? ViewGroup ?: return null
+        var dimView = cachedLockWallpaperDimRef?.get()
+        if (dimView != null && dimView.parent == parent) return dimView
+
+        dimView = parent.findViewWithTag<View>(TAG_LOCK_WALLPAPER_DIM)
+        if (dimView != null) {
+            cachedLockWallpaperDimRef = WeakReference(dimView)
+            return dimView
+        }
+
+        return try {
+            val context = rootView.context
+            val newDim = View(context).apply {
+                tag = TAG_LOCK_WALLPAPER_DIM
+                setBackgroundColor(0xFF000000.toInt())
+                alpha = 0f
+                visibility = View.GONE
+                isClickable = false
+                isFocusable = false
+                importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+            }
+            val rootIndex = parent.indexOfChild(rootView)
+            val insertIndex = if (rootIndex >= 0) rootIndex else 0
+            val lp = ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+            )
+            parent.addView(newDim, insertIndex, lp)
+            cachedLockWallpaperDimRef = WeakReference(newDim)
+            newDim
+        } catch (t: Throwable) {
+            Log.e(TAG, "Error injecting wallpaper dim layer", t)
+            null
+        }
     }
 
     private fun handleLockscreenTouchEvent(event: MotionEvent) {
@@ -240,6 +319,10 @@ object LockScreenSheetHook {
                                     if (finalNotifView != null && finalNotifView.translationY != 0.0f) {
                                         finalNotifView.translationY = 0.0f
                                     }
+                                    getDepthSubjectView(kpvc, rootView)?.translationY = 0.0f
+                                    val dimLayer = cachedLockWallpaperDimRef?.get() ?: (rootView?.parent as? ViewGroup)?.findViewWithTag<View>(TAG_LOCK_WALLPAPER_DIM)
+                                    dimLayer?.visibility = View.GONE
+                                    dimLayer?.alpha = 0.0f
                                     return result
                                 }
 
@@ -268,6 +351,10 @@ object LockScreenSheetHook {
                                         existingSheet?.swipeProgress = 0.0f
                                         rootView.translationY = 0.0f
                                         finalNotifView?.translationY = 0.0f
+                                        getDepthSubjectView(kpvc, rootView)?.translationY = 0.0f
+                                        val dimLayer = cachedLockWallpaperDimRef?.get() ?: (rootView.parent as? ViewGroup)?.findViewWithTag<View>(TAG_LOCK_WALLPAPER_DIM)
+                                        dimLayer?.visibility = View.GONE
+                                        dimLayer?.alpha = 0.0f
                                         if (!cfg.pillEnabled) {
                                             val pill = cachedLockPillRef?.get() ?: getBottomAreaView(kpvc)?.findViewWithTag<View>(TAG_HOME_PILL)
                                             pill?.visibility = View.GONE
@@ -283,6 +370,19 @@ object LockScreenSheetHook {
                                     rootView.translationY = upwardOffset
                                     if (rootView.scaleX != 1.0f) rootView.scaleX = 1.0f
                                     if (rootView.scaleY != 1.0f) rootView.scaleY = 1.0f
+
+                                    // 1b. Counter-translate depth subject to remain stationary matching background wallpaper
+                                    val depthSubjectView = getDepthSubjectView(kpvc, rootView)
+                                    if (depthSubjectView != null) {
+                                        depthSubjectView.translationY = -upwardOffset
+                                    }
+
+                                    // 1c. Reveal dynamic dimming on underlying exposed wallpaper behind the sheet
+                                    val dimLayer = ensureWallpaperDimInjected(rootView)
+                                    if (dimLayer != null) {
+                                        dimLayer.visibility = View.VISIBLE
+                                        dimLayer.alpha = (swipeProgress * 0.45f).coerceIn(0.0f, 0.45f)
+                                    }
 
                                     // 2. Ensure real-time AGSL Liquid Glass Sheet Card is at index 0
                                     var sheet = cachedLockGlassSheetRef?.get()
@@ -417,6 +517,26 @@ object LockScreenSheetHook {
                                             ?.translationY(-viewHeight)
                                             ?.setDuration(220)
                                             ?.setInterpolator(DecelerateInterpolator(1.5f))
+                                            ?.start()
+
+                                        val depthView = if (kpvc != null) getDepthSubjectView(kpvc, rootView) else null
+                                        depthView?.animate()?.cancel()
+                                        depthView?.animate()
+                                            ?.translationY(viewHeight)
+                                            ?.setDuration(220)
+                                            ?.setInterpolator(DecelerateInterpolator(1.5f))
+                                            ?.withEndAction { depthView.translationY = 0.0f }
+                                            ?.start()
+
+                                        val dimLayer = cachedLockWallpaperDimRef?.get() ?: (rootView.parent as? ViewGroup)?.findViewWithTag<View>(TAG_LOCK_WALLPAPER_DIM)
+                                        dimLayer?.animate()?.cancel()
+                                        dimLayer?.animate()
+                                            ?.alpha(0.0f)
+                                            ?.setDuration(220)
+                                            ?.withEndAction {
+                                                dimLayer.visibility = View.GONE
+                                                dimLayer.alpha = 0.0f
+                                            }
                                             ?.start()
                                     }
                                     if (Looper.myLooper() == Looper.getMainLooper()) {
@@ -771,6 +891,9 @@ object LockScreenSheetHook {
                 glassSheet?.swipeProgress = 0.0f
                 val pill = cachedLockPillRef?.get() ?: getBottomAreaView(kpvc)?.findViewWithTag<View>(TAG_HOME_PILL)
                 pill?.visibility = View.GONE
+                val dimLayer = cachedLockWallpaperDimRef?.get() ?: (rootView.parent as? ViewGroup)?.findViewWithTag<View>(TAG_LOCK_WALLPAPER_DIM)
+                dimLayer?.visibility = View.GONE
+                dimLayer?.alpha = 0.0f
                 return
             }
 

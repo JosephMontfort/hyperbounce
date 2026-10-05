@@ -656,6 +656,24 @@ object SearchIndex {
             scrollIndex = 0,
             keywords = listOf("youtube", "navbar", "floating", "bottom bar")
         ),
+        SearchItem(
+            id = "nav_bar_blur",
+            title = "Bar Blur Intensity",
+            category = "Floating Navigation Bar > Appearance",
+            destination = Destination.AppAppearance(NavApp.Instagram),
+            highlightKey = "Bar Blur Intensity",
+            scrollIndex = 0,
+            keywords = listOf("bar", "blur", "intensity", "navbar", "liquid glass")
+        ),
+        SearchItem(
+            id = "nav_pill_blur",
+            title = "Pill Blur Intensity",
+            category = "Floating Navigation Bar > Appearance",
+            destination = Destination.AppAppearance(NavApp.Instagram),
+            highlightKey = "Pill Blur Intensity",
+            scrollIndex = 0,
+            keywords = listOf("pill", "blur", "intensity", "navbar", "liquid glass", "bloom")
+        ),
 
         // === Dialer and Caller Screen ===
         SearchItem(

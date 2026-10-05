@@ -65,18 +65,49 @@ class LockScreenBottomAreaView @JvmOverloads constructor(
     private val leftTorchButton: AffordanceButton
     private val rightCameraButton: AffordanceButton
 
+    private var isTorchCallbackRegistered = false
+
     private val torchCallback = object : CameraManager.TorchCallback() {
         override fun onTorchModeChanged(camId: String, enabled: Boolean) {
-            if (camId == torchCameraId) {
-                setTorchActive(enabled)
+            mainHandler.post {
+                if (torchCameraId == null || camId == torchCameraId) {
+                    if (torchCameraId == null && enabled) {
+                        torchCameraId = camId
+                    }
+                    setTorchActive(enabled)
+                } else if (enabled) {
+                    torchCameraId = camId
+                    setTorchActive(true)
+                }
             }
         }
 
         override fun onTorchModeUnavailable(camId: String) {
-            if (camId == torchCameraId) {
-                setTorchActive(false)
+            mainHandler.post {
+                if (torchCameraId == null || camId == torchCameraId) {
+                    setTorchActive(false)
+                }
             }
         }
+    }
+
+    private fun registerTorchCallback() {
+        if (isTorchCallbackRegistered) return
+        val cm = cameraManager ?: return
+        try {
+            cm.registerTorchCallback(torchCallback, mainHandler)
+            isTorchCallbackRegistered = true
+        } catch (t: Throwable) {
+            Log.e(TAG, "Failed to register TorchCallback", t)
+        }
+    }
+
+    private fun unregisterTorchCallback() {
+        if (!isTorchCallbackRegistered) return
+        try {
+            cameraManager?.unregisterTorchCallback(torchCallback)
+            isTorchCallbackRegistered = false
+        } catch (_: Throwable) {}
     }
 
     init {
@@ -137,9 +168,8 @@ class LockScreenBottomAreaView @JvmOverloads constructor(
                         torchCameraId = cm.cameraIdList[0]
                     }
                     mainHandler.post {
-                        try {
-                            cm.registerTorchCallback(torchCallback, mainHandler)
-                        } catch (_: Throwable) {}
+                        registerTorchCallback()
+                        syncTorchState()
                     }
                 } catch (t: Throwable) {
                     Log.e(TAG, "Error resolving camera for torch", t)
@@ -240,11 +270,15 @@ class LockScreenBottomAreaView @JvmOverloads constructor(
         }
     }
 
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        registerTorchCallback()
+        syncTorchState()
+    }
+
     override fun onDetachedFromWindow() {
         super.onDetachedFromWindow()
-        try {
-            cameraManager?.unregisterTorchCallback(torchCallback)
-        } catch (_: Throwable) {}
+        unregisterTorchCallback()
     }
 
     enum class AffordanceType {
@@ -349,14 +383,9 @@ class LockScreenBottomAreaView @JvmOverloads constructor(
                 rimPaint.strokeWidth = 1.2f * density
                 canvas.drawCircle(cx, cy, radius - 0.8f * density, rimPaint)
 
-                // Top optical specular reflection arc (210 deg -> 330 deg)
+                // Bottom inner refraction shadow (35 deg -> 145 deg)
                 val rimInset = 1.2f * density
                 arcRect.set(cx - radius + rimInset, cy - radius + rimInset, cx + radius - rimInset, cy + radius - rimInset)
-                specularPaint.strokeWidth = 1.5f * density
-                specularPaint.color = Color.argb(125, 255, 255, 255)
-                canvas.drawArc(arcRect, 215f, 110f, false, specularPaint)
-
-                // Bottom inner refraction shadow (35 deg -> 145 deg)
                 specularPaint.strokeWidth = 1.2f * density
                 specularPaint.color = Color.argb(55, 0, 0, 0)
                 canvas.drawArc(arcRect, 35f, 110f, false, specularPaint)

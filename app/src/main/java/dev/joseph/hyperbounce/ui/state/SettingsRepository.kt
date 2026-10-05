@@ -342,6 +342,8 @@ class SettingsRepository(context: Context) {
             private set
         var glassIntensity by prefsFloatState("${prefix}_glass_intensity", defaults.glassIntensity)
             private set
+        var barBlurIntensity by prefsFloatState("${prefix}_bar_blur_intensity", defaults.barBlurIntensity)
+            private set
         var containerOpacity by prefsFloatState("${prefix}_container_opacity", defaults.containerOpacity)
             private set
         var cornerRadius by prefsFloatState("${prefix}_corner_radius", defaults.cornerRadius)
@@ -360,6 +362,8 @@ class SettingsRepository(context: Context) {
             private set
         var pillGlassIntensity by prefsFloatState("${prefix}_pill_glass_intensity", defaults.pillGlassIntensity)
             private set
+        var pillBlurIntensity by prefsFloatState("${prefix}_pill_blur_intensity", defaults.pillBlurIntensity)
+            private set
         var pillContainerOpacity by prefsFloatState("${prefix}_pill_container_opacity", defaults.pillContainerOpacity)
             private set
         var pillChromaticAberration by prefsBooleanState("${prefix}_pill_chromatic_aberration", defaults.pillChromaticAberration)
@@ -376,8 +380,8 @@ class SettingsRepository(context: Context) {
             private set
 
         fun snapshot(): NavBarAppSettings = NavBarAppSettings(
-            enabled, liquidGlass, glassIntensity, containerOpacity, cornerRadius, barHeight, tabWidth, bottomMargin,
-            themeMode, accent, customAccentColor, pillGlassIntensity, pillContainerOpacity, pillChromaticAberration, pillShadow,
+            enabled, liquidGlass, glassIntensity, barBlurIntensity, containerOpacity, cornerRadius, barHeight, tabWidth, bottomMargin,
+            themeMode, accent, customAccentColor, pillGlassIntensity, pillBlurIntensity, pillContainerOpacity, pillChromaticAberration, pillShadow,
             autoShrink, autoShrinkScale, autoShrinkSensitivity, reelsFullscreenZoom
         )
 
@@ -387,6 +391,8 @@ class SettingsRepository(context: Context) {
         fun setLiquidGlass(v: Boolean) { liquidGlass = v }
         @JvmName("setGlassIntensityPref")
         fun setGlassIntensity(v: Float) { glassIntensity = v }
+        @JvmName("setBarBlurIntensityPref")
+        fun setBarBlurIntensity(v: Float) { barBlurIntensity = v }
         @JvmName("setContainerOpacityPref")
         fun setContainerOpacity(v: Float) { containerOpacity = v }
         @JvmName("setCornerRadiusPref")
@@ -405,6 +411,8 @@ class SettingsRepository(context: Context) {
         fun setCustomAccentColor(v: Long) { customAccentColor = v }
         @JvmName("setPillGlassIntensityPref")
         fun setPillGlassIntensity(v: Float) { pillGlassIntensity = v }
+        @JvmName("setPillBlurIntensityPref")
+        fun setPillBlurIntensity(v: Float) { pillBlurIntensity = v }
         @JvmName("setPillContainerOpacityPref")
         fun setPillContainerOpacity(v: Float) { pillContainerOpacity = v }
         @JvmName("setPillChromaticAberrationPref")
@@ -428,6 +436,7 @@ class SettingsRepository(context: Context) {
             enabled = defaults.enabled
             liquidGlass = defaults.liquidGlass
             glassIntensity = defaults.glassIntensity
+            barBlurIntensity = defaults.barBlurIntensity
             containerOpacity = defaults.containerOpacity
             cornerRadius = defaults.cornerRadius
             barHeight = defaults.barHeight
@@ -437,6 +446,7 @@ class SettingsRepository(context: Context) {
             accent = defaults.accent
             customAccentColor = defaults.customAccentColor
             pillGlassIntensity = defaults.pillGlassIntensity
+            pillBlurIntensity = defaults.pillBlurIntensity
             pillContainerOpacity = defaults.pillContainerOpacity
             pillChromaticAberration = defaults.pillChromaticAberration
             pillShadow = defaults.pillShadow
