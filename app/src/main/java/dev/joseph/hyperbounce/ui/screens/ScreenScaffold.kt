@@ -135,7 +135,7 @@ fun ScreenScaffold(
             initialHeightOffset = initialScroll.miuixHeightOffset,
             initialContentOffset = initialScroll.miuixContentOffset
         )
-        val scrollBehavior = MiuixScrollBehavior(topAppBarState = topAppBarState)
+        val scrollBehavior = MiuixScrollBehavior(state = topAppBarState)
 
         androidx.compose.runtime.LaunchedEffect(screenKey, lazyListState, scrollBehavior) {
             androidx.compose.runtime.snapshotFlow {
