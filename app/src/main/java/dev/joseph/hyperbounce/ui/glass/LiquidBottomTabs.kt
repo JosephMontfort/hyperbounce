@@ -213,11 +213,11 @@ fun LiquidBottomTabs(
                 }
         }
 
-        val interactiveHighlight = remember(animationScope, tabsCount) {
+        val interactiveHighlight = remember(animationScope, tabsCount, density) {
             InteractiveHighlight(
                 animationScope = animationScope,
                 position = { size, _ ->
-                    val curTabWidth = (size.width - 8f.dp.toPx()) / tabsCount
+                    val curTabWidth = with(density) { (size.width - 8f.dp.toPx()) / tabsCount }
                     Offset(
                         if (isLtr) (dampedDragAnimation.value + 0.5f) * curTabWidth + panelOffset
                         else size.width - (dampedDragAnimation.value + 0.5f) * curTabWidth + panelOffset,

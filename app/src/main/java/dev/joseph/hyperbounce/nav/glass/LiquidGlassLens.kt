@@ -1,14 +1,16 @@
 package dev.joseph.hyperbounce.nav.glass
 
+import android.os.Build
 import androidx.annotation.FloatRange
 import androidx.compose.foundation.shape.AbsoluteRoundedCornerShape
 import androidx.compose.foundation.shape.CornerBasedShape
+import androidx.compose.ui.graphics.asComposeRenderEffect
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.util.fastCoerceAtLeast
 import androidx.compose.ui.util.fastCoerceAtMost
 import com.kyant.backdrop.BackdropEffectScope
+import com.kyant.backdrop.asAndroidRuntimeShader
 import com.kyant.backdrop.effects.effect
-import com.kyant.backdrop.internal.RuntimeShaderEffect
 import com.kyant.backdrop.isRuntimeShaderSupported
 import com.kyant.shapes.RoundedRectangularShape
 import org.intellij.lang.annotations.Language
@@ -151,8 +153,13 @@ fun BackdropEffectScope.liquidLens(
         setFloatUniform("depthEffect", if (depthEffect) 1f else 0f)
         setFloatUniform("chromaticAberration", if (chromaticAberration) 1f else 0f)
     }
-    val effect = RuntimeShaderEffect(shader, "content")
-    effect(effect)
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        val renderEffect = android.graphics.RenderEffect.createRuntimeShaderEffect(
+            shader.asAndroidRuntimeShader(),
+            "content"
+        ).asComposeRenderEffect()
+        effect(renderEffect)
+    }
 }
 
 private fun getCornerRadii(scope: BackdropEffectScope): FloatArray? {
