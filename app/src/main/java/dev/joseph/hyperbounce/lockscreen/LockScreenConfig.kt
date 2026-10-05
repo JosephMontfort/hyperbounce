@@ -25,6 +25,7 @@ data class LockScreenSheetConfig(
     var cornerRadius: Float = 38.0f,
     var edgeStretch: Float = 28.0f,
     // Home indicator pill
+    var pillEnabled: Boolean = true,
     var pillWidth: Float = 156.0f,
     var pillHeight: Float = 6.0f,
     var pillBottomMargin: Float = 9.0f
@@ -134,6 +135,7 @@ object LockScreenConfigHolder {
         sheet.blurRadius = prefs.getFloat("lock_card_blur_radius", 0.0f)
         sheet.cornerRadius = prefs.getFloat("lock_card_corner_radius", 38.0f)
         sheet.edgeStretch = prefs.getFloat("lock_card_edge_stretch", 28.0f)
+        sheet.pillEnabled = prefs.getBoolean("lock_pill_enabled", true)
         sheet.pillWidth = prefs.getFloat("lock_pill_width", 156.0f)
         sheet.pillHeight = prefs.getFloat("lock_pill_height", 6.0f)
         sheet.pillBottomMargin = prefs.getFloat("lock_pill_bottom_margin", 9.0f)
@@ -198,6 +200,11 @@ object LockScreenConfigHolder {
 
     fun updateKey(key: String, intent: Intent) {
         when (key) {
+            "lock_sheet_enabled" -> sheet.enabled = intent.getBooleanExtra("value_boolean", sheet.enabled)
+            "lock_pill_enabled" -> sheet.pillEnabled = intent.getBooleanExtra("value_boolean", sheet.pillEnabled)
+            "lock_pill_width" -> sheet.pillWidth = intent.getFloatExtra("value_float", sheet.pillWidth)
+            "lock_pill_height" -> sheet.pillHeight = intent.getFloatExtra("value_float", sheet.pillHeight)
+            "lock_pill_bottom_margin" -> sheet.pillBottomMargin = intent.getFloatExtra("value_float", sheet.pillBottomMargin)
             "engine_keypad_enabled" -> keypad.enabled = intent.getBooleanExtra("value_boolean", keypad.enabled)
             "pin_btn_refraction" -> keypad.buttonRefraction = intent.getFloatExtra("value_float", keypad.buttonRefraction)
             "pin_btn_bevel" -> keypad.buttonBevel = intent.getFloatExtra("value_float", keypad.buttonBevel)

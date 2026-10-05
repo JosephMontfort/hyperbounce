@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
 import com.kyant.backdrop.Backdrop
 import dev.joseph.hyperbounce.ui.Destination
@@ -52,39 +53,54 @@ fun KeypadScreen(
         }
 
         item {
-            SectionHeader("Physics & Layout", colors)
-            GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
+            val contentAlpha = if (keypad.enabled) 1f else 0.38f
+            SectionHeader(
+                "Physics & Layout",
+                colors,
+                modifier = Modifier.graphicsLayer { alpha = contentAlpha }
+            )
+            GlassCard(
+                backdrop,
+                Modifier
+                    .padding(horizontal = 16.dp)
+                    .graphicsLayer { alpha = contentAlpha }
+            ) {
                 SettingsNavRow(
                     title = "iOS 26 Radial Bloom Physics",
                     subtitle = "Cluster origin, radial spring damping & bloom expansion",
                     colors = colors,
-                    onClick = { onNavigate(Destination.KeypadIosBloomPhysics) }
+                    onClick = { onNavigate(Destination.KeypadIosBloomPhysics) },
+                    enabled = keypad.enabled
                 )
                 RowDivider(colors.separator)
                 SettingsNavRow(
                     title = "Liquid Glass Tuning",
                     subtitle = "Refraction, bevel thickness, dispersion & specular rims",
                     colors = colors,
-                    onClick = { onNavigate(Destination.KeypadGlassTuning) }
+                    onClick = { onNavigate(Destination.KeypadGlassTuning) },
+                    enabled = keypad.enabled
                 )
                 RowDivider(colors.separator)
                 SettingsNavRow(
                     title = "Buttons Layout",
                     subtitle = "Key circle diameter, liquid press scale & typography",
                     colors = colors,
-                    onClick = { onNavigate(Destination.KeypadButtonsLayout) }
+                    onClick = { onNavigate(Destination.KeypadButtonsLayout) },
+                    enabled = keypad.enabled
                 )
                 RowDivider(colors.separator)
                 SettingsNavRow(
                     title = "PIN Pad Layout",
                     subtitle = "Keypad lift, PIN dots position & grid spacing",
                     colors = colors,
-                    onClick = { onNavigate(Destination.KeypadPadLayout) }
+                    onClick = { onNavigate(Destination.KeypadPadLayout) },
+                    enabled = keypad.enabled
                 )
             }
             SectionFooter(
                 "Configure radial bloom kinetics, real-time glass optics, button dimensions, and lockscreen layout coordinates.",
-                colors
+                colors,
+                modifier = Modifier.graphicsLayer { alpha = contentAlpha }
             )
         }
     }

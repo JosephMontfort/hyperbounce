@@ -161,6 +161,7 @@ data class LockScreenSheetSettings(
     val blurRadius: Float = 0.0f,
     val cornerRadius: Float = 38.0f,
     val edgeStretch: Float = 28.0f,
+    val pillEnabled: Boolean = true,
     val pillWidth: Float = 156.0f,
     val pillHeight: Float = 6.0f,
     val pillBottomMargin: Float = 9.0f

@@ -570,6 +570,7 @@ class SettingsRepository(context: Context) {
         var blurRadius by prefsFloatState("lock_card_blur_radius", defaults.blurRadius); private set
         var cornerRadius by prefsFloatState("lock_card_corner_radius", defaults.cornerRadius); private set
         var edgeStretch by prefsFloatState("lock_card_edge_stretch", defaults.edgeStretch); private set
+        var pillEnabled by prefsBooleanState("lock_pill_enabled", defaults.pillEnabled); private set
         var pillWidth by prefsFloatState("lock_pill_width", defaults.pillWidth); private set
         var pillHeight by prefsFloatState("lock_pill_height", defaults.pillHeight); private set
         var pillBottomMargin by prefsFloatState("lock_pill_bottom_margin", defaults.pillBottomMargin); private set
@@ -577,7 +578,7 @@ class SettingsRepository(context: Context) {
         fun snapshot(): LockScreenSheetSettings = LockScreenSheetSettings(
             enabled, enableOptimization, refractionHeight, sideRefraction, bottomRefraction, bevelWidth, leftBevelWidth, rightBevelWidth, bottomBevelWidth,
             dispersionStrength, specularStrength, hairlineStrength, innerGlowStrength, innerShadow, saturationFactor, rimSoftness, blurRadius,
-            cornerRadius, edgeStretch, pillWidth, pillHeight, pillBottomMargin
+            cornerRadius, edgeStretch, pillEnabled, pillWidth, pillHeight, pillBottomMargin
         )
 
         @JvmName("setSheetEnabledPref") fun setEnabled(v: Boolean) { enabled = v }
@@ -603,6 +604,7 @@ class SettingsRepository(context: Context) {
         @JvmName("setSheetBlurRadiusPref") fun setBlurRadius(v: Float) { blurRadius = v }
         @JvmName("setSheetCornerRadiusPref") fun setCornerRadius(v: Float) { cornerRadius = v }
         @JvmName("setSheetEdgeStretchPref") fun setEdgeStretch(v: Float) { edgeStretch = v }
+        @JvmName("setSheetPillEnabledPref") fun setPillEnabled(v: Boolean) { pillEnabled = v }
         @JvmName("setSheetPillWidthPref") fun setPillWidth(v: Float) { pillWidth = v }
         @JvmName("setSheetPillHeightPref") fun setPillHeight(v: Float) { pillHeight = v }
         @JvmName("setSheetPillBottomMarginPref") fun setPillBottomMargin(v: Float) { pillBottomMargin = v }
@@ -627,6 +629,7 @@ class SettingsRepository(context: Context) {
             blurRadius = defaults.blurRadius
             cornerRadius = defaults.cornerRadius
             edgeStretch = defaults.edgeStretch
+            pillEnabled = defaults.pillEnabled
             pillWidth = defaults.pillWidth
             pillHeight = defaults.pillHeight
             pillBottomMargin = defaults.pillBottomMargin

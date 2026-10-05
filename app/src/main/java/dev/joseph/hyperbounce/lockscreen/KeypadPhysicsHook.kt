@@ -361,14 +361,17 @@ object KeypadPhysicsHook {
                     m.parameterTypes[0] == MotionEvent::class.java
                 ) {
                     module.hook(m).intercept(object : XposedInterface.Hooker {
-                        override fun intercept(chain: XposedInterface.Chain): Any? {
                             val view = chain.thisObject as? View
                             val rawArgs = chain.args
                             val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as Array<*>
                             val event = args[0] as? MotionEvent
                             val cfg = LockScreenConfigHolder.keypad
 
-                            if (view != null && event != null && cfg.enabled) {
+                            if (!cfg.enabled) {
+                                return chain.proceed()
+                            }
+
+                            if (view != null && event != null) {
                                 val liquidDrawable = view.background as? LiquidGlassKeyOptimizedDrawable
                                 val density = view.context.resources.displayMetrics.density
                                 val baseTransX = getBaseTranslationX(view, cfg, density)
@@ -609,11 +612,11 @@ object KeypadPhysicsHook {
             val pinViewClass = Class.forName("com.android.keyguard.widget.MiuiKeyguardPINView", false, classLoader)
 
             val styleKeyAsLiquidGlass: (View?) -> Unit = { keyView ->
-                if (keyView != null) {
+                val cfg = LockScreenConfigHolder.keypad
+                if (keyView != null && cfg.enabled) {
                     try {
                         val ctx = keyView.context
                         val density = ctx.resources.displayMetrics.density
-                        val cfg = LockScreenConfigHolder.keypad
 
                         try {
                             val setAnimMethod = keyView.javaClass.getMethod("setAnimationEnabled", Boolean::class.javaPrimitiveType)
@@ -671,11 +674,11 @@ object KeypadPhysicsHook {
             }
 
             val applyPinLayoutAndStyles: (View?) -> Unit = { pinView ->
-                if (pinView != null) {
+                val cfg = LockScreenConfigHolder.keypad
+                if (pinView != null && cfg.enabled) {
                     try {
                         val ctx = pinView.context
                         val density = ctx.resources.displayMetrics.density
-                        val cfg = LockScreenConfigHolder.keypad
 
                         // Ensure keyguard_bouncer_bg does not show stale blurred preview bitmap
                         val root = pinView.rootView
@@ -889,6 +892,10 @@ object KeypadPhysicsHook {
                     module.hook(m).intercept(object : XposedInterface.Hooker {
                         override fun intercept(chain: XposedInterface.Chain): Any? {
                             val result = chain.proceed()
+                            val cfg = LockScreenConfigHolder.keypad
+                            if (!cfg.enabled) {
+                                return result
+                            }
                             try {
                                 val pinView = chain.thisObject as? View
                                 applyPinLayoutAndStyles(pinView)

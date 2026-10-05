@@ -199,6 +199,15 @@ object SearchIndex {
 
         // === Lockscreen Stuffs ===
         SearchItem(
+            id = "lock_pill_master",
+            title = "Enable Home Indicator Pill",
+            category = "LockScreen Stuffs > Lock Screen Sheet > Home Indicator Pill",
+            destination = Destination.LockScreenSheetHomeIndicator,
+            highlightKey = "Enable Home Indicator Pill",
+            scrollIndex = 0,
+            keywords = listOf("lockscreen", "pill", "home indicator", "bar", "master", "enable")
+        ),
+        SearchItem(
             id = "lockscreen_bottom_refraction",
             title = "Bottom Edge Refraction",
             category = "LockScreen Stuffs > Lock Screen Sheet > Liquid Glass Tuning",

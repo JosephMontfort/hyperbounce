@@ -3,12 +3,14 @@ package dev.joseph.hyperbounce.ui.screens
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
 import com.kyant.backdrop.Backdrop
 import dev.joseph.hyperbounce.ui.components.GlassCard
 import dev.joseph.hyperbounce.ui.components.RowDivider
 import dev.joseph.hyperbounce.ui.components.SectionHeader
 import dev.joseph.hyperbounce.ui.components.SettingsSliderRow
+import dev.joseph.hyperbounce.ui.components.SettingsToggleRow
 import dev.joseph.hyperbounce.ui.state.SettingsRepository
 import dev.joseph.hyperbounce.ui.theme.HyperBounceColors
 import java.util.Locale
@@ -29,6 +31,7 @@ fun LockScreenSheetHomeIndicatorScreen(
         backdrop = backdrop,
         onBack = onBack,
         onResetPage = {
+            sheet.setPillEnabled(true)
             sheet.setPillWidth(156.0f)
             sheet.setPillHeight(6.0f)
             sheet.setPillBottomMargin(9.0f)
@@ -37,9 +40,35 @@ fun LockScreenSheetHomeIndicatorScreen(
         restartAppSubtitle = "Restart com.android.systemui",
         onRestartApp = { dev.joseph.hyperbounce.ui.utils.RootUtils.restartSystemUI(context) }
     ) { _ ->
+        val pillActive = sheet.enabled && sheet.pillEnabled
+
         item {
-            SectionHeader("Pill Dimensions & Position", colors)
             GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
+                SettingsToggleRow(
+                    title = "Enable Home Indicator Pill",
+                    subtitle = null,
+                    colors = colors,
+                    backdrop = backdrop,
+                    checked = sheet.pillEnabled,
+                    onCheckedChange = sheet::setPillEnabled,
+                    enabled = sheet.enabled
+                )
+            }
+        }
+
+        item {
+            val contentAlpha = if (pillActive) 1f else 0.38f
+            SectionHeader(
+                "Pill Dimensions & Position",
+                colors,
+                modifier = Modifier.graphicsLayer { alpha = contentAlpha }
+            )
+            GlassCard(
+                backdrop,
+                Modifier
+                    .padding(horizontal = 16.dp)
+                    .graphicsLayer { alpha = contentAlpha }
+            ) {
                 SettingsSliderRow(
                     title = "Pill Width",
                     subtitle = "Horizontal size of the bottom home indicator",
@@ -50,7 +79,7 @@ fun LockScreenSheetHomeIndicatorScreen(
                     valueRange = 40.0f..280.0f,
                     defaultValue = 156.0f,
                     valueLabel = { String.format(Locale.US, "%.0f dp", it) },
-                    enabled = sheet.enabled
+                    enabled = pillActive
                 )
                 RowDivider(colors.separator)
                 SettingsSliderRow(
@@ -63,7 +92,7 @@ fun LockScreenSheetHomeIndicatorScreen(
                     valueRange = 2.0f..16.0f,
                     defaultValue = 6.0f,
                     valueLabel = { String.format(Locale.US, "%.1f dp", it) },
-                    enabled = sheet.enabled
+                    enabled = pillActive
                 )
                 RowDivider(colors.separator)
                 SettingsSliderRow(
@@ -76,7 +105,7 @@ fun LockScreenSheetHomeIndicatorScreen(
                     valueRange = 0.0f..35.0f,
                     defaultValue = 9.0f,
                     valueLabel = { String.format(Locale.US, "%.0f dp", it) },
-                    enabled = sheet.enabled
+                    enabled = pillActive
                 )
             }
         }

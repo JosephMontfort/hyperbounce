@@ -86,6 +86,8 @@ object LockScreenSheetHook {
             val sheet = cachedLockGlassSheetRef?.get() ?: rootView?.findViewWithTag<LockScreenGlassSheetOptimizedView>(TAG_LOCK_GLASS_SHEET)
             sheet?.visibility = View.GONE
             sheet?.swipeProgress = 0.0f
+            val pill = cachedLockPillRef?.get()
+            pill?.visibility = View.GONE
             if (rootView != null) {
                 rootView.animate().cancel()
                 rootView.translationY = 0.0f
@@ -220,8 +222,26 @@ object LockScreenSheetHook {
                                 val f = ((if (rawArgs is List<*>) rawArgs[0] else (rawArgs as Array<*>)[0]) as Number).toFloat()
                                 val kpvc = chain.thisObject ?: return result
 
+                                val cfg = LockScreenConfigHolder.sheet
+                                val active = cfg.enabled && isLockScreenActive()
+
                                 val rootView = getRootView(kpvc)
                                 val finalNotifView = getNotifView(kpvc)
+
+                                if (!active) {
+                                    val existingSheet = cachedLockGlassSheetRef?.get() ?: rootView?.findViewWithTag<LockScreenGlassSheetOptimizedView>(TAG_LOCK_GLASS_SHEET)
+                                    existingSheet?.visibility = View.GONE
+                                    existingSheet?.swipeProgress = 0.0f
+                                    val pill = cachedLockPillRef?.get() ?: getBottomAreaView(kpvc)?.findViewWithTag<View>(TAG_HOME_PILL)
+                                    pill?.visibility = View.GONE
+                                    if (rootView != null && rootView.translationY != 0.0f) {
+                                        rootView.translationY = 0.0f
+                                    }
+                                    if (finalNotifView != null && finalNotifView.translationY != 0.0f) {
+                                        finalNotifView.translationY = 0.0f
+                                    }
+                                    return result
+                                }
 
                                 val now = SystemClock.uptimeMillis()
                                 val dt = now - lastExpansionTime
@@ -241,15 +261,17 @@ object LockScreenSheetHook {
                                 if (rootView != null) {
                                     val fraction = f.coerceIn(0.0f, 1.0f)
                                     val swipeProgress = (1.0f - fraction).coerceIn(0.0f, 1.0f)
-                                    val cfg = LockScreenConfigHolder.sheet
-                                    val active = cfg.enabled && isLockScreenActive()
 
-                                    if (!active || swipeProgress <= 0.001f) {
+                                    if (swipeProgress <= 0.001f) {
                                         val existingSheet = cachedLockGlassSheetRef?.get() ?: rootView.findViewWithTag<LockScreenGlassSheetOptimizedView>(TAG_LOCK_GLASS_SHEET)
                                         existingSheet?.visibility = View.GONE
                                         existingSheet?.swipeProgress = 0.0f
                                         rootView.translationY = 0.0f
                                         finalNotifView?.translationY = 0.0f
+                                        if (!cfg.pillEnabled) {
+                                            val pill = cachedLockPillRef?.get() ?: getBottomAreaView(kpvc)?.findViewWithTag<View>(TAG_HOME_PILL)
+                                            pill?.visibility = View.GONE
+                                        }
                                         return result
                                     }
 
@@ -284,8 +306,17 @@ object LockScreenSheetHook {
                                     }
 
                                     // 4. Dynamic iOS Home Indicator Bar in KeyguardBottomAreaView
-                                    if (cachedLockPillRef?.get() == null) {
+                                    if (cfg.pillEnabled) {
                                         ensurePillInjected(kpvc, cfg)
+                                        val pill = cachedLockPillRef?.get() ?: getBottomAreaView(kpvc)?.findViewWithTag<View>(TAG_HOME_PILL)
+                                        if (pill != null && pill.visibility != View.VISIBLE) {
+                                            pill.visibility = View.VISIBLE
+                                        }
+                                    } else {
+                                        val pill = cachedLockPillRef?.get() ?: getBottomAreaView(kpvc)?.findViewWithTag<View>(TAG_HOME_PILL)
+                                        if (pill != null && pill.visibility != View.GONE) {
+                                            pill.visibility = View.GONE
+                                        }
                                     }
                                 }
                             } catch (t: Throwable) {
@@ -327,6 +358,10 @@ object LockScreenSheetHook {
                 ) {
                     module.hook(m).intercept(object : XposedInterface.Hooker {
                         override fun intercept(chain: XposedInterface.Chain): Any? {
+                            val cfg = LockScreenConfigHolder.sheet
+                            if (!cfg.enabled || !isLockScreenActive()) {
+                                return chain.proceed()
+                            }
                             try {
                                 val rawArgs = chain.args
                                 val v = (if (rawArgs is List<*>) rawArgs[1] else (rawArgs as Array<*>)[1]) as? View
@@ -345,6 +380,10 @@ object LockScreenSheetHook {
                     module.hook(m).intercept(object : XposedInterface.Hooker {
                         override fun intercept(chain: XposedInterface.Chain): Any? {
                             val result = chain.proceed()
+                            val cfg = LockScreenConfigHolder.sheet
+                            if (!cfg.enabled || !isLockScreenActive()) {
+                                return result
+                            }
                             try {
                                 val kpvc = chain.thisObject
                                 val rootView = if (kpvc != null) getRootView(kpvc) else null
@@ -430,6 +469,8 @@ object LockScreenSheetHook {
                         module.hook(m).intercept(object : XposedInterface.Hooker {
                             override fun intercept(chain: XposedInterface.Chain): Any? {
                                 val result = chain.proceed()
+                                val cfg = LockScreenConfigHolder.sheet
+                                if (!cfg.enabled || !isLockScreenActive()) return result
                                 try {
                                     val v = chain.thisObject as? ViewGroup ?: return result
                                     val sheet = v.findViewWithTag<View>(TAG_LOCK_GLASS_SHEET)
@@ -447,10 +488,13 @@ object LockScreenSheetHook {
                     ) {
                         module.hook(m).intercept(object : XposedInterface.Hooker {
                             override fun intercept(chain: XposedInterface.Chain): Any? {
-                                val rawArgs = chain.args
-                                val event = (if (rawArgs is List<*>) rawArgs[0] else (rawArgs as Array<*>)[0]) as? MotionEvent
-                                if (event != null) {
-                                    handleLockscreenTouchEvent(event)
+                                val cfg = LockScreenConfigHolder.sheet
+                                if (cfg.enabled && isLockScreenActive()) {
+                                    val rawArgs = chain.args
+                                    val event = (if (rawArgs is List<*>) rawArgs[0] else (rawArgs as Array<*>)[0]) as? MotionEvent
+                                    if (event != null) {
+                                        handleLockscreenTouchEvent(event)
+                                    }
                                 }
                                 return chain.proceed()
                             }
@@ -665,10 +709,13 @@ object LockScreenSheetHook {
     }
 
     private fun ensurePillInjected(kpvc: Any, cfg: LockScreenSheetConfig) {
-        if (cachedLockPillRef?.get() != null) return
         try {
             val bottomAreaView = getBottomAreaView(kpvc) ?: return
-            var pill = bottomAreaView.findViewWithTag<View>(TAG_HOME_PILL)
+            val pill = cachedLockPillRef?.get() ?: bottomAreaView.findViewWithTag<View>(TAG_HOME_PILL)
+            if (!cfg.enabled || !cfg.pillEnabled || !isLockScreenActive()) {
+                pill?.visibility = View.GONE
+                return
+            }
             if (pill == null) {
                 val context = bottomAreaView.context
                 val density = context.resources.displayMetrics.density
@@ -677,7 +724,7 @@ object LockScreenSheetHook {
                 val radius = pillH / 2
                 val bMargin = (cfg.pillBottomMargin * density).toInt()
 
-                pill = View(context).apply {
+                val newPill = View(context).apply {
                     id = View.generateViewId()
                     tag = TAG_HOME_PILL
 
@@ -697,9 +744,12 @@ object LockScreenSheetHook {
                 ).apply {
                     bottomMargin = bMargin
                 }
-                bottomAreaView.addView(pill, flp)
+                bottomAreaView.addView(newPill, flp)
+                cachedLockPillRef = WeakReference(newPill)
+            } else {
+                pill.visibility = View.VISIBLE
+                cachedLockPillRef = WeakReference(pill)
             }
-            cachedLockPillRef = WeakReference(pill)
         } catch (t: Throwable) {
             Log.e(TAG, "Pill injection error", t)
         }
@@ -719,6 +769,8 @@ object LockScreenSheetHook {
             if (!active) {
                 glassSheet?.visibility = View.GONE
                 glassSheet?.swipeProgress = 0.0f
+                val pill = cachedLockPillRef?.get() ?: getBottomAreaView(kpvc)?.findViewWithTag<View>(TAG_HOME_PILL)
+                pill?.visibility = View.GONE
                 return
             }
 
