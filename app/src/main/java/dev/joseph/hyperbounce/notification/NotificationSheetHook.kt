@@ -276,7 +276,7 @@ object NotificationSheetHook {
     private val isUnlockedShadeActive: Boolean
         get() {
             val cfg = NotificationSheetConfigHolder.sheet
-            return cfg.enabled && currentStatusBarState == 0 && !isKeyguardShowing && !isControlCenterActive()
+            return cfg.isSheetActive && currentStatusBarState == 0 && !isKeyguardShowing && !isControlCenterActive()
         }
 
     fun isLandscapeMode(): Boolean {
@@ -436,7 +436,7 @@ object NotificationSheetHook {
         mainHandler.post {
             val container = containerRef?.get() ?: return@post
             val cfg = NotificationSheetConfigHolder.sheet
-            if (!cfg.enabled || currentStatusBarState != 0 || isKeyguard() || isControlCenterActive()) {
+            if (!cfg.isSheetActive || currentStatusBarState != 0 || isKeyguard() || isControlCenterActive()) {
                 return@post
             }
             val isLandscape = container.resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE || container.width > container.height
@@ -1030,7 +1030,7 @@ object NotificationSheetHook {
             val cfg = NotificationSheetConfigHolder.sheet
             var sheet = container.findViewWithTag<NotificationGlassSheetView>(TAG_GLASS_SHEET)
 
-            if (!cfg.enabled || currentStatusBarState != 0 || isKeyguard() || isControlCenterActive()) {
+            if (!cfg.isSheetActive || currentStatusBarState != 0 || isKeyguard() || isControlCenterActive()) {
                 sheet?.visibility = View.GONE
                 return null
             }
@@ -1117,7 +1117,7 @@ object NotificationSheetHook {
             val cfg = NotificationSheetConfigHolder.sheet
             var pillWrapper = container.findViewWithTag<ViewGroup>(TAG_HOME_PILL)
 
-            if (!cfg.enabled || currentStatusBarState != 0 || isKeyguard() || isControlCenterActive()) {
+            if (!cfg.isSheetActive || currentStatusBarState != 0 || isKeyguard() || isControlCenterActive()) {
                 pillWrapper?.visibility = View.GONE
                 return null
             }
@@ -1220,6 +1220,24 @@ object NotificationSheetHook {
                     val cfg = NotificationSheetConfigHolder.sheet
                     var handled = true
                     when (key) {
+                        "notif_master_enabled" -> {
+                            cfg.masterEnabled = intent.getBooleanExtra("value_boolean", cfg.masterEnabled)
+                            updateExpandThreshold()
+                            if (!cfg.masterEnabled) {
+                                val container = containerRef?.get()
+                                if (container != null) {
+                                    mainHandler.post {
+                                        val curSheet = cachedGlassSheetRef?.get() ?: container.findViewWithTag<NotificationGlassSheetView>(TAG_GLASS_SHEET)
+                                        curSheet?.visibility = View.GONE
+                                        val curPill = cachedHomePillRef?.get() ?: container.findViewWithTag<View>(TAG_HOME_PILL)
+                                        curPill?.visibility = View.GONE
+                                        container.translationY = 0.0f
+                                        LockScreenCoverSheetController.onShadeReset(container)
+                                        RealtimeBackdropHelper.stopLiveRefresh()
+                                    }
+                                }
+                            }
+                        }
                         "notif_sheet_enabled" -> {
                             cfg.enabled = intent.getBooleanExtra("value_boolean", cfg.enabled)
                             updateExpandThreshold()
@@ -1538,7 +1556,7 @@ object NotificationSheetHook {
                 b
             }
 
-            val isActive = cfg.enabled && currentStatusBarState == 0 && !isControlCenterActive()
+            val isActive = cfg.isSheetActive && currentStatusBarState == 0 && !isControlCenterActive()
             val extraMargin = if (isActive) (cfg.sideMargin * density).toInt() else 0
             val targetStart = origStart + extraMargin
             val targetEnd = origEnd + extraMargin
@@ -2023,7 +2041,7 @@ object NotificationSheetHook {
         try {
             val container = containerRef?.get() ?: return
             val cfg = NotificationSheetConfigHolder.sheet
-            if (!cfg.enabled || currentStatusBarState != 0 || isKeyguard() || isControlCenterActive()) {
+            if (!cfg.isSheetActive || currentStatusBarState != 0 || isKeyguard() || isControlCenterActive()) {
                 val curSheet = cachedGlassSheetRef?.get() ?: container.findViewWithTag<NotificationGlassSheetView>(TAG_GLASS_SHEET)
                 curSheet?.isClosingMode = false
                 curSheet?.isClosingFromFullOpen = false
@@ -2761,7 +2779,7 @@ object NotificationSheetHook {
                     module.hook(m).intercept(object : XposedInterface.Hooker {
                         override fun intercept(chain: XposedInterface.Chain): Any? {
                             val cfg = NotificationSheetConfigHolder.sheet
-                            if (cfg.enabled) {
+                            if (cfg.isSheetActive) {
                                 val ctx = getInjectorContext(chain.thisObject)
                                 if (isAdvancedTexturesOn(ctx)) {
                                     val args = chain.args.toTypedArray()
@@ -2791,7 +2809,7 @@ object NotificationSheetHook {
                         override fun intercept(chain: XposedInterface.Chain): Any? {
                             val result = chain.proceed()
                             val cfg = NotificationSheetConfigHolder.sheet
-                            if (cfg.enabled) {
+                            if (cfg.isSheetActive) {
                                 try {
                                     val injector = chain.thisObject ?: return result
                                     val ctx = getInjectorContext(injector) ?: containerRef?.get()?.context
@@ -2840,7 +2858,7 @@ object NotificationSheetHook {
                         override fun intercept(chain: XposedInterface.Chain): Any? {
                             val result = chain.proceed()
                             val cfg = NotificationSheetConfigHolder.sheet
-                            if (cfg.enabled) {
+                            if (cfg.isSheetActive) {
                                 try {
                                     val controller = chain.thisObject ?: return result
                                     var ctx: Context? = null

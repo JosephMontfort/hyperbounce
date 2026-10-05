@@ -28,7 +28,6 @@ fun ScreenUnlockCascadeSettleScreen(
 
     ScreenScaffold(
         title = "Row Settling Dynamics",
-        subtitle = "Center vs outer dynamic deceleration timing",
         colors = colors,
         backdrop = backdrop,
         onBack = onBack,

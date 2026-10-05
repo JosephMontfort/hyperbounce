@@ -169,6 +169,7 @@ data class LockScreenSheetSettings(
 
 /** Feature 7: Notification Center iOS Sheet & Liquid Glass Refraction Settings */
 data class NotificationSheetSettings(
+    val masterEnabled: Boolean = true,
     val enabled: Boolean = true,
     val lockWallpaperEnabled: Boolean = false,
     val customWallpaperEnabled: Boolean = false,

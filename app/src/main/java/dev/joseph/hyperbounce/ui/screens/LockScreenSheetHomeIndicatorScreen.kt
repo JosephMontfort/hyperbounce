@@ -57,18 +57,8 @@ fun LockScreenSheetHomeIndicatorScreen(
         }
 
         item {
-            val contentAlpha = if (pillActive) 1f else 0.38f
-            SectionHeader(
-                "Pill Dimensions & Position",
-                colors,
-                modifier = Modifier.graphicsLayer { alpha = contentAlpha }
-            )
-            GlassCard(
-                backdrop,
-                Modifier
-                    .padding(horizontal = 16.dp)
-                    .graphicsLayer { alpha = contentAlpha }
-            ) {
+            SectionHeader("Pill Dimensions & Position", colors)
+            GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
                 SettingsSliderRow(
                     title = "Pill Width",
                     subtitle = "Horizontal size of the bottom home indicator",

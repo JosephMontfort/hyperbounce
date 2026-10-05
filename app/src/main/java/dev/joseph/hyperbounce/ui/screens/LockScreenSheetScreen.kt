@@ -53,18 +53,8 @@ fun LockScreenSheetScreen(
         }
 
         item {
-            val contentAlpha = if (sheet.enabled) 1f else 0.38f
-            SectionHeader(
-                "Edge Glass Thickness",
-                colors,
-                modifier = Modifier.graphicsLayer { alpha = contentAlpha }
-            )
-            GlassCard(
-                backdrop,
-                Modifier
-                    .padding(horizontal = 16.dp)
-                    .graphicsLayer { alpha = contentAlpha }
-            ) {
+            SectionHeader("Edge Glass Thickness", colors)
+            GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
                 SettingsSliderRow(
                     title = "Side Edges Glass Bevel",
                     subtitle = "Thickness of glass refraction band on left & right edges",
@@ -93,24 +83,13 @@ fun LockScreenSheetScreen(
             }
             SectionFooter(
                 "Side and bottom glass thickness can be adjusted or turned completely off (0 dp). Center of the screen remains 100% transparent wallpaper.",
-                colors,
-                modifier = Modifier.graphicsLayer { alpha = contentAlpha }
+                colors
             )
         }
 
         item {
-            val contentAlpha = if (sheet.enabled) 1f else 0.38f
-            SectionHeader(
-                "Optics & Components",
-                colors,
-                modifier = Modifier.graphicsLayer { alpha = contentAlpha }
-            )
-            GlassCard(
-                backdrop,
-                Modifier
-                    .padding(horizontal = 16.dp)
-                    .graphicsLayer { alpha = contentAlpha }
-            ) {
+            SectionHeader("Optics & Components", colors)
+            GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
                 SettingsNavRow(
                     title = "Liquid Glass Tuning",
                     subtitle = "Refraction, chromatic dispersion & corner curvature",
@@ -137,8 +116,7 @@ fun LockScreenSheetScreen(
             }
             SectionFooter(
                 "Configure optical refraction parameters, specular highlight reflections, and bottom home indicator styling.",
-                colors,
-                modifier = Modifier.graphicsLayer { alpha = contentAlpha }
+                colors
             )
         }
     }

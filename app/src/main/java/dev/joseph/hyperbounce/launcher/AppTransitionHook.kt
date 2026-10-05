@@ -188,7 +188,7 @@ object AppTransitionHook {
             module.hook(calcWidthMethod).intercept(object : XposedInterface.Hooker {
                 override fun intercept(chain: XposedInterface.Chain): Any? {
                     val cfg = LauncherConfigHolder.iosAnimConfig
-                    if (!cfg.enabled || !cfg.zeroFrictionDrag) {
+                    if (!cfg.zeroFrictionDrag) {
                         return chain.proceed()
                     }
 
@@ -225,7 +225,7 @@ object AppTransitionHook {
             module.hook(calcYMethod).intercept(object : XposedInterface.Hooker {
                 override fun intercept(chain: XposedInterface.Chain): Any? {
                     val cfg = LauncherConfigHolder.iosAnimConfig
-                    if (!cfg.enabled || !cfg.zeroFrictionDrag) {
+                    if (!cfg.zeroFrictionDrag) {
                         return chain.proceed()
                     }
 
@@ -284,7 +284,7 @@ object AppTransitionHook {
                 module.hook(frictionMethod).intercept(object : XposedInterface.Hooker {
                     override fun intercept(chain: XposedInterface.Chain): Any? {
                         val cfg = LauncherConfigHolder.iosAnimConfig
-                        if (!cfg.enabled || !cfg.zeroFrictionDrag) {
+                        if (!cfg.zeroFrictionDrag) {
                             return chain.proceed()
                         }
                         val f = (chain.args[0] as? Number)?.toFloat() ?: 0f
@@ -349,7 +349,7 @@ object AppTransitionHook {
                 module.hook(defaultCenterMethod).intercept(object : XposedInterface.Hooker {
                     override fun intercept(chain: XposedInterface.Chain): Any? {
                         val cfg = LauncherConfigHolder.iosAnimConfig
-                        if (!cfg.enabled || !cfg.recentsCentering) {
+                        if (!cfg.recentsCentering) {
                             return chain.proceed()
                         }
                         return 0 // Current task stays in the center!
@@ -366,7 +366,7 @@ object AppTransitionHook {
                 module.hook(targetIndexMethod).intercept(object : XposedInterface.Hooker {
                     override fun intercept(chain: XposedInterface.Chain): Any? {
                         val cfg = LauncherConfigHolder.iosAnimConfig
-                        if (!cfg.enabled || !cfg.recentsCentering) {
+                        if (!cfg.recentsCentering) {
                             return chain.proceed()
                         }
 
@@ -392,7 +392,7 @@ object AppTransitionHook {
             module.hook(centerMethod).intercept(object : XposedInterface.Hooker {
                 override fun intercept(chain: XposedInterface.Chain): Any? {
                     val cfg = LauncherConfigHolder.iosAnimConfig
-                    if (!cfg.enabled || !cfg.recentsCentering) {
+                    if (!cfg.recentsCentering) {
                         return chain.proceed()
                     }
 
@@ -486,7 +486,7 @@ object AppTransitionHook {
                     override fun intercept(chain: XposedInterface.Chain): Any? {
                         val result = chain.proceed()
                         val cfg = LauncherConfigHolder.iosAnimConfig
-                        if (!cfg.enabled || !cfg.stackRecentsHaptics) {
+                        if (!cfg.stackRecentsHaptics) {
                             return result
                         }
 
@@ -635,7 +635,7 @@ object AppTransitionHook {
                 module.hook(readyBackMethod).intercept(object : XposedInterface.Hooker {
                     override fun intercept(chain: XposedInterface.Chain): Any? {
                         val cfg = LauncherConfigHolder.iosAnimConfig
-                        if (!cfg.enabled || !cfg.refinedHaptics) {
+                        if (!cfg.refinedHaptics) {
                             return chain.proceed()
                         }
                         val now = SystemClock.uptimeMillis()
@@ -653,7 +653,7 @@ object AppTransitionHook {
                 module.hook(handUpMethod).intercept(object : XposedInterface.Hooker {
                     override fun intercept(chain: XposedInterface.Chain): Any? {
                         val cfg = LauncherConfigHolder.iosAnimConfig
-                        if (!cfg.enabled || !cfg.refinedHaptics) {
+                        if (!cfg.refinedHaptics) {
                             return chain.proceed()
                         }
                         val now = SystemClock.uptimeMillis()
@@ -672,7 +672,7 @@ object AppTransitionHook {
                 module.hook(enterRecentMethod).intercept(object : XposedInterface.Hooker {
                     override fun intercept(chain: XposedInterface.Chain): Any? {
                         val cfg = LauncherConfigHolder.iosAnimConfig
-                        if (!cfg.enabled || !cfg.refinedHaptics) {
+                        if (!cfg.refinedHaptics) {
                             return chain.proceed()
                         }
                         val view = chain.args[0] as? View
@@ -764,7 +764,7 @@ object AppTransitionHook {
             module.hook(convertOffsetMethod).intercept(object : XposedInterface.Hooker {
                 override fun intercept(chain: XposedInterface.Chain): Any? {
                     val cfg = LauncherConfigHolder.iosAnimConfig
-                    if (!cfg.enabled || !cfg.zeroFrictionDrag) {
+                    if (!cfg.zeroFrictionDrag) {
                         return chain.proceed()
                     }
                     val f = (chain.args[0] as? Number)?.toFloat() ?: 0f
@@ -788,7 +788,7 @@ object AppTransitionHook {
             module.hook(frictionMethod).intercept(object : XposedInterface.Hooker {
                 override fun intercept(chain: XposedInterface.Chain): Any? {
                     val cfg = LauncherConfigHolder.iosAnimConfig
-                    if (!cfg.enabled || !cfg.zeroFrictionDrag) {
+                    if (!cfg.zeroFrictionDrag) {
                         return chain.proceed()
                     }
                     val f = (chain.args[0] as? Number)?.toFloat() ?: 0f
@@ -910,26 +910,42 @@ object AppTransitionHook {
             module.hook(generateMethod).intercept(object : XposedInterface.Hooker {
                 override fun intercept(chain: XposedInterface.Chain): Any? {
                     val result = chain.proceed() as? Array<Any?> ?: return chain.proceed()
-                    val cfg = LauncherConfigHolder.iosAnimConfig
-                    if (!cfg.enabled) {
-                        return result
-                    }
-
                     val animType = (chain.args[0] as? Enum<*>)?.name ?: ""
                     if (animType.contains("ELEMENT") || animType.contains("DYNAMIC_ISLAND", ignoreCase = true)) {
                         // Dynamic Island / Status Bar Element: 100% resistant to custom transition overrides!
                         return result
                     }
 
-                    try {
-                        val speedRatio = (getAnimationSpeedRatio(classLoader) / cfg.animSpeed.coerceIn(0.50f, 2.0f))
-                        val openDampingScale = (cfg.openSpringDamping / 0.98f).coerceIn(0.70f, 1.40f)
-                        val closeDampingScale = (cfg.closeSpringDamping / 0.84f).coerceIn(0.70f, 1.40f)
-                        val dampingScale = when {
-                            animType.startsWith("OPEN") -> openDampingScale
-                            animType.startsWith("CLOSE_TO_HOME") -> closeDampingScale
-                            else -> openDampingScale
+                    val cfg = LauncherConfigHolder.iosAnimConfig
+                    val speedRatio = (getAnimationSpeedRatio(classLoader) / cfg.animSpeed.coerceIn(0.50f, 2.0f))
+                    val openDampingScale = (cfg.openSpringDamping / 0.98f).coerceIn(0.70f, 1.40f)
+                    val closeDampingScale = (cfg.closeSpringDamping / 0.84f).coerceIn(0.70f, 1.40f)
+                    val dampingScale = when {
+                        animType.startsWith("OPEN") -> openDampingScale
+                        animType.startsWith("CLOSE_TO_HOME") -> closeDampingScale
+                        else -> openDampingScale
+                    }
+
+                    if (!cfg.enabled) {
+                        try {
+                            for (i in result.indices) {
+                                val sp = result[i] ?: continue
+                                val origD = (sDField?.get(sp) as? Number)?.toFloat()
+                                val origR = (sRField?.get(sp) as? Number)?.toFloat()
+                                if (origD != null && origR != null) {
+                                    val newD = (origD * dampingScale).coerceIn(0.30f, 2.0f)
+                                    val newR = (origR * speedRatio).coerceAtLeast(0.05f)
+                                    sDField?.set(sp, newD)
+                                    sRField?.set(sp, newR)
+                                }
+                            }
+                        } catch (t: Throwable) {
+                            Log.e(TAG, "Error scaling stock HyperOS spring parameters", t)
                         }
+                        return result
+                    }
+
+                    try {
 
                         // Start/Target rects for screen coordinate normalization
                         val iconRect = if (animType.startsWith("OPEN")) {
@@ -1448,7 +1464,7 @@ object AppTransitionHook {
             module.hook(getIconIndexMethod).intercept(object : XposedInterface.Hooker {
                 override fun intercept(chain: XposedInterface.Chain): Any? {
                     val cfg = LauncherConfigHolder.iosAnimConfig
-                    if (!cfg.enabled || !cfg.folderTracking) return chain.proceed()
+                    if (!cfg.folderTracking) return chain.proceed()
 
                     val controller = chain.thisObject ?: return chain.proceed()
                     val num = (chain.args[0] as? Integer)?.toInt() ?: return chain.proceed()
@@ -1483,7 +1499,7 @@ object AppTransitionHook {
             module.hook(initIconLocMethod).intercept(object : XposedInterface.Hooker {
                 override fun intercept(chain: XposedInterface.Chain): Any? {
                     val cfg = LauncherConfigHolder.iosAnimConfig
-                    if (!cfg.enabled || !cfg.folderTracking) return chain.proceed()
+                    if (!cfg.folderTracking) return chain.proceed()
 
                     try {
                         val controller = chain.thisObject ?: return chain.proceed()
@@ -1620,7 +1636,7 @@ object AppTransitionHook {
             module.hook(updatePosMethod).intercept(object : XposedInterface.Hooker {
                 override fun intercept(chain: XposedInterface.Chain): Any? {
                     val cfg = LauncherConfigHolder.iosAnimConfig
-                    if (!cfg.enabled || !cfg.folderTracking) return chain.proceed()
+                    if (!cfg.folderTracking) return chain.proceed()
 
                     try {
                         val controller = chain.thisObject ?: return chain.proceed()
@@ -1719,7 +1735,7 @@ object AppTransitionHook {
             module.hook(setVisibleScaleMethod).intercept(object : XposedInterface.Hooker {
                 override fun intercept(chain: XposedInterface.Chain): Any? {
                     val cfg = LauncherConfigHolder.iosAnimConfig
-                    if (!cfg.enabled || !cfg.folderTracking) return chain.proceed()
+                    if (!cfg.folderTracking) return chain.proceed()
 
                     try {
                         val controller = chain.thisObject ?: return chain.proceed()
@@ -1818,7 +1834,7 @@ object AppTransitionHook {
             module.hook(startFolderAnimMethod).intercept(object : XposedInterface.Hooker {
                 override fun intercept(chain: XposedInterface.Chain): Any? {
                     val cfg = LauncherConfigHolder.iosAnimConfig
-                    if (!cfg.enabled || !cfg.folderTracking) return chain.proceed()
+                    if (!cfg.folderTracking) return chain.proceed()
 
                     val isOpen = chain.args[0] as? Boolean ?: true
                     val iFolderIcon = chain.args[1]
@@ -1890,7 +1906,7 @@ object AppTransitionHook {
             module.hook(getDelayMethod).intercept(object : XposedInterface.Hooker {
                 override fun intercept(chain: XposedInterface.Chain): Any {
                     val cfg = LauncherConfigHolder.iosAnimConfig
-                    if (cfg.enabled && cfg.folderTracking) return 0L
+                    if (cfg.folderTracking) return 0L
                     return chain.proceed()
                 }
             })
@@ -1898,7 +1914,7 @@ object AppTransitionHook {
             module.hook(getGridRespMethod).intercept(object : XposedInterface.Hooker {
                 override fun intercept(chain: XposedInterface.Chain): Any {
                     val cfg = LauncherConfigHolder.iosAnimConfig
-                    if (cfg.enabled && cfg.folderTracking) return 0.32f
+                    if (cfg.folderTracking) return 0.32f
                     return chain.proceed()
                 }
             })
@@ -1906,7 +1922,7 @@ object AppTransitionHook {
             module.hook(getPrevRespMethod).intercept(object : XposedInterface.Hooker {
                 override fun intercept(chain: XposedInterface.Chain): Any {
                     val cfg = LauncherConfigHolder.iosAnimConfig
-                    if (cfg.enabled && cfg.folderTracking) return 0.32f
+                    if (cfg.folderTracking) return 0.32f
                     return chain.proceed()
                 }
             })
@@ -1914,7 +1930,7 @@ object AppTransitionHook {
             module.hook(getClosePrevRespMethod).intercept(object : XposedInterface.Hooker {
                 override fun intercept(chain: XposedInterface.Chain): Any {
                     val cfg = LauncherConfigHolder.iosAnimConfig
-                    if (cfg.enabled && cfg.folderTracking) return 0.28f
+                    if (cfg.folderTracking) return 0.28f
                     return chain.proceed()
                 }
             })

@@ -110,17 +110,8 @@ fun EngineScreen(
 
         item {
             val combinedBackdrop = rememberCombinedBackdrop(backdrop, contentBackdrop)
-            SectionHeader(
-                "Rendering Engine",
-                colors,
-                modifier = Modifier.graphicsLayer { alpha = if (masterEnabled) 1f else 0.38f }
-            )
-            GlassCard(
-                backdrop,
-                Modifier
-                    .padding(horizontal = 16.dp, vertical = 4.dp)
-                    .graphicsLayer { alpha = if (masterEnabled) 1f else 0.38f }
-            ) {
+            SectionHeader("Rendering Engine", colors)
+            GlassCard(backdrop, Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
                 EngineRow(
                     title = "Toggles",
                     colors = colors,
@@ -142,17 +133,8 @@ fun EngineScreen(
         }
 
         item {
-            SectionHeader(
-                "Toggles",
-                colors,
-                modifier = Modifier.graphicsLayer { alpha = if (togglesEnabled) 1f else 0.38f }
-            )
-            GlassCard(
-                backdrop,
-                Modifier
-                    .padding(horizontal = 16.dp, vertical = 4.dp)
-                    .graphicsLayer { alpha = if (togglesEnabled) 1f else 0.38f }
-            ) {
+            SectionHeader("Toggles", colors)
+            GlassCard(backdrop, Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
                 SettingsNavRow(
                     title = "Toggles Appearance",
                     subtitle = "Accent color & Liquid Glass optics",
@@ -172,17 +154,8 @@ fun EngineScreen(
         }
 
         item {
-            SectionHeader(
-                "Sliders",
-                colors,
-                modifier = Modifier.graphicsLayer { alpha = if (slidersEnabled) 1f else 0.38f }
-            )
-            GlassCard(
-                backdrop,
-                Modifier
-                    .padding(horizontal = 16.dp, vertical = 4.dp)
-                    .graphicsLayer { alpha = if (slidersEnabled) 1f else 0.38f }
-            ) {
+            SectionHeader("Sliders", colors)
+            GlassCard(backdrop, Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
                 SettingsNavRow(
                     title = "Sliders Appearance",
                     subtitle = "Track accent & Liquid Glass optics",
@@ -202,17 +175,8 @@ fun EngineScreen(
         }
 
         item {
-            SectionHeader(
-                "Third-Party Apps",
-                colors,
-                modifier = Modifier.graphicsLayer { alpha = if (masterEnabled) 1f else 0.38f }
-            )
-            GlassCard(
-                backdrop,
-                Modifier
-                    .padding(horizontal = 16.dp, vertical = 4.dp)
-                    .graphicsLayer { alpha = if (masterEnabled) 1f else 0.38f }
-            ) {
+            SectionHeader("Third-Party Apps", colors)
+            GlassCard(backdrop, Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
                 SettingsToggleRow(
                     title = "MIUIX App Hooking",
                     subtitle = "Auto-detect and replace toggles and sliders in third-party apps using miuix-kmp library",

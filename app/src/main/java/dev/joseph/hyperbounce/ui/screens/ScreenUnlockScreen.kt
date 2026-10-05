@@ -56,7 +56,7 @@ fun ScreenUnlockScreen(
         item {
             GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
                 SettingsToggleRow(
-                    title = "Enable Unlock Kinetics",
+                    title = "Enable Hook",
                     subtitle = null,
                     colors = colors,
                     backdrop = backdrop,
@@ -85,6 +85,7 @@ fun ScreenUnlockScreen(
                             selected = unlock.animMode == 0,
                             colors = colors,
                             modifier = Modifier.weight(1f),
+                            enabled = unlock.enabled,
                             onClick = { unlock.setAnimMode(0) }
                         )
                         ModeSegment(
@@ -93,6 +94,7 @@ fun ScreenUnlockScreen(
                             selected = unlock.animMode == 1,
                             colors = colors,
                             modifier = Modifier.weight(1f),
+                            enabled = unlock.enabled,
                             onClick = { unlock.setAnimMode(1) }
                         )
                     }
@@ -138,14 +140,16 @@ fun ScreenUnlockScreen(
                         title = "Radial Spring Kinetics",
                         subtitle = "Center damping, edge delay & 3D perspective",
                         colors = colors,
-                        onClick = { onNavigate(Destination.ScreenUnlockRadialKinetics) }
+                        onClick = { onNavigate(Destination.ScreenUnlockRadialKinetics) },
+                        enabled = unlock.enabled
                     )
                     RowDivider(colors.separator)
                     SettingsNavRow(
                         title = "Radial Dock Settling",
                         subtitle = "Dock icons bounce & arrival settling",
                         colors = colors,
-                        onClick = { onNavigate(Destination.ScreenUnlockRadialDock) }
+                        onClick = { onNavigate(Destination.ScreenUnlockRadialDock) },
+                        enabled = unlock.enabled
                     )
                 }
                 SectionFooter(
@@ -161,35 +165,40 @@ fun ScreenUnlockScreen(
                         title = "Global Kinetics & Velocity",
                         subtitle = "Duration scale, velocity influence & resting damping",
                         colors = colors,
-                        onClick = { onNavigate(Destination.ScreenUnlockCascadeGlobals) }
+                        onClick = { onNavigate(Destination.ScreenUnlockCascadeGlobals) },
+                        enabled = unlock.enabled
                     )
                     RowDivider(colors.separator)
                     SettingsNavRow(
                         title = "Kinetic Dock Isolation",
                         subtitle = "Dock damping, arrival response & 3D depth",
                         colors = colors,
-                        onClick = { onNavigate(Destination.ScreenUnlockCascadeDock) }
+                        onClick = { onNavigate(Destination.ScreenUnlockCascadeDock) },
+                        enabled = unlock.enabled
                     )
                     RowDivider(colors.separator)
                     SettingsNavRow(
                         title = "Row 3D Perspective (Z-Depth)",
                         subtitle = "Row-by-row Z-axis camera elevation",
                         colors = colors,
-                        onClick = { onNavigate(Destination.ScreenUnlockCascadeZDepth) }
+                        onClick = { onNavigate(Destination.ScreenUnlockCascadeZDepth) },
+                        enabled = unlock.enabled
                     )
                     RowDivider(colors.separator)
                     SettingsNavRow(
                         title = "Row Velocity Bounce",
                         subtitle = "Center vs outer dynamic overshoot ratios",
                         colors = colors,
-                        onClick = { onNavigate(Destination.ScreenUnlockCascadeBounce) }
+                        onClick = { onNavigate(Destination.ScreenUnlockCascadeBounce) },
+                        enabled = unlock.enabled
                     )
                     RowDivider(colors.separator)
                     SettingsNavRow(
                         title = "Row Settling Dynamics",
                         subtitle = "Center vs outer dynamic deceleration timing",
                         colors = colors,
-                        onClick = { onNavigate(Destination.ScreenUnlockCascadeSettle) }
+                        onClick = { onNavigate(Destination.ScreenUnlockCascadeSettle) },
+                        enabled = unlock.enabled
                     )
                 }
                 SectionFooter(
@@ -208,15 +217,19 @@ private fun ModeSegment(
     selected: Boolean,
     colors: HyperBounceColors,
     modifier: Modifier = Modifier,
+    enabled: Boolean = true,
     onClick: () -> Unit
 ) {
     val bg = if (selected) colors.accentBlue.copy(alpha = 0.25f) else Color.White.copy(alpha = 0.05f)
 
     Box(
         modifier = modifier
+            .graphicsLayer { alpha = if (enabled) 1f else 0.35f }
             .clip(RoundedCornerShape(12.dp))
             .background(bg)
-            .clickable(onClick = onClick)
+            .then(
+                if (enabled) Modifier.clickable(onClick = onClick) else Modifier
+            )
             .padding(vertical = 10.dp, horizontal = 12.dp)
     ) {
         Column(

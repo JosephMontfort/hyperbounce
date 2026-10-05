@@ -39,12 +39,12 @@ fun AppTransitionsScreen(
         restartAppSubtitle = "Restart com.miui.home",
         onRestartApp = { dev.joseph.hyperbounce.ui.utils.RootUtils.restartLauncher(context) }
     ) { _ ->
-        // 1. MASTER SWITCH
+        // 1. ENHANCED ANIMATION ENGINE SWITCH
         item {
             GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
                 SettingsToggleRow(
-                    title = "Enable App Transitions Engine",
-                    subtitle = null,
+                    title = "Enable Enhanced Animation Engine",
+                    subtitle = "Enhances app open and close animations (not recommended)",
                     colors = colors,
                     backdrop = backdrop,
                     checked = trans.enabled,
@@ -66,8 +66,7 @@ fun AppTransitionsScreen(
                     onValueChange = trans::setAnimSpeed,
                     valueRange = 0.50f..1.80f,
                     defaultValue = 1.00f,
-                    valueLabel = { String.format(Locale.US, "%.2fx", it) },
-                    enabled = trans.enabled
+                    valueLabel = { String.format(Locale.US, "%.2fx", it) }
                 )
                 RowDivider(colors.separator)
                 SettingsSliderRow(
@@ -79,8 +78,7 @@ fun AppTransitionsScreen(
                     onValueChange = trans::setOpenSpringDamping,
                     valueRange = 0.80f..1.25f,
                     defaultValue = 0.98f,
-                    valueLabel = { String.format(Locale.US, "%.2f", it) },
-                    enabled = trans.enabled
+                    valueLabel = { String.format(Locale.US, "%.2f", it) }
                 )
                 RowDivider(colors.separator)
                 SettingsSliderRow(
@@ -92,8 +90,7 @@ fun AppTransitionsScreen(
                     onValueChange = trans::setCloseSpringDamping,
                     valueRange = 0.70f..1.10f,
                     defaultValue = 0.84f,
-                    valueLabel = { String.format(Locale.US, "%.2f", it) },
-                    enabled = trans.enabled
+                    valueLabel = { String.format(Locale.US, "%.2f", it) }
                 )
             }
         }
@@ -108,8 +105,7 @@ fun AppTransitionsScreen(
                     colors = colors,
                     backdrop = backdrop,
                     checked = trans.folderTracking,
-                    onCheckedChange = trans::setFolderTracking,
-                    enabled = trans.enabled
+                    onCheckedChange = trans::setFolderTracking
                 )
                 RowDivider(colors.separator)
                 SettingsToggleRow(
@@ -118,8 +114,7 @@ fun AppTransitionsScreen(
                     colors = colors,
                     backdrop = backdrop,
                     checked = trans.recentsCentering,
-                    onCheckedChange = trans::setRecentsCentering,
-                    enabled = trans.enabled
+                    onCheckedChange = trans::setRecentsCentering
                 )
                 RowDivider(colors.separator)
                 SettingsToggleRow(
@@ -128,24 +123,22 @@ fun AppTransitionsScreen(
                     colors = colors,
                     backdrop = backdrop,
                     checked = trans.zeroFrictionDrag,
-                    onCheckedChange = trans::setZeroFrictionDrag,
-                    enabled = trans.enabled
+                    onCheckedChange = trans::setZeroFrictionDrag
                 )
             }
         }
 
-        // 4. TACTILE HAPTICS
+        // 4. HAPTICS
         item {
             SectionHeader("Haptics", colors)
             GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
                 SettingsToggleRow(
-                    title = "Refined Tactile Haptics",
+                    title = "Refined Haptics",
                     subtitle = "AOSP style crisp haptics for back and recents swipe up gesture",
                     colors = colors,
                     backdrop = backdrop,
                     checked = trans.refinedHaptics,
-                    onCheckedChange = trans::setRefinedHaptics,
-                    enabled = trans.enabled
+                    onCheckedChange = trans::setRefinedHaptics
                 )
                 RowDivider(colors.separator)
                 SettingsToggleRow(
@@ -154,8 +147,7 @@ fun AppTransitionsScreen(
                     colors = colors,
                     backdrop = backdrop,
                     checked = trans.stackRecentsHaptics,
-                    onCheckedChange = trans::setStackRecentsHaptics,
-                    enabled = trans.enabled
+                    onCheckedChange = trans::setStackRecentsHaptics
                 )
             }
         }

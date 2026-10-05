@@ -540,6 +540,8 @@ object ScreenUnlockHook {
                             }
                         }
                         "dev.joseph.hyperbounce.ACTION_TRIGGER_UNLOCK_ANIMATION" -> {
+                            val cfg = LauncherConfigHolder.unlockConfig
+                            if (!cfg.enabled) return
                             val velocity = intent.getFloatExtra("EXTRA_VELOCITY", 0.0f)
                             if (velocity != 0.0f) {
                                 updateVelocity(velocity)

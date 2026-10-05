@@ -3,6 +3,7 @@ package dev.joseph.hyperbounce.notification
 import android.content.SharedPreferences
 
 data class NotificationSheetConfig(
+    var masterEnabled: Boolean = true,
     var enabled: Boolean = true,
     var lockWallpaperEnabled: Boolean = false,
     var customWallpaperEnabled: Boolean = false,
@@ -46,10 +47,16 @@ data class NotificationSheetConfig(
     var iosHunSqueezeStrength: Float = 3.0f
 ) {
     /**
-     * True only if sheet is enabled and lockscreen wallpaper toggle is on.
+     * True only if master switch and sheet toggle are both on.
+     */
+    val isSheetActive: Boolean
+        get() = masterEnabled && enabled
+
+    /**
+     * True only if sheet is active and lockscreen wallpaper toggle is on.
      */
     val isWallpaperActive: Boolean
-        get() = enabled && lockWallpaperEnabled
+        get() = isSheetActive && lockWallpaperEnabled
 
     /**
      * Custom wallpaper is active only if lockscreen wallpaper feature is on and custom wallpaper toggle is enabled.
@@ -89,6 +96,7 @@ object NotificationSheetConfigHolder {
     val sheet = NotificationSheetConfig()
 
     fun updateFromPrefs(prefs: SharedPreferences) {
+        sheet.masterEnabled = prefs.getBoolean("notif_master_enabled", true)
         sheet.enabled = prefs.getBoolean("notif_sheet_enabled", true)
         sheet.lockWallpaperEnabled = prefs.getBoolean("notif_sheet_lock_wallpaper_enabled", false)
         sheet.customWallpaperEnabled = prefs.getBoolean("notif_sheet_custom_wallpaper_enabled", false)

@@ -26,7 +26,6 @@ fun ScreenUnlockCascadeDockScreen(
 
     ScreenScaffold(
         title = "Kinetic Dock Isolation",
-        subtitle = "Dock damping, arrival response & 3D depth",
         colors = colors,
         backdrop = backdrop,
         onBack = onBack,

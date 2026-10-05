@@ -53,18 +53,8 @@ fun KeypadScreen(
         }
 
         item {
-            val contentAlpha = if (keypad.enabled) 1f else 0.38f
-            SectionHeader(
-                "Physics & Layout",
-                colors,
-                modifier = Modifier.graphicsLayer { alpha = contentAlpha }
-            )
-            GlassCard(
-                backdrop,
-                Modifier
-                    .padding(horizontal = 16.dp)
-                    .graphicsLayer { alpha = contentAlpha }
-            ) {
+            SectionHeader("Physics & Layout", colors)
+            GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
                 SettingsNavRow(
                     title = "iOS 26 Radial Bloom Physics",
                     subtitle = "Cluster origin, radial spring damping & bloom expansion",
@@ -99,8 +89,7 @@ fun KeypadScreen(
             }
             SectionFooter(
                 "Configure radial bloom kinetics, real-time glass optics, button dimensions, and lockscreen layout coordinates.",
-                colors,
-                modifier = Modifier.graphicsLayer { alpha = contentAlpha }
+                colors
             )
         }
     }

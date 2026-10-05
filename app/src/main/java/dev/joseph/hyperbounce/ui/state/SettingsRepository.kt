@@ -641,6 +641,7 @@ class SettingsRepository(context: Context) {
     inner class NotificationSheetHolder {
         private val defaults = NotificationSheetSettings()
 
+        var masterEnabled by prefsBooleanState("notif_master_enabled", defaults.masterEnabled); private set
         var enabled by prefsBooleanState("notif_sheet_enabled", defaults.enabled); private set
         var lockWallpaperEnabled by prefsBooleanState("notif_sheet_lock_wallpaper_enabled", defaults.lockWallpaperEnabled); private set
         var customWallpaperEnabled by prefsBooleanState("notif_sheet_custom_wallpaper_enabled", defaults.customWallpaperEnabled); private set
@@ -679,6 +680,7 @@ class SettingsRepository(context: Context) {
         var iosHunSqueezeStrength by prefsFloatState("notif_ios_hun_squeeze_strength", defaults.iosHunSqueezeStrength); private set
 
         fun snapshot(): NotificationSheetSettings = NotificationSheetSettings(
+            masterEnabled,
             enabled, lockWallpaperEnabled, customWallpaperEnabled, lockWallpaperHomescreenOnly,
             depthWallpaperEnabled, depthCustomSubject,
             oneToOneTrackingEnabled,
@@ -693,6 +695,7 @@ class SettingsRepository(context: Context) {
             iosHunAnimationEnabled, iosHunDurationMs, iosHunStartScale, iosHunSqueezeStrength
         )
 
+        @JvmName("setNotifMasterEnabledPref") fun setMasterEnabled(v: Boolean) { masterEnabled = v }
         @JvmName("setNotifSheetEnabledPref") fun setEnabled(v: Boolean) { enabled = v }
         @JvmName("setNotifSheetLockWallpaperEnabledPref") fun setLockWallpaperEnabled(v: Boolean) { lockWallpaperEnabled = v }
         @JvmName("setNotifSheetCustomWallpaperEnabledPref") fun setCustomWallpaperEnabled(v: Boolean) { customWallpaperEnabled = v }
@@ -731,6 +734,7 @@ class SettingsRepository(context: Context) {
         @JvmName("setNotifIosHunSqueezeStrengthPref") fun setIosHunSqueezeStrength(v: Float) { iosHunSqueezeStrength = v }
 
         fun reloadFromDefaults() {
+            masterEnabled = defaults.masterEnabled
             enabled = defaults.enabled
             lockWallpaperEnabled = defaults.lockWallpaperEnabled
             customWallpaperEnabled = defaults.customWallpaperEnabled

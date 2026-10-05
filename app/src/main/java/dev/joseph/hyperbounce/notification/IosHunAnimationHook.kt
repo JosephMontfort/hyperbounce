@@ -110,7 +110,7 @@ object IosHunAnimationHook {
                                     val isKeyguard = NotificationSheetHook.currentStatusBarState == 1 || isKeyguardActive(chain.thisObject)
                                     val isShadeOpen = NotificationSheetHook.isShadeSwitching || isShadeExpanded(chain.thisObject)
 
-                                    if (cfg.enabled && cfg.iosHunAnimationEnabled && !isKeyguard && !isShadeOpen) {
+                                    if (cfg.masterEnabled && cfg.iosHunAnimationEnabled && !isKeyguard && !isShadeOpen) {
                                         if (isAppear) {
                                             handleHeadsUpAppear(row, chain.thisObject)
                                         } else {

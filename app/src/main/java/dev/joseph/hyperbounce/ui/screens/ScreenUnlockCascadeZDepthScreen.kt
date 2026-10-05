@@ -28,7 +28,6 @@ fun ScreenUnlockCascadeZDepthScreen(
 
     ScreenScaffold(
         title = "Row 3D Perspective",
-        subtitle = "Row-by-row Z-axis camera elevation",
         colors = colors,
         backdrop = backdrop,
         onBack = onBack,

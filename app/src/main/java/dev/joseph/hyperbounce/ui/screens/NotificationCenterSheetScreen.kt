@@ -148,6 +148,81 @@ fun NotificationCenterSheetScreen(
         restartAppSubtitle = "Restart com.android.systemui",
         onRestartApp = { dev.joseph.hyperbounce.ui.utils.RootUtils.restartSystemUI(context) }
     ) { _ ->
+        val sheetActive = sheet.masterEnabled && sheet.enabled
+
+        item {
+            GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
+                SettingsToggleRow(
+                    title = "Enable Hook",
+                    subtitle = null,
+                    colors = colors,
+                    backdrop = backdrop,
+                    checked = sheet.masterEnabled,
+                    onCheckedChange = sheet::setMasterEnabled
+                )
+            }
+        }
+
+        item {
+            SectionHeader("Pop-Up Notification Animation", colors)
+            GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
+                SettingsToggleRow(
+                    title = "iOS 26 Pop-Up Animation",
+                    subtitle = "iOS 26 style animation for pop up notifications",
+                    colors = colors,
+                    backdrop = backdrop,
+                    checked = sheet.iosHunAnimationEnabled,
+                    onCheckedChange = sheet::setIosHunAnimationEnabled,
+                    enabled = sheet.masterEnabled
+                )
+                if (sheet.iosHunAnimationEnabled) {
+                    RowDivider(colors.separator)
+                    SettingsSliderRow(
+                        title = "Animation Speed (Duration)",
+                        subtitle = null,
+                        colors = colors,
+                        backdrop = backdrop,
+                        value = sheet.iosHunDurationMs,
+                        onValueChange = sheet::setIosHunDurationMs,
+                        valueRange = 200.0f..1000.0f,
+                        defaultValue = 600.0f,
+                        valueLabel = { String.format(Locale.US, "%.0f ms", it) },
+                        enabled = sheet.masterEnabled && sheet.iosHunAnimationEnabled
+                    )
+                    RowDivider(colors.separator)
+                    SettingsSliderRow(
+                        title = "Emergence Start Scale",
+                        subtitle = "Initial size when emerging outward from the center top notch",
+                        colors = colors,
+                        backdrop = backdrop,
+                        value = sheet.iosHunStartScale,
+                        onValueChange = sheet::setIosHunStartScale,
+                        valueRange = 0.20f..0.70f,
+                        defaultValue = 0.25f,
+                        valueLabel = { String.format(Locale.US, "%.0f%%", it * 100.0f) },
+                        enabled = sheet.masterEnabled && sheet.iosHunAnimationEnabled
+                    )
+                    RowDivider(colors.separator)
+                    SettingsSliderRow(
+                        title = "Inertia Squeeze & Stretch",
+                        subtitle = "Physics velocity elongation during transit and lateral squash upon landing",
+                        colors = colors,
+                        backdrop = backdrop,
+                        value = sheet.iosHunSqueezeStrength,
+                        onValueChange = sheet::setIosHunSqueezeStrength,
+                        valueRange = 0.0f..4.0f,
+                        defaultValue = 3.0f,
+                        valueLabel = { String.format(Locale.US, "%.0f%%", it * 100.0f) },
+                        enabled = sheet.masterEnabled && sheet.iosHunAnimationEnabled
+                    )
+                }
+            }
+            SectionFooter(
+                "Applies exclusively to incoming heads-up pop-up notifications after the screen is unlocked. Does not affect lock screen notifications or open notification shade.",
+                colors
+            )
+        }
+
         item {
             GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
                 SettingsToggleRow(
@@ -156,7 +231,8 @@ fun NotificationCenterSheetScreen(
                     colors = colors,
                     backdrop = backdrop,
                     checked = sheet.enabled,
-                    onCheckedChange = sheet::setEnabled
+                    onCheckedChange = sheet::setEnabled,
+                    enabled = sheet.masterEnabled
                 )
             }
         }
@@ -171,7 +247,7 @@ fun NotificationCenterSheetScreen(
                     backdrop = backdrop,
                     checked = sheet.lockWallpaperEnabled,
                     onCheckedChange = sheet::setLockWallpaperEnabled,
-                    enabled = sheet.enabled
+                    enabled = sheetActive
                 )
                 if (sheet.lockWallpaperEnabled) {
                     RowDivider(colors.separator)
@@ -182,7 +258,7 @@ fun NotificationCenterSheetScreen(
                         backdrop = backdrop,
                         checked = sheet.oneToOneTrackingEnabled,
                         onCheckedChange = sheet::setOneToOneTrackingEnabled,
-                        enabled = sheet.enabled && sheet.lockWallpaperEnabled
+                        enabled = sheetActive && sheet.lockWallpaperEnabled
                     )
                     RowDivider(colors.separator)
                     SettingsToggleRow(
@@ -192,7 +268,7 @@ fun NotificationCenterSheetScreen(
                         backdrop = backdrop,
                         checked = sheet.lockWallpaperHomescreenOnly,
                         onCheckedChange = sheet::setLockWallpaperHomescreenOnly,
-                        enabled = sheet.enabled && sheet.lockWallpaperEnabled
+                        enabled = sheetActive && sheet.lockWallpaperEnabled
                     )
                     RowDivider(colors.separator)
                     SettingsToggleRow(
@@ -202,7 +278,7 @@ fun NotificationCenterSheetScreen(
                         backdrop = backdrop,
                         checked = sheet.customWallpaperEnabled,
                         onCheckedChange = sheet::setCustomWallpaperEnabled,
-                        enabled = sheet.enabled && sheet.lockWallpaperEnabled
+                        enabled = sheetActive && sheet.lockWallpaperEnabled
                     )
                     if (sheet.customWallpaperEnabled) {
                         RowDivider(colors.separator)
@@ -210,6 +286,7 @@ fun NotificationCenterSheetScreen(
                             title = if (hasCustomWallpaper) "Change & Crop Wallpaper" else "Choose & Crop Wallpaper",
                             subtitle = if (hasCustomWallpaper) "Custom wallpaper active. Tap to choose a new one and crop" else "Pick an image and crop",
                             colors = colors,
+                            enabled = sheetActive && sheet.lockWallpaperEnabled && sheet.customWallpaperEnabled,
                             onClick = {
                                 customWallpaperPickerLauncher.launch("image/*")
                             }
@@ -221,6 +298,7 @@ fun NotificationCenterSheetScreen(
                                 subtitle = "Revert to lockscreen wallpaper background",
                                 colors = colors,
                                 titleColor = colors.accentRed,
+                                enabled = sheetActive && sheet.lockWallpaperEnabled && sheet.customWallpaperEnabled,
                                 onClick = {
                                     CustomWallpaperHelper.clearCustomWallpaper(context)
                                     hasCustomWallpaper = false
@@ -256,7 +334,7 @@ fun NotificationCenterSheetScreen(
                             sheet.setDepthWallpaperEnabled(enabled)
                             hasCustomSubject = DepthWallpaperHelper.hasCustomSubject(context) || sheet.depthCustomSubject
                         },
-                        enabled = sheet.enabled && sheet.lockWallpaperEnabled
+                        enabled = sheetActive && sheet.lockWallpaperEnabled
                     )
                     if (sheet.depthWallpaperEnabled) {
                         RowDivider(colors.separator)
@@ -264,6 +342,7 @@ fun NotificationCenterSheetScreen(
                             title = if (hasCustomSubject) "Change Custom Subject (PNG)" else "Upload Custom Subject (PNG)",
                             subtitle = if (hasCustomSubject) "Custom subject active (cutout). Tap to pick another" else "Use your own cutout image with background already removed",
                             colors = colors,
+                            enabled = sheetActive && sheet.lockWallpaperEnabled && sheet.depthWallpaperEnabled,
                             onClick = {
                                 imagePickerLauncher.launch("image/*")
                             }
@@ -274,6 +353,7 @@ fun NotificationCenterSheetScreen(
                                 title = "Adjust Depth Subject Position",
                                 subtitle = "Reposition and scale the cutout over the wallpaper",
                                 colors = colors,
+                                enabled = sheetActive && sheet.lockWallpaperEnabled && sheet.depthWallpaperEnabled,
                                 onClick = {
                                     val currentBmp = DepthWallpaperHelper.getSubjectBitmap(context)
                                     if (currentBmp != null) {
@@ -289,6 +369,7 @@ fun NotificationCenterSheetScreen(
                                 subtitle = "Clear custom cutout subject",
                                 colors = colors,
                                 titleColor = colors.accentRed,
+                                enabled = sheetActive && sheet.lockWallpaperEnabled && sheet.depthWallpaperEnabled,
                                 onClick = {
                                     DepthWallpaperHelper.clearCustomSubject(context) { success ->
                                         hasCustomSubject = false
@@ -320,7 +401,7 @@ fun NotificationCenterSheetScreen(
                         backdrop = backdrop,
                         checked = sheet.lockScreenAsNotifCenterEnabled,
                         onCheckedChange = sheet::setLockScreenAsNotifCenterEnabled,
-                        enabled = sheet.enabled && sheet.lockWallpaperEnabled
+                        enabled = sheetActive && sheet.lockWallpaperEnabled
                     )
                     if (sheet.lockScreenAsNotifCenterEnabled) {
                         RowDivider(colors.separator)
@@ -331,7 +412,7 @@ fun NotificationCenterSheetScreen(
                             backdrop = backdrop,
                             checked = sheet.showBottomWidgets,
                             onCheckedChange = sheet::setShowBottomWidgets,
-                            enabled = sheet.enabled && sheet.lockWallpaperEnabled && sheet.lockScreenAsNotifCenterEnabled
+                            enabled = sheetActive && sheet.lockWallpaperEnabled && sheet.lockScreenAsNotifCenterEnabled
                         )
                     }
                 }
@@ -352,7 +433,7 @@ fun NotificationCenterSheetScreen(
                     backdrop = backdrop,
                     checked = sheet.glassEffectsEnabled,
                     onCheckedChange = sheet::setGlassEffectsEnabled,
-                    enabled = sheet.enabled && sheet.lockWallpaperEnabled
+                    enabled = sheetActive && sheet.lockWallpaperEnabled
                 )
                 if (sheet.glassEffectsEnabled) {
                     RowDivider(colors.separator)
@@ -369,7 +450,7 @@ fun NotificationCenterSheetScreen(
                         valueRange = 0.0f..80.0f,
                         defaultValue = 32.0f,
                         valueLabel = { String.format(Locale.US, "%.0f dp", it) },
-                        enabled = sheet.enabled && sheet.lockWallpaperEnabled && sheet.glassEffectsEnabled
+                        enabled = sheetActive && sheet.lockWallpaperEnabled && sheet.glassEffectsEnabled
                     )
                     RowDivider(colors.separator)
                     SettingsSliderRow(
@@ -382,7 +463,7 @@ fun NotificationCenterSheetScreen(
                         valueRange = 0.0f..80.0f,
                         defaultValue = 28.0f,
                         valueLabel = { String.format(Locale.US, "%.0f dp", it) },
-                        enabled = sheet.enabled && sheet.lockWallpaperEnabled && sheet.glassEffectsEnabled
+                        enabled = sheetActive && sheet.lockWallpaperEnabled && sheet.glassEffectsEnabled
                     )
                     RowDivider(colors.separator)
                     SettingsSliderRow(
@@ -395,7 +476,7 @@ fun NotificationCenterSheetScreen(
                         valueRange = 0.0f..64.0f,
                         defaultValue = 36.0f,
                         valueLabel = { String.format(Locale.US, "%.0f dp", it) },
-                        enabled = sheet.enabled
+                        enabled = sheetActive
                     )
                 }
             }
@@ -418,7 +499,7 @@ fun NotificationCenterSheetScreen(
                     valueRange = 0.0f..32.0f,
                     defaultValue = 14.0f,
                     valueLabel = { String.format(Locale.US, "%.0f dp", it) },
-                    enabled = sheet.enabled
+                    enabled = sheetActive
                 )
             }
             SectionFooter(
@@ -434,6 +515,7 @@ fun NotificationCenterSheetScreen(
                     title = "Liquid Glass Tuning",
                     subtitle = "Refraction, chromatic dispersion & corner curvature",
                     colors = colors,
+                    enabled = sheetActive,
                     onClick = { onNavigate(Destination.NotificationCenterSheetGlassTuning) }
                 )
                 RowDivider(colors.separator)
@@ -441,6 +523,7 @@ fun NotificationCenterSheetScreen(
                     title = "Glass Lighting & Highlights",
                     subtitle = "Specular rims, perimeter hairline & inner glow",
                     colors = colors,
+                    enabled = sheetActive,
                     onClick = { onNavigate(Destination.NotificationCenterSheetLighting) }
                 )
                 RowDivider(colors.separator)
@@ -448,71 +531,12 @@ fun NotificationCenterSheetScreen(
                     title = "Home Indicator Pill",
                     subtitle = "Pill dimensions, height & bottom margin",
                     colors = colors,
+                    enabled = sheetActive,
                     onClick = { onNavigate(Destination.NotificationCenterSheetHomeIndicator) }
                 )
             }
             SectionFooter(
                 "Configure optical refraction parameters, specular highlight reflections, and bottom home indicator styling.",
-                colors
-            )
-        }
-
-        item {
-            SectionHeader("Pop-Up Notification Animation", colors)
-            GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
-                SettingsToggleRow(
-                    title = "iOS 26 Pop-Up Animation",
-                    subtitle = "iOS 26 style animation for pop up notifications",
-                    colors = colors,
-                    backdrop = backdrop,
-                    checked = sheet.iosHunAnimationEnabled,
-                    onCheckedChange = sheet::setIosHunAnimationEnabled,
-                    enabled = sheet.enabled
-                )
-                if (sheet.iosHunAnimationEnabled) {
-                    RowDivider(colors.separator)
-                    SettingsSliderRow(
-                        title = "Animation Speed (Duration)",
-                        subtitle = null,
-                        colors = colors,
-                        backdrop = backdrop,
-                        value = sheet.iosHunDurationMs,
-                        onValueChange = sheet::setIosHunDurationMs,
-                        valueRange = 200.0f..1000.0f,
-                        defaultValue = 600.0f,
-                        valueLabel = { String.format(Locale.US, "%.0f ms", it) },
-                        enabled = sheet.enabled
-                    )
-                    RowDivider(colors.separator)
-                    SettingsSliderRow(
-                        title = "Emergence Start Scale",
-                        subtitle = "Initial size when emerging outward from the center top notch",
-                        colors = colors,
-                        backdrop = backdrop,
-                        value = sheet.iosHunStartScale,
-                        onValueChange = sheet::setIosHunStartScale,
-                        valueRange = 0.20f..0.70f,
-                        defaultValue = 0.25f,
-                        valueLabel = { String.format(Locale.US, "%.0f%%", it * 100.0f) },
-                        enabled = sheet.enabled
-                    )
-                    RowDivider(colors.separator)
-                    SettingsSliderRow(
-                        title = "Inertia Squeeze & Stretch",
-                        subtitle = "Physics velocity elongation during transit and lateral squash upon landing",
-                        colors = colors,
-                        backdrop = backdrop,
-                        value = sheet.iosHunSqueezeStrength,
-                        onValueChange = sheet::setIosHunSqueezeStrength,
-                        valueRange = 0.0f..4.0f,
-                        defaultValue = 3.0f,
-                        valueLabel = { String.format(Locale.US, "%.0f%%", it * 100.0f) },
-                        enabled = sheet.enabled
-                    )
-                }
-            }
-            SectionFooter(
-                "Applies exclusively to incoming heads-up pop-up notifications after the screen is unlocked. Does not affect lock screen notifications or open notification shade.",
                 colors
             )
         }

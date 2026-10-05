@@ -26,7 +26,6 @@ fun ScreenUnlockCascadeGlobalsScreen(
 
     ScreenScaffold(
         title = "Global Kinetics & Velocity",
-        subtitle = "Duration scale, velocity influence & resting damping",
         colors = colors,
         backdrop = backdrop,
         onBack = onBack,

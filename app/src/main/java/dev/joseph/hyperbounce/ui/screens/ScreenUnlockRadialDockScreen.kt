@@ -26,7 +26,6 @@ fun ScreenUnlockRadialDockScreen(
 
     ScreenScaffold(
         title = "Radial Dock Settling",
-        subtitle = "Dock icons bounce & arrival settling",
         colors = colors,
         backdrop = backdrop,
         onBack = onBack,

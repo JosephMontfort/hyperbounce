@@ -26,7 +26,6 @@ fun ScreenUnlockRadialKineticsScreen(
 
     ScreenScaffold(
         title = "Radial Spring Kinetics",
-        subtitle = "Center damping, edge delay & 3D perspective",
         colors = colors,
         backdrop = backdrop,
         onBack = onBack,

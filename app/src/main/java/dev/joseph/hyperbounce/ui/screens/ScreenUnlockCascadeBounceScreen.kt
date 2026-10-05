@@ -28,7 +28,6 @@ fun ScreenUnlockCascadeBounceScreen(
 
     ScreenScaffold(
         title = "Row Velocity Bounce",
-        subtitle = "Center vs outer dynamic overshoot ratios",
         colors = colors,
         backdrop = backdrop,
         onBack = onBack,

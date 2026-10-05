@@ -185,6 +185,7 @@ fun SettingsClickableRow(
     titleColor: Color? = null,
     trailing: (@Composable () -> Unit)? = null,
     icon: (@Composable () -> Unit)? = null,
+    enabled: Boolean = true,
     modifier: Modifier = Modifier,
     searchKey: String? = null
 ) {
@@ -195,22 +196,29 @@ fun SettingsClickableRow(
             summary = subtitle,
             startAction = icon?.let { { IconChip(iconTint ?: Color.Transparent) { icon() } } },
             endActions = trailing?.let { { trailing() } },
-            onClick = onClick,
+            onClick = { if (enabled) onClick() },
             modifier = modifier.searchHighlight(searchKey ?: title, colors)
         )
     } else {
         val interactionSource = remember { MutableInteractionSource() }
         val isPressed by interactionSource.collectIsPressedAsState()
-        val bgAlpha by animateFloatAsState(if (isPressed) 0.15f else 0.0f)
+        val bgAlpha by animateFloatAsState(if (isPressed && enabled) 0.15f else 0.0f)
+        val displayAlpha = if (enabled) 1f else 0.35f
 
         Row(
             modifier
                 .searchHighlight(searchKey ?: title, colors)
-                .background(colors.label.copy(alpha = bgAlpha))
-                .clickable(
-                    interactionSource = interactionSource,
-                    indication = null,
-                    onClick = onClick
+                .graphicsLayer { alpha = displayAlpha }
+                .then(
+                    if (enabled) {
+                        Modifier
+                            .background(colors.label.copy(alpha = bgAlpha))
+                            .clickable(
+                                interactionSource = interactionSource,
+                                indication = null,
+                                onClick = onClick
+                            )
+                    } else Modifier
                 )
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp, vertical = 12.dp),
