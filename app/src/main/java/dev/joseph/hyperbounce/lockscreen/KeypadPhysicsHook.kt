@@ -361,6 +361,7 @@ object KeypadPhysicsHook {
                     m.parameterTypes[0] == MotionEvent::class.java
                 ) {
                     module.hook(m).intercept(object : XposedInterface.Hooker {
+                        override fun intercept(chain: XposedInterface.Chain): Any? {
                             val view = chain.thisObject as? View
                             val rawArgs = chain.args
                             val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as Array<*>
