@@ -17,21 +17,30 @@ object SearchIndex {
     val allItems: List<SearchItem> = listOf(
         // === Toggles & Sliders ===
         SearchItem(
-            id = "toggle_engine",
-            title = "Toggles Render Engine",
+            id = "toggle_hook_master",
+            title = "Enable Hook",
             category = "Toggles and Sliders",
             destination = Destination.Engine,
-            highlightKey = "Toggles Render Engine",
+            highlightKey = "Enable Hook",
             scrollIndex = 0,
+            keywords = listOf("toggle", "slider", "master", "hook", "enable")
+        ),
+        SearchItem(
+            id = "toggle_engine",
+            title = "Toggles",
+            category = "Toggles and Sliders",
+            destination = Destination.Engine,
+            highlightKey = "Toggles",
+            scrollIndex = 1,
             keywords = listOf("toggle", "switch", "liquid glass", "engine")
         ),
         SearchItem(
             id = "slider_engine",
-            title = "Sliders Render Engine",
+            title = "Sliders",
             category = "Toggles and Sliders",
             destination = Destination.Engine,
-            highlightKey = "Sliders Render Engine",
-            scrollIndex = 0,
+            highlightKey = "Sliders",
+            scrollIndex = 1,
             keywords = listOf("slider", "liquid glass", "engine", "volume", "brightness")
         ),
         SearchItem(

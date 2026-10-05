@@ -1241,6 +1241,9 @@ public class LiquidTogglesHook extends XposedModule {
         }
 
         HyperBouncePrefs hyperBouncePrefs = null;
+        boolean togglesSlidersHookEnabled = true;
+        boolean toggleEnabled = true;
+        boolean sliderEnabled = true;
         boolean miuixAppsHookingEnabled = false;
         try {
             hyperBouncePrefs = new HyperBouncePrefs(this);
@@ -1248,12 +1251,26 @@ public class LiquidTogglesHook extends XposedModule {
                 log(4, "HyperBounce", "disabled globally, skipping toggles/sliders/keypad injection");
                 return;
             }
+            togglesSlidersHookEnabled = hyperBouncePrefs.getTogglesSlidersHookEnabled();
+            if (!togglesSlidersHookEnabled) {
+                log(4, "HyperBounce", "toggles/sliders hook disabled via master switch, skipping");
+                hookDynamicIslandIfPresent(packageName, packageClassLoader);
+                return;
+            }
+
+            toggleEnabled = hyperBouncePrefs.getToggleEnabled();
+            sliderEnabled = hyperBouncePrefs.getSliderEnabled();
             USE_LIQUID_GLASS_TOGGLE = hyperBouncePrefs.getToggleEngineIsLiquidGlass();
             USE_LIQUID_GLASS_SLIDER = hyperBouncePrefs.getSliderEngineIsLiquidGlass();
-            dev.joseph.hyperbounce.toggles.LiquidToggleHost.setHyperBouncePrefs(hyperBouncePrefs);
-            dev.joseph.hyperbounce.toggles.LiquidSliderHost.setHyperBouncePrefs(hyperBouncePrefs);
-            toggleAccentColor = (int) hyperBouncePrefs.toggleAccentColor();
-            sliderAccentColor = (int) hyperBouncePrefs.sliderAccentColor();
+
+            if (toggleEnabled) {
+                dev.joseph.hyperbounce.toggles.LiquidToggleHost.setHyperBouncePrefs(hyperBouncePrefs);
+                toggleAccentColor = (int) hyperBouncePrefs.toggleAccentColor();
+            }
+            if (sliderEnabled) {
+                dev.joseph.hyperbounce.toggles.LiquidSliderHost.setHyperBouncePrefs(hyperBouncePrefs);
+                sliderAccentColor = (int) hyperBouncePrefs.sliderAccentColor();
+            }
             miuixAppsHookingEnabled = hyperBouncePrefs.getMiuixAppsHookingEnabled();
         } catch (Throwable t) {
             // This hook runs inside system-critical processes (android, systemui,
@@ -1268,7 +1285,7 @@ public class LiquidTogglesHook extends XposedModule {
         // widget's onTouchEvent hook. The old global dispatchTouchEvent hook is only
         // needed by the legacy non-liquid path; installing it globally otherwise adds
         // an interception to every View touch dispatch in the hooked process.
-        if (!USE_LIQUID_GLASS_TOGGLE) {
+        if (toggleEnabled && !USE_LIQUID_GLASS_TOGGLE) {
             try {
                 Method dispatch = View.class.getDeclaredMethod(
                         "dispatchTouchEvent", MotionEvent.class);
@@ -1301,61 +1318,74 @@ public class LiquidTogglesHook extends XposedModule {
             }
         }
 
-        for (String className : TARGET_TOGGLE_CLASSES)
-            applyUnifiedToggleEngine(className, packageClassLoader);
-        for (String className : TARGET_SLIDER_CLASSES)
-            applyUnifiedSliderEngine(className, packageClassLoader);
+        if (toggleEnabled) {
+            for (String className : TARGET_TOGGLE_CLASSES)
+                applyUnifiedToggleEngine(className, packageClassLoader);
+        }
+        if (sliderEnabled) {
+            for (String className : TARGET_SLIDER_CLASSES)
+                applyUnifiedSliderEngine(className, packageClassLoader);
+        }
 
         if (miuixAppsHookingEnabled) {
-            applyUnifiedToggleEngine("fan.slidingwidget.widget.SlidingButton", packageClassLoader);
-            applyUnifiedSliderEngine("fan.androidbase.widget.SeekBar", packageClassLoader);
+            if (toggleEnabled) {
+                applyUnifiedToggleEngine("fan.slidingwidget.widget.SlidingButton", packageClassLoader);
+            }
+            if (sliderEnabled) {
+                applyUnifiedSliderEngine("fan.androidbase.widget.SeekBar", packageClassLoader);
+            }
 
             if (!packageName.equals("com.android.systemui") &&
                     !packageName.equals("miui.systemui.plugin")) {
-                try {
-                    Method loadClass = ClassLoader.class.getDeclaredMethod(
-                            "loadClass", String.class, boolean.class);
-                    loadClass.setAccessible(true);
-                    installHook(loadClass, chain -> {
-                        String name = (String) chain.getArg(0);
-                        if (name == null ||
-                                (!name.endsWith("SlidingButton") &&
-                                 !name.endsWith("SlidingSwitch") &&
-                                 !name.endsWith("SlidingSwitchCompat") &&
-                                 !name.endsWith("SeekBar"))) {
-                            return chain.proceed();
-                        }
-
-                        if (name.startsWith("android.") || name.startsWith("androidx.") ||
-                                name.startsWith("java.") || name.startsWith("kotlin.")) {
-                            return chain.proceed();
-                        }
-
-                        Object result = chain.proceed();
-                        if (result instanceof Class<?>) {
-                            Class<?> clazz = (Class<?>) result;
-                            if (android.widget.CompoundButton.class.isAssignableFrom(clazz)) {
-                                applyUnifiedToggleEngine(name, clazz.getClassLoader());
-                            } else if (android.widget.ProgressBar.class.isAssignableFrom(clazz)) {
-                                applyUnifiedSliderEngine(name, clazz.getClassLoader());
+                if (toggleEnabled || sliderEnabled) {
+                    try {
+                        Method loadClass = ClassLoader.class.getDeclaredMethod(
+                                "loadClass", String.class, boolean.class);
+                        loadClass.setAccessible(true);
+                        final boolean finalToggleEnabled = toggleEnabled;
+                        final boolean finalSliderEnabled = sliderEnabled;
+                        installHook(loadClass, chain -> {
+                            String name = (String) chain.getArg(0);
+                            if (name == null) return chain.proceed();
+                            boolean isToggle = finalToggleEnabled && (name.endsWith("SlidingButton") ||
+                                     name.endsWith("SlidingSwitch") ||
+                                     name.endsWith("SlidingSwitchCompat"));
+                            boolean isSlider = finalSliderEnabled && name.endsWith("SeekBar");
+                            if (!isToggle && !isSlider) {
+                                return chain.proceed();
                             }
-                        }
-                        return result;
-                    });
-                } catch (Throwable t) {
-                    log(4, "HyperBounce", "Dynamic ClassLoader hook failed for " + packageName, t);
+
+                            if (name.startsWith("android.") || name.startsWith("androidx.") ||
+                                    name.startsWith("java.") || name.startsWith("kotlin.")) {
+                                return chain.proceed();
+                            }
+
+                            Object result = chain.proceed();
+                            if (result instanceof Class<?>) {
+                                Class<?> clazz = (Class<?>) result;
+                                if (isToggle && android.widget.CompoundButton.class.isAssignableFrom(clazz)) {
+                                    applyUnifiedToggleEngine(name, clazz.getClassLoader());
+                                } else if (isSlider && android.widget.ProgressBar.class.isAssignableFrom(clazz)) {
+                                    applyUnifiedSliderEngine(name, clazz.getClassLoader());
+                                }
+                            }
+                            return result;
+                        });
+                    } catch (Throwable t) {
+                        log(4, "HyperBounce", "Dynamic ClassLoader hook failed for " + packageName, t);
+                    }
                 }
             }
         }
 
-        if (packageName.equals("com.android.phone") ||
+        if (toggleEnabled && (packageName.equals("com.android.phone") ||
                 packageName.equals("com.android.contacts") ||
-                packageName.equals("com.android.settings")) {
+                packageName.equals("com.android.settings"))) {
             applyDialerToggleEngine(packageClassLoader);
         }
 
-        if (packageName.equals("com.android.systemui") ||
-                packageName.equals("miui.systemui.plugin")) {
+        if (toggleEnabled && (packageName.equals("com.android.systemui") ||
+                packageName.equals("miui.systemui.plugin"))) {
             try {
                 Method loadClass = ClassLoader.class.getDeclaredMethod(
                         "loadClass", String.class, boolean.class);
@@ -1377,6 +1407,10 @@ public class LiquidTogglesHook extends XposedModule {
             }
         }
 
+        hookDynamicIslandIfPresent(packageName, packageClassLoader);
+    }
+
+    private void hookDynamicIslandIfPresent(String packageName, ClassLoader packageClassLoader) {
         if (packageName.equals("miui.systemui.plugin") ||
                 packageName.equals("com.android.systemui")) {
             try {

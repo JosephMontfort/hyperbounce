@@ -49,7 +49,8 @@ enum class AccentPreset(val label: String, val argb: Long?) {
 
 enum class RenderEngine(val label: String) {
     Native("Native Canvas"),
-    LiquidGlass("Liquid Glass")
+    LiquidGlass("Liquid Glass"),
+    Disabled("Disabled")
 }
 
 enum class NavApp(val displayName: String, val packageName: String) {
@@ -95,6 +96,7 @@ data class GlassFeel(
 )
 
 data class EngineSettings(
+    val togglesSlidersHookEnabled: Boolean = true,
     val toggleEngine: RenderEngine = RenderEngine.LiquidGlass,
     val sliderEngine: RenderEngine = RenderEngine.LiquidGlass,
     val keypadEnabled: Boolean = true,

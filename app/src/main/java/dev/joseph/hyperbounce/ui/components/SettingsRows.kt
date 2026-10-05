@@ -126,6 +126,7 @@ fun SettingsNavRow(
     iconTint: Color? = null,
     subtitle: String? = null,
     icon: (@Composable () -> Unit)? = null,
+    enabled: Boolean = true,
     modifier: Modifier = Modifier,
     searchKey: String? = null
 ) {
@@ -134,18 +135,25 @@ fun SettingsNavRow(
         ArrowPreference(
             title = title,
             summary = subtitle,
+            enabled = enabled,
             startAction = icon?.let { { IconChip(iconTint ?: Color.Transparent) { icon() } } },
-            onClick = onClick,
+            onClick = { if (enabled) onClick() },
             modifier = modifier.searchHighlight(searchKey ?: title, colors)
         )
     } else {
+        val displayAlpha = if (enabled) 1f else 0.35f
         Row(
             modifier
                 .searchHighlight(searchKey ?: title, colors)
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                    onClick = onClick
+                .graphicsLayer { alpha = displayAlpha }
+                .then(
+                    if (enabled) {
+                        Modifier.clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                            onClick = onClick
+                        )
+                    } else Modifier
                 )
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp, vertical = 12.dp),
@@ -297,7 +305,8 @@ fun SettingsDropdownRow(
     subtitle: String? = null,
     iconTint: Color? = null,
     searchKey: String? = null,
-    icon: (@Composable () -> Unit)? = null
+    icon: (@Composable () -> Unit)? = null,
+    enabled: Boolean = true
 ) {
     val componentStyle = LocalComponentStyle.current
     val view = LocalView.current
@@ -307,17 +316,22 @@ fun SettingsDropdownRow(
             selectedIndex = selectedIndex,
             title = title,
             summary = subtitle,
+            enabled = enabled,
             startAction = icon?.let { { IconChip(iconTint ?: Color.Transparent) { icon() } } },
             onSelectedIndexChange = { idx ->
-                view.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
-                onSelect(idx)
+                if (enabled) {
+                    view.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
+                    onSelect(idx)
+                }
             },
             modifier = modifier.searchHighlight(searchKey ?: title, colors)
         )
     } else {
+        val displayAlpha = if (enabled) 1f else 0.35f
         Row(
             modifier
                 .searchHighlight(searchKey ?: title, colors)
+                .graphicsLayer { alpha = displayAlpha }
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -339,7 +353,8 @@ fun SettingsDropdownRow(
                 options = options,
                 selectedIndex = selectedIndex,
                 onSelect = onSelect,
-                backdrop = backdrop
+                backdrop = backdrop,
+                enabled = enabled
             )
         }
     }

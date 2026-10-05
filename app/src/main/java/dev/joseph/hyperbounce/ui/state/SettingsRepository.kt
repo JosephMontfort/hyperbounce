@@ -204,6 +204,8 @@ class SettingsRepository(context: Context) {
         NavApp.YouTube -> youtube
     }
 
+    var togglesSlidersHookEnabled by prefsBooleanState("toggles_sliders_hook_enabled", true)
+        private set
     var toggleEngine by prefsEnumState("engine_toggle_render", RenderEngine.LiquidGlass)
         private set
     var sliderEngine by prefsEnumState("engine_slider_render", RenderEngine.LiquidGlass)
@@ -241,6 +243,11 @@ class SettingsRepository(context: Context) {
     @JvmName("setModuleEnabledPref")
     fun setModuleEnabled(value: Boolean) {
         moduleEnabled = value
+    }
+
+    @JvmName("setTogglesSlidersHookEnabledPref")
+    fun setTogglesSlidersHookEnabled(value: Boolean) {
+        togglesSlidersHookEnabled = value
     }
 
     @JvmName("setToggleEnginePref")
@@ -303,6 +310,7 @@ class SettingsRepository(context: Context) {
         callerScreen.reloadFromDefaults()
         dialerRecents.reloadFromDefaults()
         moduleEnabled = true
+        togglesSlidersHookEnabled = true
         toggleEngine = RenderEngine.LiquidGlass
         sliderEngine = RenderEngine.LiquidGlass
         keypadEnabled = true

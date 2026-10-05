@@ -23,6 +23,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
 import com.kyant.backdrop.Backdrop
 import com.kyant.backdrop.backdrops.rememberCombinedBackdrop
@@ -73,6 +74,7 @@ fun EngineScreen(
         backdrop = backdrop,
         onBack = onBack,
         onResetPage = {
+            repository.setTogglesSlidersHookEnabled(true)
             repository.toggleGlass.reloadFromDefaults()
             repository.sliderGlass.reloadFromDefaults()
             repository.setToggleEngine(RenderEngine.LiquidGlass)
@@ -81,6 +83,7 @@ fun EngineScreen(
             repository.setToggleCustomColor(0xFF30D158L)
             repository.setSliderAccent(AccentPreset.Green)
             repository.setSliderCustomColor(0xFF30D158L)
+            repository.setMiuixAppsHookingEnabled(false)
         },
         restartAppTitle = "Restart All Scoped Apps",
         restartAppSubtitle = "Restart all apps in active scope",
@@ -89,16 +92,42 @@ fun EngineScreen(
             dev.joseph.hyperbounce.ui.utils.RootUtils.restartScopedApps(context, pkgs)
         }
     ) { contentBackdrop ->
+        val masterEnabled = repository.togglesSlidersHookEnabled
+        val togglesEnabled = masterEnabled && repository.toggleEngine != RenderEngine.Disabled
+        val slidersEnabled = masterEnabled && repository.sliderEngine != RenderEngine.Disabled
+
+        item {
+            GlassCard(backdrop, Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
+                SettingsToggleRow(
+                    title = "Enable Hook",
+                    colors = colors,
+                    backdrop = backdrop,
+                    checked = repository.togglesSlidersHookEnabled,
+                    onCheckedChange = repository::setTogglesSlidersHookEnabled
+                )
+            }
+        }
+
         item {
             val combinedBackdrop = rememberCombinedBackdrop(backdrop, contentBackdrop)
-            SectionHeader("Rendering Engine", colors)
-            GlassCard(backdrop, Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
+            SectionHeader(
+                "Rendering Engine",
+                colors,
+                modifier = Modifier.graphicsLayer { alpha = if (masterEnabled) 1f else 0.38f }
+            )
+            GlassCard(
+                backdrop,
+                Modifier
+                    .padding(horizontal = 16.dp, vertical = 4.dp)
+                    .graphicsLayer { alpha = if (masterEnabled) 1f else 0.38f }
+            ) {
                 EngineRow(
-                    title = "Toggle Switches",
+                    title = "Toggles",
                     colors = colors,
                     backdrop = combinedBackdrop,
                     selected = repository.toggleEngine,
-                    onSelect = repository::setToggleEngine
+                    onSelect = repository::setToggleEngine,
+                    enabled = masterEnabled
                 )
                 RowDivider(colors.separator, insetStart = 16.dp)
                 EngineRow(
@@ -106,58 +135,91 @@ fun EngineScreen(
                     colors = colors,
                     backdrop = combinedBackdrop,
                     selected = repository.sliderEngine,
-                    onSelect = repository::setSliderEngine
+                    onSelect = repository::setSliderEngine,
+                    enabled = masterEnabled
                 )
             }
         }
 
         item {
-            SectionHeader("Toggle Switches", colors)
-            GlassCard(backdrop, Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
+            SectionHeader(
+                "Toggles",
+                colors,
+                modifier = Modifier.graphicsLayer { alpha = if (togglesEnabled) 1f else 0.38f }
+            )
+            GlassCard(
+                backdrop,
+                Modifier
+                    .padding(horizontal = 16.dp, vertical = 4.dp)
+                    .graphicsLayer { alpha = if (togglesEnabled) 1f else 0.38f }
+            ) {
                 SettingsNavRow(
                     title = "Toggles Appearance",
                     subtitle = "Accent color & Liquid Glass optics",
                     colors = colors,
-                    onClick = { onNavigate(Destination.ToggleAppearance) }
+                    onClick = { onNavigate(Destination.ToggleAppearance) },
+                    enabled = togglesEnabled
                 )
                 RowDivider(colors.separator, insetStart = 16.dp)
                 SettingsNavRow(
                     title = "Toggles Drag Physics",
                     subtitle = "Touch tracking & spring bounce dynamics",
                     colors = colors,
-                    onClick = { onNavigate(Destination.TogglePhysics) }
+                    onClick = { onNavigate(Destination.TogglePhysics) },
+                    enabled = togglesEnabled
                 )
             }
         }
 
         item {
-            SectionHeader("Sliders", colors)
-            GlassCard(backdrop, Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
+            SectionHeader(
+                "Sliders",
+                colors,
+                modifier = Modifier.graphicsLayer { alpha = if (slidersEnabled) 1f else 0.38f }
+            )
+            GlassCard(
+                backdrop,
+                Modifier
+                    .padding(horizontal = 16.dp, vertical = 4.dp)
+                    .graphicsLayer { alpha = if (slidersEnabled) 1f else 0.38f }
+            ) {
                 SettingsNavRow(
                     title = "Sliders Appearance",
                     subtitle = "Track accent & Liquid Glass optics",
                     colors = colors,
-                    onClick = { onNavigate(Destination.SliderAppearance) }
+                    onClick = { onNavigate(Destination.SliderAppearance) },
+                    enabled = slidersEnabled
                 )
                 RowDivider(colors.separator, insetStart = 16.dp)
                 SettingsNavRow(
                     title = "Sliders Drag Physics",
                     subtitle = "Touch tracking & spring bounce dynamics",
                     colors = colors,
-                    onClick = { onNavigate(Destination.SliderPhysics) }
+                    onClick = { onNavigate(Destination.SliderPhysics) },
+                    enabled = slidersEnabled
                 )
             }
         }
 
         item {
-            SectionHeader("Third-Party Apps", colors)
-            GlassCard(backdrop, Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
+            SectionHeader(
+                "Third-Party Apps",
+                colors,
+                modifier = Modifier.graphicsLayer { alpha = if (masterEnabled) 1f else 0.38f }
+            )
+            GlassCard(
+                backdrop,
+                Modifier
+                    .padding(horizontal = 16.dp, vertical = 4.dp)
+                    .graphicsLayer { alpha = if (masterEnabled) 1f else 0.38f }
+            ) {
                 SettingsToggleRow(
                     title = "MIUIX App Hooking",
                     subtitle = "Auto-detect and replace toggles and sliders in third-party apps using miuix-kmp library",
                     colors = colors,
                     backdrop = backdrop,
                     checked = repository.miuixAppsHookingEnabled,
+                    enabled = masterEnabled,
                     onCheckedChange = { enabled ->
                         repository.setMiuixAppsHookingEnabled(enabled)
                         if (enabled) {
@@ -181,14 +243,16 @@ internal fun EngineRow(
     colors: HyperBounceColors,
     backdrop: Backdrop,
     selected: RenderEngine,
-    onSelect: (RenderEngine) -> Unit
+    onSelect: (RenderEngine) -> Unit,
+    enabled: Boolean = true
 ) {
     SettingsDropdownRow(
         title = title,
         options = RenderEngine.entries.map { it.label },
-        selectedIndex = RenderEngine.entries.indexOf(selected),
+        selectedIndex = RenderEngine.entries.indexOf(selected).coerceAtLeast(0),
         onSelect = { onSelect(RenderEngine.entries[it]) },
         colors = colors,
-        backdrop = backdrop
+        backdrop = backdrop,
+        enabled = enabled
     )
 }

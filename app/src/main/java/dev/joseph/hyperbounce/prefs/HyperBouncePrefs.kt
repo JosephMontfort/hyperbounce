@@ -128,12 +128,27 @@ class HyperBouncePrefs(module: XposedInterface) {
 
     // --- toggle/slider engine --------------------------------------------------------------
 
+    val togglesSlidersHookEnabled: Boolean
+        get() = prefs.getBoolean("toggles_sliders_hook_enabled", true)
+
+    val toggleEngine: String
+        get() = prefs.getString("engine_toggle_render", "LiquidGlass") ?: "LiquidGlass"
+
+    val sliderEngine: String
+        get() = prefs.getString("engine_slider_render", "LiquidGlass") ?: "LiquidGlass"
+
+    val toggleEnabled: Boolean
+        get() = togglesSlidersHookEnabled && toggleEngine != "Disabled"
+
+    val sliderEnabled: Boolean
+        get() = togglesSlidersHookEnabled && sliderEngine != "Disabled"
+
     /** true = Liquid Glass engine, false = the original native Canvas/AGSL engine. */
     val toggleEngineIsLiquidGlass: Boolean
-        get() = prefs.getString("engine_toggle_render", "LiquidGlass") != "Native"
+        get() = toggleEngine == "LiquidGlass"
 
     val sliderEngineIsLiquidGlass: Boolean
-        get() = prefs.getString("engine_slider_render", "LiquidGlass") != "Native"
+        get() = sliderEngine == "LiquidGlass"
 
     val keypadEnabled: Boolean
         get() = prefs.getBoolean("engine_keypad_enabled", true)

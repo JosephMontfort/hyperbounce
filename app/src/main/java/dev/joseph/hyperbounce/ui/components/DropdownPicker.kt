@@ -15,6 +15,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
 import com.kyant.backdrop.Backdrop
 import dev.joseph.hyperbounce.ui.theme.HyperBounceType
@@ -32,7 +33,8 @@ fun DropdownPicker(
     selectedIndex: Int,
     onSelect: (Int) -> Unit,
     backdrop: Backdrop,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true
 ) {
     val componentStyle = dev.joseph.hyperbounce.ui.state.LocalComponentStyle.current
     val isDark = dev.joseph.hyperbounce.ui.theme.LocalIsDarkTheme.current
@@ -56,17 +58,24 @@ fun DropdownPicker(
         )
     }
 
+    val displayAlpha = if (enabled) 1f else 0.35f
+
     Box(modifier = modifier) {
         if (componentStyle == dev.joseph.hyperbounce.ui.state.ComponentStyle.MIUIX) {
             Row(
                 modifier = Modifier
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                        onClick = {
-                            view.performHapticFeedback(android.view.HapticFeedbackConstants.CONTEXT_CLICK)
-                            expanded = !expanded
-                        }
+                    .graphicsLayer { alpha = displayAlpha }
+                    .then(
+                        if (enabled) {
+                            Modifier.clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null,
+                                onClick = {
+                                    view.performHapticFeedback(android.view.HapticFeedbackConstants.CONTEXT_CLICK)
+                                    expanded = !expanded
+                                }
+                            )
+                        } else Modifier
                     )
                     .padding(horizontal = 8.dp, vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -84,13 +93,18 @@ fun DropdownPicker(
         } else {
             Row(
                 modifier = Modifier
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                        onClick = {
-                            view.performHapticFeedback(android.view.HapticFeedbackConstants.CONTEXT_CLICK)
-                            expanded = !expanded
-                        }
+                    .graphicsLayer { alpha = displayAlpha }
+                    .then(
+                        if (enabled) {
+                            Modifier.clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null,
+                                onClick = {
+                                    view.performHapticFeedback(android.view.HapticFeedbackConstants.CONTEXT_CLICK)
+                                    expanded = !expanded
+                                }
+                            )
+                        } else Modifier
                     )
                     .padding(horizontal = 12.dp, vertical = 7.dp),
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -111,21 +125,23 @@ fun DropdownPicker(
             }
         }
 
-        WindowDropdownPopup(
-            entry = entry,
-            show = expanded,
-            onDismiss = { expanded = false },
-            onDismissFinished = {},
-            maxHeight = 280.dp,
-            dropdownColors = if (componentStyle == dev.joseph.hyperbounce.ui.state.ComponentStyle.MIUIX) {
-                DropdownDefaults.dropdownColors()
-            } else {
-                DropdownDefaults.dropdownColors(
-                    containerColor = if (isDark) Color(0xFF222224) else Color(0xFFF7F7F8),
-                    contentColor = if (isDark) Color.White else Color.Black,
-                    selectedContentColor = if (isDark) Color(0xFF0A84FF) else Color(0xFF007AFF)
-                )
-            }
-        )
+        if (enabled) {
+            WindowDropdownPopup(
+                entry = entry,
+                show = expanded,
+                onDismiss = { expanded = false },
+                onDismissFinished = {},
+                maxHeight = 280.dp,
+                dropdownColors = if (componentStyle == dev.joseph.hyperbounce.ui.state.ComponentStyle.MIUIX) {
+                    DropdownDefaults.dropdownColors()
+                } else {
+                    DropdownDefaults.dropdownColors(
+                        containerColor = if (isDark) Color(0xFF222224) else Color(0xFFF7F7F8),
+                        contentColor = if (isDark) Color.White else Color.Black,
+                        selectedContentColor = if (isDark) Color(0xFF0A84FF) else Color(0xFF007AFF)
+                    )
+                }
+            )
+        }
     }
 }
