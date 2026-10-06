@@ -499,7 +499,7 @@ object ControlCenterHook {
                                         if ("STARTED" == stateStr) {
                                             ControlCenterConfigHolder.sPendingOrientationRebind = false
                                             ControlCenterConfigHolder.wakeAndRefreshAllGroupedTiles()
-                                        } else if ("STOPPED" == stateStr || "DESTROYED" == stateStr) {
+                                        } else if ("CREATED" == stateStr || "STOPPED" == stateStr || "DESTROYED" == stateStr) {
                                             try {
                                                 IosTileGroupFolder.dismissActiveOverlay(animated = false)
                                             } catch (t: Throwable) {}
@@ -509,6 +509,24 @@ object ControlCenterHook {
                                             }
                                         }
                                     }
+                                }
+                            } catch (t: Throwable) {}
+                            result
+                        }
+                    }
+                    if (m.name == "onVisibilityAggregated" || m.name == "onWindowVisibilityChanged") {
+                        m.isAccessible = true
+                        module.hook(m).intercept { chain ->
+                            val result = chain.proceed()
+                            try {
+                                val firstArg = chain.args.getOrNull(0)
+                                val isVisible = when (firstArg) {
+                                    is Boolean -> firstArg
+                                    is Int -> firstArg == View.VISIBLE
+                                    else -> true
+                                }
+                                if (!isVisible) {
+                                    IosTileGroupFolder.dismissActiveOverlay(animated = false)
                                 }
                             } catch (t: Throwable) {}
                             result
@@ -543,11 +561,14 @@ object ControlCenterHook {
                     if (m.name == "showPanel" || m.name == "onStart") {
                         m.isAccessible = true
                         module.hook(m).intercept { chain ->
+                            try {
+                                IosTileGroupFolder.dismissActiveOverlay(animated = false)
+                            } catch (t: Throwable) {}
                             ControlCenterConfigHolder.wakeAndRefreshAllGroupedTiles()
                             chain.proceed()
                         }
                     }
-                    if (m.name == "hidePanel") {
+                    if (m.name == "hidePanel" || m.name == "onStop") {
                         m.isAccessible = true
                         module.hook(m).intercept { chain ->
                             try {
@@ -570,6 +591,11 @@ object ControlCenterHook {
                                     ControlCenterConfigHolder.sCurrentVelocityY = args[0] as Float
                                     ControlCenterConfigHolder.sLastTouchTime = System.currentTimeMillis()
                                     ControlCenterConfigHolder.sIsUserFlicking = true
+                                }
+                                val appearanceM = chain.thisObject.javaClass.getMethod("getAppearance")
+                                val isAppeared = appearanceM.invoke(chain.thisObject) as? Boolean ?: true
+                                if (!isAppeared) {
+                                    IosTileGroupFolder.dismissActiveOverlay(animated = false)
                                 }
                             } catch (t: Throwable) {}
                             chain.proceed()

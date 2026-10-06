@@ -242,44 +242,83 @@ object IosTileGroupFolder {
             return super.onTouchEvent(event)
         }
 
+        private fun getBaseTileSize(): Int {
+            val iconSizeId = context.resources.getIdentifier("qs_tile_item_icon_size", "dimen", context.packageName)
+            return if (iconSizeId != 0) {
+                context.resources.getDimensionPixelSize(iconSizeId)
+            } else {
+                (68 * resources.displayMetrics.density).toInt()
+            }
+        }
+
         override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
             val w = MeasureSpec.getSize(widthMeasureSpec)
             val h = MeasureSpec.getSize(heightMeasureSpec)
             setMeasuredDimension(w, h)
 
-            val density = resources.displayMetrics.density
-            val stdTilePx = (56 * density).toInt()
-            val stdSpec = MeasureSpec.makeMeasureSpec(stdTilePx, MeasureSpec.EXACTLY)
+            val baseSize = getBaseTileSize()
+            val childSpec = MeasureSpec.makeMeasureSpec(baseSize, MeasureSpec.EXACTLY)
 
             for (i in 0 until childCount) {
-                getChildAt(i)?.measure(stdSpec, stdSpec)
+                val child = getChildAt(i) ?: continue
+                try {
+                    val tileLabelId = context.resources.getIdentifier("tile_label", "id", context.packageName)
+                    if (tileLabelId != 0) {
+                        child.findViewById<View>(tileLabelId)?.visibility = View.GONE
+                    }
+                    val markId = context.resources.getIdentifier("mark", "id", context.packageName)
+                    if (markId != 0) {
+                        child.findViewById<View>(markId)?.visibility = View.GONE
+                    }
+                    val iconFrameId = context.resources.getIdentifier("icon_frame", "id", context.packageName)
+                    val iconFrame = child.findViewById<View>(iconFrameId)
+                    if (iconFrame != null) {
+                        val lp = iconFrame.layoutParams
+                        if (lp is FrameLayout.LayoutParams) {
+                            lp.gravity = Gravity.CENTER
+                            lp.topMargin = 0
+                            lp.bottomMargin = 0
+                            lp.leftMargin = 0
+                            lp.rightMargin = 0
+                            iconFrame.layoutParams = lp
+                        }
+                        iconFrame.background = null
+                    }
+                } catch (t: Throwable) {}
+
+                child.measure(childSpec, childSpec)
             }
         }
 
         override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {
             val density = resources.displayMetrics.density
-            val pad = (2 * density).toInt()
+            val pad = (4 * density).toInt()
             val gap = (4 * density).toInt()
 
             val availW = Math.max(0, (r - l) - 2 * pad - gap)
-            val subW = Math.max(0, availW / 2)
+            val subW = availW / 2f
             val availH = Math.max(0, (b - t) - 2 * pad - gap)
-            val subH = Math.max(0, availH / 2)
+            val subH = availH / 2f
 
-            val stdTilePx = (56 * density).toInt()
+            val baseSize = getBaseTileSize()
             val targetSize = Math.min(subW, subH)
-            val scale = if (stdTilePx > 0) targetSize.toFloat() / stdTilePx.toFloat() else 0.5f
+            val scale = if (baseSize > 0) targetSize / baseSize.toFloat() else 0.45f
+            val halfBase = baseSize / 2f
 
             for (i in 0 until childCount) {
                 val child = getChildAt(i) ?: continue
                 val col = i % 2
                 val row = i / 2
-                val cl = pad + col * (subW + gap)
-                val ct = pad + row * (subH + gap)
 
-                child.layout(cl, ct, cl + stdTilePx, ct + stdTilePx)
-                child.pivotX = 0f
-                child.pivotY = 0f
+                val centerX = pad + col * (subW + gap) + subW / 2f
+                val centerY = pad + row * (subH + gap) + subH / 2f
+
+                val cl = (centerX - halfBase).toInt()
+                val ct = (centerY - halfBase).toInt()
+                child.layout(cl, ct, cl + baseSize, ct + baseSize)
+
+                child.pivotX = halfBase
+                child.pivotY = halfBase
                 child.scaleX = scale
                 child.scaleY = scale
 
@@ -334,25 +373,10 @@ object IosTileGroupFolder {
             isFocusable = true
             isFocusableInTouchMode = true
 
-            // 1. Full-screen Native Blur Scrim Backdrop
+            // 1. Full-screen Clean Scrim Backdrop over existing CC window blur
             scrimView.layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT)
-            scrimView.setBackgroundColor(Color.parseColor("#80000000"))
+            scrimView.setBackgroundColor(Color.parseColor("#B3000000"))
             addView(scrimView)
-
-            val classLoader = sourceContainer.classLoader ?: context.classLoader
-            try {
-                val miBlurClass = Class.forName("miui.systemui.util.MiBlurCompat", false, classLoader)
-                val setModeMethod = miBlurClass.getMethod("setMiViewBlurModeCompat", View::class.java, Int::class.javaPrimitiveType)
-                setModeMethod.invoke(null, scrimView, 2)
-                val setPassWindowBlur = miBlurClass.getMethod("setPassWindowBlurEnabledCompat", View::class.java, Boolean::class.javaPrimitiveType)
-                setPassWindowBlur.invoke(null, scrimView, true)
-            } catch (t: Throwable) {
-                try {
-                    val miBlurClass = Class.forName("com.miui.systemui.util.MiBlurCompat", false, classLoader)
-                    val setModeMethod = miBlurClass.getMethod("setMiViewBlurModeCompat", View::class.java, Int::class.javaPrimitiveType)
-                    setModeMethod.invoke(null, scrimView, 2)
-                } catch (t2: Throwable) {}
-            }
 
             // Tapping or swiping outside the card closes the overlay
             scrimView.setOnClickListener {
@@ -379,10 +403,9 @@ object IosTileGroupFolder {
                 }
             }
 
-            // 2. Centered Card Container respecting advanced textures vs normal blur
+            // 2. Centered Card Container styled identically to the collapsed group container
             val density = resources.displayMetrics.density
             val cardPadding = (14 * density).toInt()
-            val cardCornerRadius = 32 * density
 
             val cardLp = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply {
                 gravity = Gravity.CENTER
@@ -391,41 +414,9 @@ object IosTileGroupFolder {
             }
             cardContainer.layoutParams = cardLp
             cardContainer.setPadding(cardPadding, cardPadding, cardPadding, cardPadding)
-            cardContainer.clipToOutline = true
-            cardContainer.outlineProvider = object : android.view.ViewOutlineProvider() {
-                override fun getOutline(view: View, outline: android.graphics.Outline) {
-                    outline.setRoundRect(0, 0, view.width, view.height, cardCornerRadius)
-                }
-            }
 
-            val isBlur = ControlCenterGrouping.isAdvancedTexturesEnabled(context, classLoader)
-            if (isBlur) {
-                try {
-                    val miBlurClass = Class.forName("miui.systemui.util.MiBlurCompat", false, classLoader)
-                    val setModeMethod = miBlurClass.getMethod("setMiViewBlurModeCompat", View::class.java, Int::class.javaPrimitiveType)
-                    setModeMethod.invoke(null, cardContainer, 1)
-
-                    val tokenClass = Class.forName("miui.systemui.util.MiuiColorBlendToken", false, classLoader)
-                    val tokenInst = tokenClass.getDeclaredField("INSTANCE").get(null)
-                    val getBlendMethod = tokenClass.getMethod("getCC_TILE_DEFAULT_BLEND_COLORS")
-                    val blendColors = getBlendMethod.invoke(tokenInst)
-
-                    val setBlendMethod = miBlurClass.getMethod("setMiBackgroundBlendColors", View::class.java, blendColors.javaClass)
-                    setBlendMethod.invoke(null, cardContainer, blendColors)
-                } catch (t: Throwable) {}
-
-                val cardBg = GradientDrawable().apply {
-                    cornerRadius = cardCornerRadius
-                    setColor(Color.parseColor("#331A1A1A"))
-                }
-                cardContainer.background = cardBg
-            } else {
-                val cardBg = GradientDrawable().apply {
-                    cornerRadius = cardCornerRadius
-                    setColor(Color.parseColor("#E6202020"))
-                }
-                cardContainer.background = cardBg
-            }
+            val classLoader = sourceContainer.classLoader ?: context.classLoader
+            ControlCenterGrouping.applyGroupContainerStyle(cardContainer, classLoader)
 
             buildExpandedCardContent()
             addView(cardContainer)
@@ -565,21 +556,25 @@ object IosTileGroupFolder {
                 if (showLabels) {
                     tileLabel?.visibility = View.VISIBLE
                     tileLabel?.alpha = 1.0f
+                    tileLabel?.maxLines = 1
+                    tileLabel?.textSize = 10.5f
                     val tlp = tileLabel?.layoutParams as? FrameLayout.LayoutParams
                     if (tlp != null) {
                         tlp.gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
-                        tlp.bottomMargin = (2 * density).toInt()
+                        tlp.bottomMargin = 0
                         tlp.topMargin = 0
-                        tlp.height = (18 * density).toInt()
+                        tlp.height = (15 * density).toInt()
                         tileLabel.layoutParams = tlp
                     }
                     val iflp = iconFrame?.layoutParams as? FrameLayout.LayoutParams
                     if (iflp != null) {
                         iflp.gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
-                        iflp.topMargin = (2 * density).toInt()
+                        iflp.topMargin = 0
                         iflp.bottomMargin = 0
                         iconFrame.layoutParams = iflp
                     }
+                    circView.scaleX = 0.85f
+                    circView.scaleY = 0.85f
                 } else {
                     tileLabel?.visibility = View.GONE
                     tileLabel?.alpha = 0.0f
@@ -590,6 +585,8 @@ object IosTileGroupFolder {
                         iflp.bottomMargin = 0
                         iconFrame.layoutParams = iflp
                     }
+                    circView.scaleX = 0.95f
+                    circView.scaleY = 0.95f
                 }
                 iconFrame?.background = null
 
@@ -774,22 +771,25 @@ object IosTileGroupFolder {
                 cardContainer.scaleX = initialScale
                 cardContainer.scaleY = initialScale
 
-                findMainPanel()?.animate()?.alpha(0f)?.setDuration(220)?.start()
+                scrimView.animate()
+                    .alpha(1f)
+                    .setDuration(240)
+                    .start()
 
-                val anim = ValueAnimator.ofFloat(0f, 1f).apply {
-                    duration = 320
-                    interpolator = FOLME_SPRING_INTERPOLATOR
-                    addUpdateListener { va ->
-                        val fraction = va.animatedValue as Float
-                        scrimView.alpha = fraction
-                        cardContainer.alpha = fraction
-                        cardContainer.translationX = deltaX * (1f - fraction)
-                        cardContainer.translationY = deltaY * (1f - fraction)
-                        cardContainer.scaleX = initialScale + (1f - initialScale) * fraction
-                        cardContainer.scaleY = initialScale + (1f - initialScale) * fraction
+                cardContainer.setLayerType(View.LAYER_TYPE_HARDWARE, null)
+                cardContainer.animate()
+                    .translationX(0f)
+                    .translationY(0f)
+                    .scaleX(1f)
+                    .scaleY(1f)
+                    .alpha(1f)
+                    .setDuration(280)
+                    .setInterpolator(FOLME_SPRING_INTERPOLATOR)
+                    .withEndAction {
+                        cardContainer.setLayerType(View.LAYER_TYPE_NONE, null)
+                        findMainPanel()?.alpha = 0f
                     }
-                }
-                anim.start()
+                    .start()
             }
         }
 
@@ -816,41 +816,35 @@ object IosTileGroupFolder {
             val targetDeltaY = (sourceY + sourceH / 2f) - (cardY + cardH / 2f)
             val targetScale = if (cardW > 0) Math.min(1f, sourceW / cardW) else 0.5f
 
-            findMainPanel()?.animate()?.alpha(1f)?.setDuration(240)?.start()
+            findMainPanel()?.alpha = 1f
 
-            val anim = ValueAnimator.ofFloat(1f, 0f).apply {
-                duration = 260
-                interpolator = FOLME_SPRING_INTERPOLATOR
-                addUpdateListener { va ->
-                    val fraction = va.animatedValue as Float
-                    scrimView.alpha = fraction
-                    cardContainer.alpha = fraction
-                    cardContainer.translationX = targetDeltaX * (1f - fraction)
-                    cardContainer.translationY = targetDeltaY * (1f - fraction)
-                    cardContainer.scaleX = targetScale + (1f - targetScale) * fraction
-                    cardContainer.scaleY = targetScale + (1f - targetScale) * fraction
+            scrimView.animate()
+                .alpha(0f)
+                .setDuration(200)
+                .start()
+
+            cardContainer.setLayerType(View.LAYER_TYPE_HARDWARE, null)
+            cardContainer.animate()
+                .translationX(targetDeltaX)
+                .translationY(targetDeltaY)
+                .scaleX(targetScale)
+                .scaleY(targetScale)
+                .alpha(0f)
+                .setDuration(240)
+                .setInterpolator(FOLME_SPRING_INTERPOLATOR)
+                .withEndAction {
+                    cardContainer.setLayerType(View.LAYER_TYPE_NONE, null)
+                    dismissImmediately()
                 }
-                addListener(object : AnimatorListenerAdapter() {
-                    override fun onAnimationEnd(animation: Animator) {
-                        (parent as? ViewGroup)?.removeView(this@IosFolderExpandedOverlay)
-                        findMainPanel()?.alpha = 1f
-                        sourceContainer.classLoader?.let { cl ->
-                            ControlCenterGrouping.rebindGroupContainer(
-                                sourceContainer.parent as? View ?: sourceContainer,
-                                sourceContainer.group,
-                                sourceContainer.qsListCtrl,
-                                cl,
-                                forceRebuild = false
-                            )
-                        }
-                    }
-                })
-            }
-            anim.start()
+                .start()
         }
 
         fun dismissImmediately() {
-            if (isClosing) return
+            if (isClosing) {
+                (parent as? ViewGroup)?.removeView(this)
+                findMainPanel()?.alpha = 1f
+                return
+            }
             isClosing = true
             activeOverlayRef = null
             findMainPanel()?.alpha = 1f
@@ -864,6 +858,26 @@ object IosTileGroupFolder {
                     forceRebuild = false
                 )
             }
+        }
+
+        override fun onWindowVisibilityChanged(visibility: Int) {
+            super.onWindowVisibilityChanged(visibility)
+            if (visibility != View.VISIBLE) {
+                dismissImmediately()
+            }
+        }
+
+        override fun onVisibilityAggregated(isVisible: Boolean) {
+            super.onVisibilityAggregated(isVisible)
+            if (!isVisible) {
+                dismissImmediately()
+            }
+        }
+
+        override fun onDetachedFromWindow() {
+            super.onDetachedFromWindow()
+            activeOverlayRef = null
+            findMainPanel()?.alpha = 1f
         }
 
         private fun findMainPanel(): View? {
