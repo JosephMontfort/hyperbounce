@@ -1336,20 +1336,22 @@ object ControlCenterHook {
                         module.hook(m).intercept { chain ->
                             ControlCenterConfigHolder.sQSListController = chain.thisObject
                             val originalList = chain.proceed() as? List<*>
-                            if (originalList != null && originalList.isNotEmpty()) {
-                                if (ControlCenterConfigHolder.sAllQSRecords.size < originalList.size) {
-                                    val existing = java.util.Collections.newSetFromMap(java.util.IdentityHashMap<Any, Boolean>())
-                                    existing.addAll(ControlCenterConfigHolder.sAllQSRecords)
-                                    for (item in originalList) {
-                                        if (item != null && existing.add(item)) {
-                                            ControlCenterConfigHolder.sAllQSRecords.add(item)
-                                        }
+                            if (originalList != null) {
+                                val cardRecords = ControlCenterConfigHolder.sAllQSRecords.filter { r ->
+                                    val sp = ControlCenterConfigHolder.getRecordSpec(r)
+                                    sp == "wifi" || sp == "cell"
+                                }
+                                ControlCenterConfigHolder.sAllQSRecords.clear()
+                                ControlCenterConfigHolder.sAllQSRecords.addAll(cardRecords)
+                                for (item in originalList) {
+                                    if (item != null && !ControlCenterConfigHolder.sAllQSRecords.contains(item)) {
+                                        ControlCenterConfigHolder.sAllQSRecords.add(item)
                                     }
                                 }
                             }
                             if (originalList == null || ControlCenterConfigHolder.sTileGroups.isEmpty()) return@intercept originalList
                             try {
-                                val filtered = ArrayList<Any>(originalList.size)
+                                val filtered = ArrayList<Any>()
                                 for (item in originalList) {
                                     if (item != null) {
                                         val spec = ControlCenterConfigHolder.getRecordSpec(item)
@@ -2555,8 +2557,7 @@ object ControlCenterHook {
                         m.isAccessible = true
                         module.hook(m).intercept { chain ->
                             val itemView = chain.thisObject as? View
-                            val isGroup = itemView != null && (itemView.getTag(0x7f099995) != null || (itemView.findViewById<View>(0x7f099995) != null).also { if (it) itemView.setTag(0x7f099995, java.lang.Boolean.TRUE) })
-                            if (isGroup) {
+                            if (itemView != null && itemView.findViewById<View>(0x7f099995) != null) {
                                 if (ControlCenterConfigHolder.sIsDisassembleMode || (ControlCenterConfigHolder.sIsEditMode && !ControlCenterConfigHolder.sIsGroupSelectMode)) {
                                     chain.proceed()
                                 } else {
@@ -2571,8 +2572,7 @@ object ControlCenterHook {
                         m.isAccessible = true
                         module.hook(m).intercept { chain ->
                             val itemView = chain.thisObject as? View
-                            val isGroup = itemView != null && (itemView.getTag(0x7f099995) != null || (itemView.findViewById<View>(0x7f099995) != null).also { if (it) itemView.setTag(0x7f099995, java.lang.Boolean.TRUE) })
-                            if (isGroup) {
+                            if (itemView != null && itemView.findViewById<View>(0x7f099995) != null) {
                                 if (ControlCenterConfigHolder.sIsDisassembleMode || (ControlCenterConfigHolder.sIsEditMode && !ControlCenterConfigHolder.sIsGroupSelectMode)) {
                                     chain.proceed()
                                 } else {
@@ -3313,21 +3313,9 @@ object ControlCenterHook {
             applyMediaPlayerLayout(holder)
         } else {
             val itemView = ControlCenterGrouping.getViewHolderItemView(holder)
-            if (itemView != null) {
-                val groupTag = itemView.getTag(0x7f099995)
-                val isGroup = if (groupTag != null) {
-                    groupTag == java.lang.Boolean.TRUE
-                } else {
-                    val found = itemView.findViewById<ViewGroup>(0x7f099995) != null
-                    itemView.setTag(0x7f099995, if (found) java.lang.Boolean.TRUE else java.lang.Boolean.FALSE)
-                    found
-                }
-                if (isGroup) {
-                    var group = itemView.getTag(0x7f099994) as? TileGroup
-                    if (group != null) {
-                        // Already bound by QSTileRecord.onBindViewHolder with its active controller
-                        return
-                    }
+            if (itemView != null && itemView.findViewById<ViewGroup>(0x7f099995) != null) {
+                var group = itemView.getTag(0x7f099994) as? TileGroup
+                if (group == null) {
                     val spec = itemView.getTag(0x7f099990) as? String
                         ?: try {
                             val itemF = holder.javaClass.getDeclaredField("item")
@@ -3338,9 +3326,9 @@ object ControlCenterHook {
                         itemView.setTag(0x7f099990, spec)
                         group = ControlCenterConfigHolder.isGroupAnchor(spec)
                     }
-                    if (group != null) {
-                        ControlCenterGrouping.rebindGroupContainer(itemView, group, null, classLoader)
-                    }
+                }
+                if (group != null) {
+                    ControlCenterGrouping.rebindGroupContainer(itemView, group, null, classLoader)
                 }
             }
         }

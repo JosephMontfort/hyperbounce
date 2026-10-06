@@ -18,7 +18,6 @@ class SpannedGridLayoutManager : GridLayoutManager {
         private const val TAG = "SpannedGridLayoutManager"
         private const val SPAN_COUNT = 4
         private const val MAX_ROWS = 100
-        @Volatile private var sRecyclerViewField: java.lang.reflect.Field? = null
     }
 
     private val mContext: Context
@@ -121,12 +120,9 @@ class SpannedGridLayoutManager : GridLayoutManager {
         var adapter: RecyclerView.Adapter<*>? = mAttachedRv?.adapter
         if (adapter == null) {
             try {
-                var f = sRecyclerViewField
-                if (f == null) {
-                    f = RecyclerView.LayoutManager::class.java.getDeclaredField("mRecyclerView").apply { isAccessible = true }
-                    sRecyclerViewField = f
-                }
-                val rv = f.get(this) as? RecyclerView
+                val adapterField = RecyclerView.LayoutManager::class.java.getDeclaredField("mRecyclerView")
+                adapterField.isAccessible = true
+                val rv = adapterField.get(this) as? RecyclerView
                 if (rv != null) {
                     adapter = rv.adapter
                     mAttachedRv = rv

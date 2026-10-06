@@ -20,7 +20,6 @@ import android.widget.TextView
 import android.widget.Toast
 import io.github.libxposed.api.XposedModule
 import java.lang.ref.WeakReference
-import java.lang.reflect.Field
 import java.lang.reflect.InvocationHandler
 import java.lang.reflect.Method
 import java.lang.reflect.Proxy
@@ -1051,70 +1050,42 @@ object ControlCenterFullUnlock {
     private val sAdapterQsFooters = ConcurrentHashMap<Any, Pair<Any, List<Any>>>()
     private val sAdapterFooters = ConcurrentHashMap<Any, MutableList<Pair<Any, List<Any>>>>()
 
-    private val sSlotIdCache = java.util.Collections.synchronizedMap(java.util.WeakHashMap<Any, String>())
-    @Volatile private var sGetOwnerMethod: Method? = null
-    @Volatile private var sGetItemMethod: Method? = null
-    @Volatile private var sGetItemViewTypeMethod: Method? = null
-    @Volatile private var sAddedField: Field? = null
-    @Volatile private var sItemViewField: Field? = null
-    @Volatile private var sGetTypeMethod: Method? = null
-
     /**
      * Resolves the SlotItem ID from a ViewHolder instance.
      */
     fun getSlotIdFromViewHolder(vh: Any?): String? {
         if (vh == null) return null
-        sSlotIdCache[vh]?.let { return it }
-
-        var resolvedId: String? = null
         try {
-            var getOwnerMethod = sGetOwnerMethod
-            if (getOwnerMethod == null) {
-                getOwnerMethod = try { vh.javaClass.getMethod("getOwner") } catch (e: Throwable) { null }
-                sGetOwnerMethod = getOwnerMethod
-            }
+            val getOwnerMethod = try { vh.javaClass.getMethod("getOwner") } catch (e: Throwable) { null }
             val owner = getOwnerMethod?.invoke(vh)
             if (owner != null && Proxy.isProxyClass(owner.javaClass)) {
                 val handler = Proxy.getInvocationHandler(owner) as? ProxyContentHandler
-                if (handler != null) resolvedId = handler.id
+                if (handler != null) return handler.id
             }
         } catch (t: Throwable) {}
 
-        if (resolvedId == null) {
-            try {
-                var getItemMethod = sGetItemMethod
-                if (getItemMethod == null) {
-                    getItemMethod = try { vh.javaClass.getMethod("getItem\$miui_controlcenter_release") } catch (e: Throwable) { null }
-                    sGetItemMethod = getItemMethod
-                }
-                val item = getItemMethod?.invoke(vh)
-                val spec = item?.let { ControlCenterConfigHolder.getRecordSpec(it) }
+        // Fallback via getItem and viewType
+        try {
+            val getItemMethod = try { vh.javaClass.getMethod("getItem\$miui_controlcenter_release") } catch (e: Throwable) { null }
+            val item = getItemMethod?.invoke(vh)
+            val spec = item?.let { ControlCenterConfigHolder.getRecordSpec(it) }
+            val getItemViewTypeMethod = vh.javaClass.getMethod("getItemViewType")
+            val vt = getItemViewTypeMethod.invoke(vh) as Int
 
-                if (spec == "wifi") resolvedId = "card:wifi"
-                else if (spec == "cell") resolvedId = "card:cell"
-                else if (spec != null) {
-                    val g = ControlCenterConfigHolder.isGroupAnchor(spec)
-                    resolvedId = if (g != null) "group:${g.id}" else "tile:$spec"
-                } else {
-                    var getItemViewTypeMethod = sGetItemViewTypeMethod
-                    if (getItemViewTypeMethod == null) {
-                        getItemViewTypeMethod = vh.javaClass.getMethod("getItemViewType")
-                        sGetItemViewTypeMethod = getItemViewTypeMethod
-                    }
-                    val vt = getItemViewTypeMethod.invoke(vh) as Int
-                    if (vt == 3484336 || vt == 63342) resolvedId = "component:media"
-                    else if (vt == 3484338 || vt == 274442) resolvedId = "component:brightness"
-                    else if (vt == 3484339 || vt == 865269) resolvedId = "component:volume"
-                    else if (vt == 338423) resolvedId = "component:device_center"
-                    else if (vt == 2668765) resolvedId = "component:device_controls"
-                }
-            } catch (t: Throwable) {}
-        }
-
-        if (resolvedId != null) {
-            sSlotIdCache[vh] = resolvedId
-        }
-        return resolvedId
+            if (spec == "wifi") return "card:wifi"
+            if (spec == "cell") return "card:cell"
+            if (spec != null) {
+                val g = ControlCenterConfigHolder.isGroupAnchor(spec)
+                if (g != null) return "group:${g.id}"
+                return "tile:$spec"
+            }
+            if (vt == 3484336 || vt == 63342) return "component:media"
+            if (vt == 3484338 || vt == 274442) return "component:brightness"
+            if (vt == 3484339 || vt == 865269) return "component:volume"
+            if (vt == 338423) return "component:device_center"
+            if (vt == 2668765) return "component:device_controls"
+        } catch (t: Throwable) {}
+        return null
     }
 
     /**
@@ -1186,11 +1157,7 @@ object ControlCenterFullUnlock {
                             val spec = ControlCenterConfigHolder.getRecordSpec(item)
                             var vt = 2273
                             try {
-                                var getTypeM = sGetTypeMethod
-                                if (getTypeM == null) {
-                                    getTypeM = item.javaClass.getMethod("getType")
-                                    sGetTypeMethod = getTypeM
-                                }
+                                val getTypeM = item.javaClass.getMethod("getType")
                                 vt = getTypeM.invoke(item) as Int
                             } catch (t: Throwable) {}
 
@@ -1264,11 +1231,7 @@ object ControlCenterFullUnlock {
 
                             var vt = 2272
                             try {
-                                var getTypeM = sGetTypeMethod
-                                if (getTypeM == null) {
-                                    getTypeM = item.javaClass.getMethod("getType")
-                                    sGetTypeMethod = getTypeM
-                                }
+                                val getTypeM = item.javaClass.getMethod("getType")
                                 vt = getTypeM.invoke(item) as Int
                             } catch (t: Throwable) {}
 
@@ -2151,28 +2114,17 @@ object ControlCenterFullUnlock {
                                 if (isOurHelper && ControlCenterConfigHolder.sIsEditMode && ControlCenterConfigHolder.config.isModularEditActive) {
                                     val targetVh = chain.args.getOrNull(2)
                                     if (targetVh != null) {
-                                        var getItemViewTypeMethod = sGetItemViewTypeMethod
-                                        if (getItemViewTypeMethod == null) {
-                                            getItemViewTypeMethod = targetVh.javaClass.getMethod("getItemViewType")
-                                            sGetItemViewTypeMethod = getItemViewTypeMethod
-                                        }
+                                        val getItemViewTypeMethod = targetVh.javaClass.getMethod("getItemViewType")
                                         val vt = getItemViewTypeMethod.invoke(targetVh) as Int
                                         if (isNonDraggableItem(vt)) {
                                             return@intercept false
                                         }
-                                        var getItemMethod = sGetItemMethod
-                                        if (getItemMethod == null) {
-                                            getItemMethod = try { targetVh.javaClass.getMethod("getItem\$miui_controlcenter_release") } catch (e: Throwable) { null }
-                                            sGetItemMethod = getItemMethod
-                                        }
+                                        val getItemMethod = try { targetVh.javaClass.getMethod("getItem\$miui_controlcenter_release") } catch (e: Throwable) { null }
                                         val targetItem = getItemMethod?.invoke(targetVh)
                                         if (targetItem != null) {
-                                            var addedField = sAddedField
-                                            if (addedField == null) {
-                                                addedField = try { targetItem.javaClass.getDeclaredField("added").apply { isAccessible = true } } catch (e: Throwable) { null }
-                                                sAddedField = addedField
-                                            }
+                                            val addedField = try { targetItem.javaClass.getDeclaredField("added") } catch (e: Throwable) { null }
                                             if (addedField != null) {
+                                                addedField.isAccessible = true
                                                 val isAdded = addedField.getBoolean(targetItem)
                                                 if (!isAdded) return@intercept false
                                             }
@@ -2198,11 +2150,7 @@ object ControlCenterFullUnlock {
                                     val curY = (chain.args.getOrNull(3) as? Int) ?: 0
 
                                     if (selected != null && !dropTargets.isNullOrEmpty()) {
-                                        var selViewField = sItemViewField
-                                        if (selViewField == null) {
-                                            selViewField = try { selected.javaClass.getField("itemView") } catch (e: Throwable) { null }
-                                            sItemViewField = selViewField
-                                        }
+                                        val selViewField = try { selected.javaClass.getField("itemView") } catch (e: Throwable) { null }
                                         val selView = selViewField?.get(selected) as? View
 
                                         if (selView != null) {
@@ -2223,19 +2171,11 @@ object ControlCenterFullUnlock {
 
                                             for (target in dropTargets) {
                                                 if (target == null || target === selected) continue
-                                                var tgtViewField = sItemViewField
-                                                if (tgtViewField == null) {
-                                                    tgtViewField = try { target.javaClass.getField("itemView") } catch (e: Throwable) { null }
-                                                    sItemViewField = tgtViewField
-                                                }
+                                                val tgtViewField = try { target.javaClass.getField("itemView") } catch (e: Throwable) { null }
                                                 val tgtView = tgtViewField?.get(target) as? View ?: continue
 
                                                 val vt = try {
-                                                    var getItemViewTypeMethod = sGetItemViewTypeMethod
-                                                    if (getItemViewTypeMethod == null) {
-                                                        getItemViewTypeMethod = target.javaClass.getMethod("getItemViewType")
-                                                        sGetItemViewTypeMethod = getItemViewTypeMethod
-                                                    }
+                                                    val getItemViewTypeMethod = target.javaClass.getMethod("getItemViewType")
                                                     getItemViewTypeMethod.invoke(target) as Int
                                                 } catch (t: Throwable) { -1 }
 

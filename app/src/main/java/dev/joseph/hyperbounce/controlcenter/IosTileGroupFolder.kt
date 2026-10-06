@@ -96,30 +96,7 @@ object IosTileGroupFolder {
         return sBaseTileSizeCached
     }
 
-    fun invokeRecordHaptic(childRecord: Any?, view: View, isLong: Boolean) {
-        var motorSuccess = false
-        if (childRecord != null) {
-            try {
-                val hfField = childRecord.javaClass.getDeclaredField("hapticFeedback")
-                hfField.isAccessible = true
-                val hf = hfField.get(childRecord)
-                if (hf != null) {
-                    val methodName = if (isLong) "postLongClick" else "postClick"
-                    val method = hf.javaClass.getMethod(methodName)
-                    method.isAccessible = true
-                    method.invoke(hf)
-                    motorSuccess = true
-                }
-            } catch (_: Throwable) {}
-        }
-        if (!motorSuccess) {
-            try {
-                view.performHapticFeedback(
-                    if (isLong) HapticFeedbackConstants.LONG_PRESS else HapticFeedbackConstants.KEYBOARD_TAP
-                )
-            } catch (_: Throwable) {}
-        }
-    }
+
 
     fun invokeRecordAction(actionObj: Any?, arg: Any?): Boolean {
         if (actionObj == null) return false
@@ -845,55 +822,19 @@ object IosTileGroupFolder {
                 view.isClickable = true
                 view.isLongClickable = true
                 view.isFocusable = true
-                view.setOnClickListener { clickedView ->
-                    invokeRecordHaptic(childRecord, clickedView, isLong = false)
-                    var invoked = false
-                    try {
-                        val f = childRecord.javaClass.getDeclaredField("clickAction")
-                        f.isAccessible = true
-                        val action = f.get(childRecord)
-                        invoked = invokeRecordAction(action, clickedView)
-                    } catch (t: Throwable) {}
-
-                    if (!invoked) {
-                        try {
-                            val tObj = childRecord.javaClass.getMethod("getTile").invoke(childRecord)
-                            tObj?.javaClass?.getMethod("click")?.invoke(tObj)
-                        } catch (t2: Throwable) {}
-                    }
-
-                    clickedView.postDelayed({
-                        try {
-                            val tObj = childRecord.javaClass.getMethod("getTile").invoke(childRecord)
-                            if (tObj != null) {
-                                tObj.javaClass.getMethod("refreshState").invoke(tObj)
-                                val curState = tObj.javaClass.getMethod("getState").invoke(tObj)
-                                if (curState != null) {
-                                    for (vm in clickedView.javaClass.methods) {
-                                        if (vm.name == "updateState" && vm.parameterTypes.size == 3) {
-                                            vm.isAccessible = true
-                                            vm.invoke(clickedView, curState, isConnected, false)
-                                            ControlCenterGrouping.applyNonAdvancedStyleToChildTile(clickedView, curState, classLoader)
-                                            break
-                                        }
-                                    }
-                                }
-                            }
-                        } catch (t: Throwable) {}
-                    }, 50)
-                }
 
                 view.setOnLongClickListener { clickedView ->
-                    invokeRecordHaptic(childRecord, clickedView, isLong = true)
-                    var invoked = false
+                    var handled = false
                     try {
                         val f = childRecord.javaClass.getDeclaredField("longClickAction")
                         f.isAccessible = true
                         val action = f.get(childRecord)
-                        invoked = invokeRecordAction(action, clickedView)
+                        if (action != null) {
+                            handled = invokeRecordAction(action, clickedView)
+                        }
                     } catch (t: Throwable) {}
 
-                    if (!invoked) {
+                    if (!handled) {
                         try {
                             val tObj = childRecord.javaClass.getMethod("getTile").invoke(childRecord)
                             if (tObj != null) {
@@ -906,14 +847,22 @@ object IosTileGroupFolder {
                                 if (isDualTarget) {
                                     try {
                                         tObj.javaClass.getMethod("secondaryClick").invoke(tObj)
+                                        handled = true
                                     } catch (t: Throwable) {
-                                        try { tObj.javaClass.getMethod("longClick").invoke(tObj) } catch (t2: Throwable) {}
+                                        try {
+                                            tObj.javaClass.getMethod("longClick").invoke(tObj)
+                                            handled = true
+                                        } catch (t2: Throwable) {}
                                     }
                                 } else {
                                     try {
                                         tObj.javaClass.getMethod("longClick").invoke(tObj)
+                                        handled = true
                                     } catch (t: Throwable) {
-                                        try { tObj.javaClass.getMethod("secondaryClick").invoke(tObj) } catch (t2: Throwable) {}
+                                        try {
+                                            tObj.javaClass.getMethod("secondaryClick").invoke(tObj)
+                                            handled = true
+                                        } catch (t2: Throwable) {}
                                     }
                                 }
                             }
@@ -921,8 +870,10 @@ object IosTileGroupFolder {
                             Log.e(TAG, "Tile onLongClick error: $spec", t)
                         }
                     }
-                    dismissOverlay()
-                    true
+                    if (handled) {
+                        dismissOverlay()
+                    }
+                    handled
                 }
             } catch (t: Throwable) {
                 Log.e(TAG, "bindTileDirectly error: $spec", t)

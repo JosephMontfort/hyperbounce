@@ -1215,7 +1215,6 @@ object ControlCenterGrouping {
                 ?: return
 
             anchorView.setTag(0x7f099994, resolvedGroup)
-            anchorView.setTag(0x7f099995, java.lang.Boolean.TRUE)
             applyGroupContainerStyle(anchorView, classLoader, resolvedGroup)
 
             val ctx = anchorView.context
@@ -1253,43 +1252,30 @@ object ControlCenterGrouping {
 
             val activeCtrl = qsListCtrl ?: ControlCenterConfigHolder.sQSListController
             val recordMap = HashMap<String, Any>()
-            val neededSpecs = resolvedGroup.specs
-            for (r in ControlCenterConfigHolder.sAllQSRecords) {
-                if (r != null) {
-                    val s = ControlCenterConfigHolder.getRecordSpec(r)
-                    if (s != null && neededSpecs.contains(s) && !recordMap.containsKey(s)) {
-                        recordMap[s] = r
-                    }
-                }
-            }
-
-            if (recordMap.size < neededSpecs.size && activeCtrl != null) {
+            if (activeCtrl != null) {
                 val listFieldNames = arrayOf("addedTiles", "copiedTiles", "systemTiles", "packageTiles", "records")
                 for (fn in listFieldNames) {
-                    if (recordMap.size >= neededSpecs.size) break
                     try {
                         val f = activeCtrl.javaClass.getDeclaredField(fn)
                         f.isAccessible = true
                         val list = f.get(activeCtrl) as? List<*>
                         if (list != null) {
                             for (r in list) {
-                                if (r != null) {
-                                    val s = ControlCenterConfigHolder.getRecordSpec(r)
-                                    if (s != null && neededSpecs.contains(s) && !recordMap.containsKey(s)) {
-                                        recordMap[s] = r
-                                        if (recordMap.size >= neededSpecs.size) break
-                                    }
-                                }
+                                val s = ControlCenterConfigHolder.getRecordSpec(r)
+                                if (s != null && !recordMap.containsKey(s) && r != null) recordMap[s] = r
                             }
                         }
                     } catch (t: Throwable) {}
                 }
             }
 
-            var viewsRebuilt = false
+            for (r in ControlCenterConfigHolder.sAllQSRecords) {
+                val s = ControlCenterConfigHolder.getRecordSpec(r)
+                if (s != null && !recordMap.containsKey(s) && r != null) recordMap[s] = r
+            }
+
             if (container is DynamicGroupContainer) {
                 if (forceRebuild || container.childCount == 0 || container.getTag(0x7f099997) != resolvedGroup.id) {
-                    viewsRebuilt = true
                     container.removeAllViews()
                     container.setTag(0x7f099997, resolvedGroup.id)
                     container.rowCount = rowCount
@@ -1469,9 +1455,7 @@ object ControlCenterGrouping {
                     }
                 }
             }
-            if (viewsRebuilt) {
-                container.requestLayout()
-            }
+            container.requestLayout()
         } catch (t: Throwable) {
             Log.e(TAG, "rebindGroupContainer error", t)
         }
