@@ -111,6 +111,19 @@ object ControlCenterGrouping {
 
     fun computeGroupLayout(specs: List<String>, tileSizesList: List<String>): GroupLayoutResult? {
         if (specs.size < 2 || specs.size != tileSizesList.size) return null
+
+        // Specialized iOS 7-tile cluster (3 normal 1x1 + 4 shrunken mini tiles in slot (1,1))
+        if (specs.size == 7 && tileSizesList.all { it == "C" }) {
+            val placed = mutableListOf<PlacedTile>()
+            placed.add(PlacedTile(specs[0], 0, 0, 1, 1, "C"))
+            placed.add(PlacedTile(specs[1], 1, 0, 1, 1, "C"))
+            placed.add(PlacedTile(specs[2], 0, 1, 1, 1, "C"))
+            for (i in 3 until 7) {
+                placed.add(PlacedTile(specs[i], 1, 1, 1, 1, "C"))
+            }
+            return GroupLayoutResult(2, placed, "7_IOS_CLUSTER")
+        }
+
         val grid = Array(6) { arrayOfNulls<String>(2) }
         val placed = mutableListOf<PlacedTile>()
 
@@ -1229,20 +1242,54 @@ object ControlCenterGrouping {
 
                     val layoutRes = computeGroupLayoutForGroup(resolvedGroup)
                     if (layoutRes != null) {
-                        container.placedTiles = layoutRes.placedTiles
-                        val dynamicSubHolders = arrayOfNulls<Any>(resolvedGroup.specs.size)
-                        val mainPanelController = getMainPanelController(activeCtrl)
-                            ?: getMainPanelController(ControlCenterConfigHolder.sQSListController)
+                        val isIosCluster = layoutRes.layoutType == "7_IOS_CLUSTER" && resolvedGroup.specs.size == 7
+                        if (isIosCluster) {
+                            val iosCluster = IosTileGroupFolder.IosClusterContainer(ctx).apply {
+                                this.group = resolvedGroup
+                                this.classLoader = classLoader
+                                this.qsListCtrl = activeCtrl
+                                layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+                            }
+                            container.addView(iosCluster)
 
-                        for (i in resolvedGroup.specs.indices) {
-                            val pt = layoutRes.placedTiles[i]
-                            val child = inflateTileForType(pt.type, container, activeCtrl, classLoader)
-                            container.addView(child)
-                            val h = createSubHolderForView(child, mainPanelController, classLoader)
-                            attachSubHolder(h)
-                            dynamicSubHolders[i] = h
+                            val dynamicSubHolders = arrayOfNulls<Any>(7)
+                            val mainPanelController = getMainPanelController(activeCtrl)
+                                ?: getMainPanelController(ControlCenterConfigHolder.sQSListController)
+
+                            // First 3 normal tiles
+                            for (i in 0 until 3) {
+                                val child = inflateTileForType("C", iosCluster, activeCtrl, classLoader)
+                                iosCluster.addView(child)
+                                val h = createSubHolderForView(child, mainPanelController, classLoader)
+                                attachSubHolder(h)
+                                dynamicSubHolders[i] = h
+                            }
+
+                            // 4 mini tiles inside miniClusterView
+                            for (i in 3 until 7) {
+                                val child = inflateTileForType("C", iosCluster.miniClusterView, activeCtrl, classLoader)
+                                iosCluster.miniClusterView.addView(child)
+                                val h = createSubHolderForView(child, mainPanelController, classLoader)
+                                attachSubHolder(h)
+                                dynamicSubHolders[i] = h
+                            }
+                            anchorView.setTag(0x7f099993, dynamicSubHolders)
+                        } else {
+                            container.placedTiles = layoutRes.placedTiles
+                            val dynamicSubHolders = arrayOfNulls<Any>(resolvedGroup.specs.size)
+                            val mainPanelController = getMainPanelController(activeCtrl)
+                                ?: getMainPanelController(ControlCenterConfigHolder.sQSListController)
+
+                            for (i in resolvedGroup.specs.indices) {
+                                val pt = layoutRes.placedTiles[i]
+                                val child = inflateTileForType(pt.type, container, activeCtrl, classLoader)
+                                container.addView(child)
+                                val h = createSubHolderForView(child, mainPanelController, classLoader)
+                                attachSubHolder(h)
+                                dynamicSubHolders[i] = h
+                            }
+                            anchorView.setTag(0x7f099993, dynamicSubHolders)
                         }
-                        anchorView.setTag(0x7f099993, dynamicSubHolders)
                     }
                     container.requestLayout()
                 }
@@ -1345,9 +1392,16 @@ object ControlCenterGrouping {
                             childView.isLongClickable = false
                             childView.isFocusable = false
                         } else {
-                            childView.isClickable = true
-                            childView.isLongClickable = true
-                            childView.isFocusable = true
+                            val isIosMiniTile = resolvedGroup.getEffectiveLayoutType() == "7_IOS_CLUSTER" && i >= 3
+                            if (isIosMiniTile) {
+                                childView.isClickable = false
+                                childView.isLongClickable = false
+                                childView.isFocusable = false
+                            } else {
+                                childView.isClickable = true
+                                childView.isLongClickable = true
+                                childView.isFocusable = true
+                            }
                         }
                     } catch (t: Throwable) {
                         Log.e(TAG, "rebindGroupContainer subHolder error: $childSpec", t)

@@ -96,6 +96,7 @@ data class TileGroup(
             }
         }
         return when {
+            specs.size == 7 -> "7_IOS_CLUSTER"
             specs.size == 4 -> "4_CIRCULAR"
             specs.size == 2 -> {
                 val isExp = specs.all { s -> ControlCenterConfigHolder.sExpandedTileSpecs.contains(s) }
@@ -116,6 +117,7 @@ data class TileGroup(
             "2_CIRCULAR_HORIZ" -> Pair(2, 1)
             "2_EXPANDED" -> Pair(2, 2)
             "2_VERTICAL" -> Pair(2, 2)
+            "7_IOS_CLUSTER" -> Pair(2, 2)
             else -> Pair(2, getEffectiveRowCount().coerceIn(1, 6))
         }
     }
@@ -127,6 +129,7 @@ data class TileGroup(
                type == "2_VERTICAL" ||
                type == "1_EXP_2_CIRC" ||
                type == "1_VERT_2_CIRC" ||
+               type == "7_IOS_CLUSTER" ||
                (getEffectiveRowCount() == 2)
     }
 }
