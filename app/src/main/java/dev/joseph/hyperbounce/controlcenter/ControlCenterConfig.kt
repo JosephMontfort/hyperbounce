@@ -1119,10 +1119,6 @@ object ControlCenterConfigHolder {
                         continue
                     }
 
-                    if (isCircular) {
-                        ControlCenterHook.setCircularTileLabelVisibility(itemView, false)
-                    }
-
                     // Special Handling for Sliders
                     if (isSlider) {
                         if (selectBadge != null) selectBadge.visibility = View.GONE
@@ -1625,16 +1621,13 @@ object ControlCenterConfigHolder {
                 }
             }
         }
-        updateAllVisibleTileBadges()
         if (rv != null) {
             rv.post {
                 updateAllVisibleTileBadges()
-                refreshAdapter(rv, ctx, isStructuralChange = true)
             }
         } else if (rootView != null) {
             rootView.post {
                 updateAllVisibleTileBadges()
-                refreshAdapter(rootView, ctx, isStructuralChange = true)
             }
         }
     }

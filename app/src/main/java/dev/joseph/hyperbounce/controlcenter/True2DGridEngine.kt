@@ -575,6 +575,10 @@ object True2DGridEngine {
         }
 
         try {
+            if (ControlCenterConfigHolder.sIsEditMode || !ControlCenterConfigHolder.config.isTrue2dGridActive) {
+                return false
+            }
+
             val orientation = ReflectionCache.glmOrientationField?.getInt(glm) ?: 1
             if (orientation != 1) {
                 // Horizontal orientation not used by Control Center; let stock handle
