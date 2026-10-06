@@ -1336,22 +1336,20 @@ object ControlCenterHook {
                         module.hook(m).intercept { chain ->
                             ControlCenterConfigHolder.sQSListController = chain.thisObject
                             val originalList = chain.proceed() as? List<*>
-                            if (originalList != null) {
-                                val cardRecords = ControlCenterConfigHolder.sAllQSRecords.filter { r ->
-                                    val sp = ControlCenterConfigHolder.getRecordSpec(r)
-                                    sp == "wifi" || sp == "cell"
-                                }
-                                ControlCenterConfigHolder.sAllQSRecords.clear()
-                                ControlCenterConfigHolder.sAllQSRecords.addAll(cardRecords)
-                                for (item in originalList) {
-                                    if (item != null && !ControlCenterConfigHolder.sAllQSRecords.contains(item)) {
-                                        ControlCenterConfigHolder.sAllQSRecords.add(item)
+                            if (originalList != null && originalList.isNotEmpty()) {
+                                if (ControlCenterConfigHolder.sAllQSRecords.size < originalList.size) {
+                                    val existing = java.util.Collections.newSetFromMap(java.util.IdentityHashMap<Any, Boolean>())
+                                    existing.addAll(ControlCenterConfigHolder.sAllQSRecords)
+                                    for (item in originalList) {
+                                        if (item != null && existing.add(item)) {
+                                            ControlCenterConfigHolder.sAllQSRecords.add(item)
+                                        }
                                     }
                                 }
                             }
                             if (originalList == null || ControlCenterConfigHolder.sTileGroups.isEmpty()) return@intercept originalList
                             try {
-                                val filtered = ArrayList<Any>()
+                                val filtered = ArrayList<Any>(originalList.size)
                                 for (item in originalList) {
                                     if (item != null) {
                                         val spec = ControlCenterConfigHolder.getRecordSpec(item)
@@ -3315,24 +3313,34 @@ object ControlCenterHook {
             applyMediaPlayerLayout(holder)
         } else {
             val itemView = ControlCenterGrouping.getViewHolderItemView(holder)
-            if (itemView != null && (itemView.getTag(0x7f099995) != null || itemView.findViewById<ViewGroup>(0x7f099995) != null)) {
-                var group = itemView.getTag(0x7f099994) as? TileGroup
-                if (group != null) {
-                    // Already bound by QSTileRecord.onBindViewHolder with its active controller
-                    return
+            if (itemView != null) {
+                val groupTag = itemView.getTag(0x7f099995)
+                val isGroup = if (groupTag != null) {
+                    groupTag == java.lang.Boolean.TRUE
+                } else {
+                    val found = itemView.findViewById<ViewGroup>(0x7f099995) != null
+                    itemView.setTag(0x7f099995, if (found) java.lang.Boolean.TRUE else java.lang.Boolean.FALSE)
+                    found
                 }
-                val spec = itemView.getTag(0x7f099990) as? String
-                    ?: try {
-                        val itemF = holder.javaClass.getDeclaredField("item")
-                        itemF.isAccessible = true
-                        ControlCenterConfigHolder.getRecordSpec(itemF.get(holder))
-                    } catch (t: Throwable) { null }
-                if (spec != null) {
-                    itemView.setTag(0x7f099990, spec)
-                    group = ControlCenterConfigHolder.isGroupAnchor(spec)
-                }
-                if (group != null) {
-                    ControlCenterGrouping.rebindGroupContainer(itemView, group, null, classLoader)
+                if (isGroup) {
+                    var group = itemView.getTag(0x7f099994) as? TileGroup
+                    if (group != null) {
+                        // Already bound by QSTileRecord.onBindViewHolder with its active controller
+                        return
+                    }
+                    val spec = itemView.getTag(0x7f099990) as? String
+                        ?: try {
+                            val itemF = holder.javaClass.getDeclaredField("item")
+                            itemF.isAccessible = true
+                            ControlCenterConfigHolder.getRecordSpec(itemF.get(holder))
+                        } catch (t: Throwable) { null }
+                    if (spec != null) {
+                        itemView.setTag(0x7f099990, spec)
+                        group = ControlCenterConfigHolder.isGroupAnchor(spec)
+                    }
+                    if (group != null) {
+                        ControlCenterGrouping.rebindGroupContainer(itemView, group, null, classLoader)
+                    }
                 }
             }
         }

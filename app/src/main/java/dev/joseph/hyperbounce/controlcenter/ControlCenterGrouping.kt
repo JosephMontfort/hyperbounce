@@ -1253,26 +1253,37 @@ object ControlCenterGrouping {
 
             val activeCtrl = qsListCtrl ?: ControlCenterConfigHolder.sQSListController
             val recordMap = HashMap<String, Any>()
-            if (activeCtrl != null) {
+            val neededSpecs = resolvedGroup.specs
+            for (r in ControlCenterConfigHolder.sAllQSRecords) {
+                if (r != null) {
+                    val s = ControlCenterConfigHolder.getRecordSpec(r)
+                    if (s != null && neededSpecs.contains(s) && !recordMap.containsKey(s)) {
+                        recordMap[s] = r
+                    }
+                }
+            }
+
+            if (recordMap.size < neededSpecs.size && activeCtrl != null) {
                 val listFieldNames = arrayOf("addedTiles", "copiedTiles", "systemTiles", "packageTiles", "records")
                 for (fn in listFieldNames) {
+                    if (recordMap.size >= neededSpecs.size) break
                     try {
                         val f = activeCtrl.javaClass.getDeclaredField(fn)
                         f.isAccessible = true
                         val list = f.get(activeCtrl) as? List<*>
                         if (list != null) {
                             for (r in list) {
-                                val s = ControlCenterConfigHolder.getRecordSpec(r)
-                                if (s != null && !recordMap.containsKey(s) && r != null) recordMap[s] = r
+                                if (r != null) {
+                                    val s = ControlCenterConfigHolder.getRecordSpec(r)
+                                    if (s != null && neededSpecs.contains(s) && !recordMap.containsKey(s)) {
+                                        recordMap[s] = r
+                                        if (recordMap.size >= neededSpecs.size) break
+                                    }
+                                }
                             }
                         }
                     } catch (t: Throwable) {}
                 }
-            }
-
-            for (r in ControlCenterConfigHolder.sAllQSRecords) {
-                val s = ControlCenterConfigHolder.getRecordSpec(r)
-                if (s != null && !recordMap.containsKey(s) && r != null) recordMap[s] = r
             }
 
             var viewsRebuilt = false

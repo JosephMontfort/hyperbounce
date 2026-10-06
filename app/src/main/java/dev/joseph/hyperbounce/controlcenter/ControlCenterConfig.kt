@@ -717,147 +717,180 @@ object ControlCenterConfigHolder {
         return null
     }
 
+    private val sRecordSpecCache = java.util.Collections.synchronizedMap(java.util.WeakHashMap<Any, String>())
+    @Volatile private var sGetSpecMethod: java.lang.reflect.Method? = null
+    @Volatile private var sSpecField: java.lang.reflect.Field? = null
+    @Volatile private var sGetTileMethod: java.lang.reflect.Method? = null
+    @Volatile private var sGetTileSpecMethod: java.lang.reflect.Method? = null
+
     fun getRecordSpec(r: Any?): String? {
         if (r == null) return null
-        return try {
-            val m = r.javaClass.getMethod("getSpec")
+        sRecordSpecCache[r]?.let { return it }
+        val spec = try {
+            var m = sGetSpecMethod
+            if (m == null) {
+                m = r.javaClass.getMethod("getSpec")
+                sGetSpecMethod = m
+            }
             m.invoke(r) as? String
         } catch (t: Throwable) {
             try {
-                val f = r.javaClass.getDeclaredField("spec")
-                f.isAccessible = true
+                var f = sSpecField
+                if (f == null) {
+                    f = r.javaClass.getDeclaredField("spec").apply { isAccessible = true }
+                    sSpecField = f
+                }
                 f.get(r) as? String
             } catch (t2: Throwable) {
                 try {
-                    val getTileM = r.javaClass.getMethod("getTile")
-                    val tileObj = getTileM.invoke(r)
+                    var tm = sGetTileMethod
+                    if (tm == null) {
+                        tm = r.javaClass.getMethod("getTile")
+                        sGetTileMethod = tm
+                    }
+                    val tileObj = tm.invoke(r)
                     if (tileObj != null) {
-                        val getSpecM = tileObj.javaClass.getMethod("getTileSpec")
-                        getSpecM.invoke(tileObj) as? String
+                        var tsm = sGetTileSpecMethod
+                        if (tsm == null) {
+                            tsm = tileObj.javaClass.getMethod("getTileSpec")
+                            sGetTileSpecMethod = tsm
+                        }
+                        tsm.invoke(tileObj) as? String
                     } else null
                 } catch (t3: Throwable) {
                     null
                 }
             }
         }
+        if (spec != null) {
+            sRecordSpecCache[r] = spec
+        }
+        return spec
     }
 
     private var sLastWakeTimestamp: Long = 0L
 
     fun wakeAndRefreshAllGroupedTiles() {
         val now = android.os.SystemClock.uptimeMillis()
-        if (now - sLastWakeTimestamp < 250L) {
+        if (now - sLastWakeTimestamp < 500L) {
             return
         }
         sLastWakeTimestamp = now
 
-        try {
-            val rv = sRecyclerView?.get() as? ViewGroup
-            for (r in sAllQSRecords) {
-                if (r != null) {
-                    val spec = getRecordSpec(r)
-                    if (isGroupChild(spec)) {
-                        try {
-                            if (GroupedTileReflectionCache.startListeningMethod == null) {
-                                GroupedTileReflectionCache.startListeningMethod = r.javaClass.getMethod("startListening")
-                            }
-                            GroupedTileReflectionCache.startListeningMethod?.invoke(r)
-                        } catch (t: Throwable) {}
-
-                        try {
-                            if (GroupedTileReflectionCache.getTileMethod == null) {
-                                GroupedTileReflectionCache.getTileMethod = r.javaClass.getMethod("getTile")
-                            }
-                            val tileObj = GroupedTileReflectionCache.getTileMethod?.invoke(r)
-                            if (tileObj != null) {
-                                if (GroupedTileReflectionCache.setListeningMethod == null) {
-                                    GroupedTileReflectionCache.setListeningMethod = tileObj.javaClass.getMethod("setListening", Any::class.java, Boolean::class.javaPrimitiveType)
+        val rv = sRecyclerView?.get() as? ViewGroup
+        val task = Runnable {
+            try {
+                for (r in sAllQSRecords) {
+                    if (r != null) {
+                        val spec = getRecordSpec(r)
+                        if (isGroupChild(spec)) {
+                            try {
+                                if (GroupedTileReflectionCache.startListeningMethod == null) {
+                                    GroupedTileReflectionCache.startListeningMethod = r.javaClass.getMethod("startListening")
                                 }
-                                GroupedTileReflectionCache.setListeningMethod?.invoke(tileObj, r, true)
+                                GroupedTileReflectionCache.startListeningMethod?.invoke(r)
+                            } catch (t: Throwable) {}
 
-                                if (GroupedTileReflectionCache.refreshStateMethod == null) {
-                                    GroupedTileReflectionCache.refreshStateMethod = tileObj.javaClass.getMethod("refreshState")
+                            try {
+                                if (GroupedTileReflectionCache.getTileMethod == null) {
+                                    GroupedTileReflectionCache.getTileMethod = r.javaClass.getMethod("getTile")
                                 }
-                                GroupedTileReflectionCache.refreshStateMethod?.invoke(tileObj)
+                                val tileObj = GroupedTileReflectionCache.getTileMethod?.invoke(r)
+                                if (tileObj != null) {
+                                    if (GroupedTileReflectionCache.setListeningMethod == null) {
+                                        GroupedTileReflectionCache.setListeningMethod = tileObj.javaClass.getMethod("setListening", Any::class.java, Boolean::class.javaPrimitiveType)
+                                    }
+                                    GroupedTileReflectionCache.setListeningMethod?.invoke(tileObj, r, true)
 
-                                if (GroupedTileReflectionCache.getStateMethod == null) {
-                                    GroupedTileReflectionCache.getStateMethod = tileObj.javaClass.getMethod("getState")
-                                }
-                                val curState = GroupedTileReflectionCache.getStateMethod?.invoke(tileObj)
+                                    if (GroupedTileReflectionCache.refreshStateMethod == null) {
+                                        GroupedTileReflectionCache.refreshStateMethod = tileObj.javaClass.getMethod("refreshState")
+                                    }
+                                    GroupedTileReflectionCache.refreshStateMethod?.invoke(tileObj)
 
-                                if (GroupedTileReflectionCache.getHolderMethod == null) {
-                                    GroupedTileReflectionCache.getHolderMethod = r.javaClass.getMethod("getHolder")
-                                }
-                                var holder = GroupedTileReflectionCache.getHolderMethod?.invoke(r)
+                                    if (GroupedTileReflectionCache.getStateMethod == null) {
+                                        GroupedTileReflectionCache.getStateMethod = tileObj.javaClass.getMethod("getState")
+                                    }
+                                    val curState = GroupedTileReflectionCache.getStateMethod?.invoke(tileObj)
 
-                                if (holder == null && rv != null && spec != null) {
-                                    val group = findGroupForSpec(spec)
-                                    if (group != null) {
-                                        val anchorSpec = group.specs.firstOrNull()
-                                        for (i in 0 until rv.childCount) {
-                                            val child = rv.getChildAt(i)
-                                            if (child != null && (child.getTag(0x7f099990) == anchorSpec || child.getTag(0x7f099994) == group)) {
-                                                val subHolders = child.getTag(0x7f099993) as? Array<*>
-                                                val idx = group.specs.indexOf(spec)
-                                                if (subHolders != null && idx in subHolders.indices && subHolders[idx] != null) {
-                                                    holder = subHolders[idx]
-                                                    if (GroupedTileReflectionCache.setHolderMethod == null) {
-                                                        for (m in r.javaClass.methods) {
-                                                            if (m.name == "setHolder" && m.parameterTypes.size == 1) {
-                                                                GroupedTileReflectionCache.setHolderMethod = m
-                                                                break
+                                    if (GroupedTileReflectionCache.getHolderMethod == null) {
+                                        GroupedTileReflectionCache.getHolderMethod = r.javaClass.getMethod("getHolder")
+                                    }
+                                    var holder = GroupedTileReflectionCache.getHolderMethod?.invoke(r)
+
+                                    if (holder == null && rv != null && spec != null) {
+                                        val group = findGroupForSpec(spec)
+                                        if (group != null) {
+                                            val anchorSpec = group.specs.firstOrNull()
+                                            for (i in 0 until rv.childCount) {
+                                                val child = rv.getChildAt(i)
+                                                if (child != null && (child.getTag(0x7f099990) == anchorSpec || child.getTag(0x7f099994) == group)) {
+                                                    val subHolders = child.getTag(0x7f099993) as? Array<*>
+                                                    val idx = group.specs.indexOf(spec)
+                                                    if (subHolders != null && idx in subHolders.indices && subHolders[idx] != null) {
+                                                        holder = subHolders[idx]
+                                                        if (GroupedTileReflectionCache.setHolderMethod == null) {
+                                                            for (m in r.javaClass.methods) {
+                                                                if (m.name == "setHolder" && m.parameterTypes.size == 1) {
+                                                                    GroupedTileReflectionCache.setHolderMethod = m
+                                                                    break
+                                                                }
                                                             }
                                                         }
+                                                        GroupedTileReflectionCache.setHolderMethod?.invoke(r, holder)
                                                     }
-                                                    GroupedTileReflectionCache.setHolderMethod?.invoke(r, holder)
-                                                }
-                                                break
-                                            }
-                                        }
-                                    }
-                                }
-
-                                if (holder != null && curState != null) {
-                                    if (GroupedTileReflectionCache.itemViewField == null) {
-                                        var c: Class<*>? = holder.javaClass
-                                        while (c != null) {
-                                            try {
-                                                val f = c.getDeclaredField("itemView")
-                                                f.isAccessible = true
-                                                GroupedTileReflectionCache.itemViewField = f
-                                                break
-                                            } catch (t: Throwable) { c = c.superclass }
-                                        }
-                                    }
-                                    val childView = GroupedTileReflectionCache.itemViewField?.get(holder) as? View
-                                    if (childView != null) {
-                                        childView.visibility = View.VISIBLE
-                                        if (!sIsEditMode) {
-                                            childView.alpha = 1.0f
-                                        }
-                                        val vClass = childView.javaClass
-                                        if (GroupedTileReflectionCache.lastChildViewClass != vClass) {
-                                            GroupedTileReflectionCache.lastChildViewClass = vClass
-                                            GroupedTileReflectionCache.updateStateMethod = null
-                                            for (vm in vClass.methods) {
-                                                if (vm.name == "updateState" && vm.parameterTypes.size == 3) {
-                                                    vm.isAccessible = true
-                                                    GroupedTileReflectionCache.updateStateMethod = vm
                                                     break
                                                 }
                                             }
                                         }
-                                        val isConnected = (spec == "wifi" || spec == "cell")
-                                        GroupedTileReflectionCache.updateStateMethod?.invoke(childView, curState, isConnected, false)
+                                    }
+
+                                    if (holder != null && curState != null) {
+                                        if (GroupedTileReflectionCache.itemViewField == null) {
+                                            var c: Class<*>? = holder.javaClass
+                                            while (c != null) {
+                                                try {
+                                                    val f = c.getDeclaredField("itemView")
+                                                    f.isAccessible = true
+                                                    GroupedTileReflectionCache.itemViewField = f
+                                                    break
+                                                } catch (t: Throwable) { c = c.superclass }
+                                            }
+                                        }
+                                        val childView = GroupedTileReflectionCache.itemViewField?.get(holder) as? View
+                                        if (childView != null) {
+                                            childView.visibility = View.VISIBLE
+                                            if (!sIsEditMode) {
+                                                childView.alpha = 1.0f
+                                            }
+                                            val vClass = childView.javaClass
+                                            if (GroupedTileReflectionCache.lastChildViewClass != vClass) {
+                                                GroupedTileReflectionCache.lastChildViewClass = vClass
+                                                GroupedTileReflectionCache.updateStateMethod = null
+                                                for (vm in vClass.methods) {
+                                                    if (vm.name == "updateState" && vm.parameterTypes.size == 3) {
+                                                        vm.isAccessible = true
+                                                        GroupedTileReflectionCache.updateStateMethod = vm
+                                                        break
+                                                    }
+                                                }
+                                            }
+                                            val isConnected = (spec == "wifi" || spec == "cell")
+                                            GroupedTileReflectionCache.updateStateMethod?.invoke(childView, curState, isConnected, false)
+                                        }
                                     }
                                 }
-                            }
-                        } catch (t: Throwable) {}
+                            } catch (t: Throwable) {}
+                        }
                     }
                 }
+            } catch (t: Throwable) {
+                Log.e(TAG, "wakeAndRefreshAllGroupedTiles error", t)
             }
-        } catch (t: Throwable) {
-            Log.e(TAG, "wakeAndRefreshAllGroupedTiles error", t)
+        }
+        if (rv != null) {
+            rv.post(task)
+        } else {
+            task.run()
         }
     }
 

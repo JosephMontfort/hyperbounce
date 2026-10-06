@@ -58,6 +58,93 @@ object IosTileGroupFolder {
 
     private var activeOverlayRef: WeakReference<IosFolderExpandedOverlay>? = null
 
+    @Volatile private var sBaseTileSizeCached = -1
+    @Volatile private var sTileLabelIdCached = -1
+    @Volatile private var sMarkIdCached = -1
+    @Volatile private var sIconFrameIdCached = -1
+
+    private fun getTileLabelResId(ctx: Context): Int {
+        if (sTileLabelIdCached == -1) {
+            sTileLabelIdCached = ctx.resources.getIdentifier("tile_label", "id", ctx.packageName)
+        }
+        return sTileLabelIdCached
+    }
+
+    private fun getMarkResId(ctx: Context): Int {
+        if (sMarkIdCached == -1) {
+            sMarkIdCached = ctx.resources.getIdentifier("mark", "id", ctx.packageName)
+        }
+        return sMarkIdCached
+    }
+
+    private fun getIconFrameResId(ctx: Context): Int {
+        if (sIconFrameIdCached == -1) {
+            sIconFrameIdCached = ctx.resources.getIdentifier("icon_frame", "id", ctx.packageName)
+        }
+        return sIconFrameIdCached
+    }
+
+    private fun getBaseTileSize(ctx: Context): Int {
+        if (sBaseTileSizeCached == -1) {
+            val iconSizeId = ctx.resources.getIdentifier("qs_tile_item_icon_size", "dimen", ctx.packageName)
+            sBaseTileSizeCached = if (iconSizeId != 0) {
+                ctx.resources.getDimensionPixelSize(iconSizeId)
+            } else {
+                (68 * ctx.resources.displayMetrics.density).toInt()
+            }
+        }
+        return sBaseTileSizeCached
+    }
+
+    fun invokeRecordHaptic(childRecord: Any?, view: View, isLong: Boolean) {
+        var motorSuccess = false
+        if (childRecord != null) {
+            try {
+                val hfField = childRecord.javaClass.getDeclaredField("hapticFeedback")
+                hfField.isAccessible = true
+                val hf = hfField.get(childRecord)
+                if (hf != null) {
+                    val methodName = if (isLong) "postLongClick" else "postClick"
+                    val method = hf.javaClass.getMethod(methodName)
+                    method.isAccessible = true
+                    method.invoke(hf)
+                    motorSuccess = true
+                }
+            } catch (_: Throwable) {}
+        }
+        if (!motorSuccess) {
+            try {
+                view.performHapticFeedback(
+                    if (isLong) HapticFeedbackConstants.LONG_PRESS else HapticFeedbackConstants.KEYBOARD_TAP
+                )
+            } catch (_: Throwable) {}
+        }
+    }
+
+    fun invokeRecordAction(actionObj: Any?, arg: Any?): Boolean {
+        if (actionObj == null) return false
+        for (m in actionObj.javaClass.methods) {
+            if (m.name == "invoke") {
+                m.isAccessible = true
+                try {
+                    if (m.parameterTypes.size == 1 && arg != null && m.parameterTypes[0].isAssignableFrom(arg.javaClass)) {
+                        m.invoke(actionObj, arg)
+                        return true
+                    } else if (m.parameterTypes.size == 1) {
+                        m.invoke(actionObj, arg)
+                        return true
+                    } else if (m.parameterTypes.isEmpty()) {
+                        m.invoke(actionObj)
+                        return true
+                    }
+                } catch (t: Throwable) {
+                    Log.e(TAG, "Error invoking action", t)
+                }
+            }
+        }
+        return false
+    }
+
     fun isExpandedOverlayActive(): Boolean {
         val overlay = activeOverlayRef?.get()
         return overlay != null && overlay.parent != null
@@ -191,32 +278,35 @@ object IosTileGroupFolder {
                 child.translationX = 0f
                 child.translationY = 0f
 
-                val tileLabelId = context.resources.getIdentifier("tile_label", "id", context.packageName)
-                if (tileLabelId != 0) {
-                    val tileLabel = child.findViewById<View>(tileLabelId)
-                    tileLabel?.visibility = View.GONE
-                    tileLabel?.alpha = 0f
-                }
-
-                val markId = context.resources.getIdentifier("mark", "id", context.packageName)
-                if (markId != 0) {
-                    val mark = child.findViewById<View>(markId)
-                    mark?.visibility = View.GONE
-                }
-
-                val iconFrameId = context.resources.getIdentifier("icon_frame", "id", context.packageName)
-                val iconFrame = child.findViewById<View>(iconFrameId)
-                if (iconFrame != null) {
-                    val iflp = iconFrame.layoutParams
-                    if (iflp is FrameLayout.LayoutParams) {
-                        iflp.gravity = Gravity.CENTER
-                        iflp.topMargin = 0
-                        iflp.bottomMargin = 0
-                        iflp.leftMargin = 0
-                        iflp.rightMargin = 0
-                        iconFrame.layoutParams = iflp
+                if (child.getTag(0x7f099996) != java.lang.Boolean.TRUE) {
+                    val tileLabelId = getTileLabelResId(context)
+                    if (tileLabelId != 0) {
+                        val tileLabel = child.findViewById<View>(tileLabelId)
+                        tileLabel?.visibility = View.GONE
+                        tileLabel?.alpha = 0f
                     }
-                    iconFrame.background = null
+
+                    val markId = getMarkResId(context)
+                    if (markId != 0) {
+                        val mark = child.findViewById<View>(markId)
+                        mark?.visibility = View.GONE
+                    }
+
+                    val iconFrameId = getIconFrameResId(context)
+                    val iconFrame = if (iconFrameId != 0) child.findViewById<View>(iconFrameId) else null
+                    if (iconFrame != null) {
+                        val iflp = iconFrame.layoutParams
+                        if (iflp is FrameLayout.LayoutParams) {
+                            iflp.gravity = Gravity.CENTER
+                            iflp.topMargin = 0
+                            iflp.bottomMargin = 0
+                            iflp.leftMargin = 0
+                            iflp.rightMargin = 0
+                            iconFrame.layoutParams = iflp
+                        }
+                        iconFrame.background = null
+                    }
+                    child.setTag(0x7f099996, java.lang.Boolean.TRUE)
                 }
             } catch (t: Throwable) {}
         }
@@ -239,14 +329,19 @@ object IosTileGroupFolder {
             background = null
 
             setOnClickListener {
+                if (ControlCenterConfigHolder.sIsEditMode) return@setOnClickListener
                 val parentCluster = parent as? IosClusterContainer ?: return@setOnClickListener
                 openExpandedFolder(parentCluster)
             }
         }
 
-        override fun onInterceptTouchEvent(ev: MotionEvent?): Boolean = true
+        override fun onInterceptTouchEvent(ev: MotionEvent?): Boolean {
+            if (ControlCenterConfigHolder.sIsEditMode) return false
+            return true
+        }
 
         override fun onTouchEvent(event: MotionEvent): Boolean {
+            if (ControlCenterConfigHolder.sIsEditMode) return false
             when (event.action) {
                 MotionEvent.ACTION_DOWN -> {
                     downX = event.x
@@ -270,49 +365,43 @@ object IosTileGroupFolder {
             return super.onTouchEvent(event)
         }
 
-        private fun getBaseTileSize(): Int {
-            val iconSizeId = context.resources.getIdentifier("qs_tile_item_icon_size", "dimen", context.packageName)
-            return if (iconSizeId != 0) {
-                context.resources.getDimensionPixelSize(iconSizeId)
-            } else {
-                (68 * resources.displayMetrics.density).toInt()
-            }
-        }
-
         override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
             val w = MeasureSpec.getSize(widthMeasureSpec)
             val h = MeasureSpec.getSize(heightMeasureSpec)
             setMeasuredDimension(w, h)
 
-            val baseSize = getBaseTileSize()
+            val baseSize = getBaseTileSize(context)
             val childSpec = MeasureSpec.makeMeasureSpec(baseSize, MeasureSpec.EXACTLY)
 
             for (i in 0 until childCount) {
                 val child = getChildAt(i) ?: continue
-                try {
-                    val tileLabelId = context.resources.getIdentifier("tile_label", "id", context.packageName)
-                    if (tileLabelId != 0) {
-                        child.findViewById<View>(tileLabelId)?.visibility = View.GONE
-                    }
-                    val markId = context.resources.getIdentifier("mark", "id", context.packageName)
-                    if (markId != 0) {
-                        child.findViewById<View>(markId)?.visibility = View.GONE
-                    }
-                    val iconFrameId = context.resources.getIdentifier("icon_frame", "id", context.packageName)
-                    val iconFrame = child.findViewById<View>(iconFrameId)
-                    if (iconFrame != null) {
-                        val lp = iconFrame.layoutParams
-                        if (lp is FrameLayout.LayoutParams) {
-                            lp.gravity = Gravity.CENTER
-                            lp.topMargin = 0
-                            lp.bottomMargin = 0
-                            lp.leftMargin = 0
-                            lp.rightMargin = 0
-                            iconFrame.layoutParams = lp
+                if (child.getTag(0x7f099996) != java.lang.Boolean.TRUE) {
+                    try {
+                        val tileLabelId = getTileLabelResId(context)
+                        if (tileLabelId != 0) {
+                            child.findViewById<View>(tileLabelId)?.visibility = View.GONE
                         }
-                        iconFrame.background = null
-                    }
-                } catch (t: Throwable) {}
+                        val markId = getMarkResId(context)
+                        if (markId != 0) {
+                            child.findViewById<View>(markId)?.visibility = View.GONE
+                        }
+                        val iconFrameId = getIconFrameResId(context)
+                        val iconFrame = if (iconFrameId != 0) child.findViewById<View>(iconFrameId) else null
+                        if (iconFrame != null) {
+                            val lp = iconFrame.layoutParams
+                            if (lp is FrameLayout.LayoutParams) {
+                                lp.gravity = Gravity.CENTER
+                                lp.topMargin = 0
+                                lp.bottomMargin = 0
+                                lp.leftMargin = 0
+                                lp.rightMargin = 0
+                                iconFrame.layoutParams = lp
+                            }
+                            iconFrame.background = null
+                        }
+                        child.setTag(0x7f099996, java.lang.Boolean.TRUE)
+                    } catch (t: Throwable) {}
+                }
 
                 child.measure(childSpec, childSpec)
             }
@@ -757,17 +846,16 @@ object IosTileGroupFolder {
                 view.isLongClickable = true
                 view.isFocusable = true
                 view.setOnClickListener { clickedView ->
+                    invokeRecordHaptic(childRecord, clickedView, isLong = false)
+                    var invoked = false
                     try {
                         val f = childRecord.javaClass.getDeclaredField("clickAction")
                         f.isAccessible = true
-                        val action = f.get(childRecord) as? kotlin.jvm.functions.Function1<View, *>
-                        if (action != null) {
-                            action.invoke(clickedView)
-                        } else {
-                            val tObj = childRecord.javaClass.getMethod("getTile").invoke(childRecord)
-                            tObj?.javaClass?.getMethod("click")?.invoke(tObj)
-                        }
-                    } catch (t: Throwable) {
+                        val action = f.get(childRecord)
+                        invoked = invokeRecordAction(action, clickedView)
+                    } catch (t: Throwable) {}
+
+                    if (!invoked) {
                         try {
                             val tObj = childRecord.javaClass.getMethod("getTile").invoke(childRecord)
                             tObj?.javaClass?.getMethod("click")?.invoke(tObj)
@@ -796,53 +884,45 @@ object IosTileGroupFolder {
                 }
 
                 view.setOnLongClickListener { clickedView ->
-                    try {
-                        clickedView.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
-                        val tObj = childRecord.javaClass.getMethod("getTile").invoke(childRecord)
-                        if (tObj != null) {
-                            val stateObj = try { tObj.javaClass.getMethod("getState").invoke(tObj) } catch (t: Throwable) { null }
-                            val isDualTarget = try {
-                                val f = stateObj?.javaClass?.getField("dualTarget")
-                                f?.getBoolean(stateObj) ?: false
-                            } catch (t: Throwable) { false }
-
-                            if (isDualTarget) {
-                                try {
-                                    tObj.javaClass.getMethod("secondaryClick").invoke(tObj)
-                                } catch (t: Throwable) {
-                                    try { tObj.javaClass.getMethod("longClick").invoke(tObj) } catch (t2: Throwable) {}
-                                }
-                            } else {
-                                try {
-                                    tObj.javaClass.getMethod("longClick").invoke(tObj)
-                                } catch (t: Throwable) {
-                                    try { tObj.javaClass.getMethod("secondaryClick").invoke(tObj) } catch (t2: Throwable) {}
-                                }
-                            }
-                            dismissOverlay()
-                            return@setOnLongClickListener true
-                        }
-                    } catch (t: Throwable) {
-                        Log.e(TAG, "Tile onLongClick error: $spec", t)
-                    }
-
+                    invokeRecordHaptic(childRecord, clickedView, isLong = true)
+                    var invoked = false
                     try {
                         val f = childRecord.javaClass.getDeclaredField("longClickAction")
                         f.isAccessible = true
                         val action = f.get(childRecord)
-                        if (action != null) {
-                            for (m in action.javaClass.methods) {
-                                if (m.name == "invoke") {
-                                    m.isAccessible = true
-                                    if (m.parameterTypes.size == 1) m.invoke(action, clickedView)
-                                    else if (m.parameterTypes.isEmpty()) m.invoke(action)
-                                    dismissOverlay()
-                                    return@setOnLongClickListener true
+                        invoked = invokeRecordAction(action, clickedView)
+                    } catch (t: Throwable) {}
+
+                    if (!invoked) {
+                        try {
+                            val tObj = childRecord.javaClass.getMethod("getTile").invoke(childRecord)
+                            if (tObj != null) {
+                                val stateObj = try { tObj.javaClass.getMethod("getState").invoke(tObj) } catch (t: Throwable) { null }
+                                val isDualTarget = try {
+                                    val f = stateObj?.javaClass?.getField("dualTarget")
+                                    f?.getBoolean(stateObj) ?: false
+                                } catch (t: Throwable) { false }
+
+                                if (isDualTarget) {
+                                    try {
+                                        tObj.javaClass.getMethod("secondaryClick").invoke(tObj)
+                                    } catch (t: Throwable) {
+                                        try { tObj.javaClass.getMethod("longClick").invoke(tObj) } catch (t2: Throwable) {}
+                                    }
+                                } else {
+                                    try {
+                                        tObj.javaClass.getMethod("longClick").invoke(tObj)
+                                    } catch (t: Throwable) {
+                                        try { tObj.javaClass.getMethod("secondaryClick").invoke(tObj) } catch (t2: Throwable) {}
+                                    }
                                 }
                             }
+                        } catch (t: Throwable) {
+                            Log.e(TAG, "Tile onLongClick error: $spec", t)
                         }
-                    } catch (t: Throwable) {}
-                    false
+                    }
+                    dismissOverlay()
+                    true
                 }
             } catch (t: Throwable) {
                 Log.e(TAG, "bindTileDirectly error: $spec", t)
