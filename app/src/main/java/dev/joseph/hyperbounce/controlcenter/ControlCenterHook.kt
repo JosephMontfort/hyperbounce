@@ -6168,6 +6168,30 @@ class TileResizeDragTouchListener(
     private var threeRowsH = 0f
     private var row4H = 0f
     private var fiveRowsH = 0f
+    private val cardRadius = 26f * density
+    private var initialRadius = 26f * density
+
+    private fun getMediaDims(state: Int): Pair<Float, Float> {
+        return when (state) {
+            FluidTileResizeHandler.MEDIA_1X1 -> Pair(oneColW, row1H)
+            FluidTileResizeHandler.MEDIA_1X2 -> Pair(oneColW, row2H)
+            FluidTileResizeHandler.MEDIA_1X3 -> Pair(oneColW, threeRowsH)
+            FluidTileResizeHandler.MEDIA_1X4 -> Pair(oneColW, row4H)
+            FluidTileResizeHandler.MEDIA_1X5 -> Pair(oneColW, fiveRowsH)
+            FluidTileResizeHandler.MEDIA_2X1 -> Pair(twoColW, row1H)
+            FluidTileResizeHandler.MEDIA_2X2 -> Pair(twoColW, row2H)
+            FluidTileResizeHandler.MEDIA_2X3 -> Pair(twoColW, threeRowsH)
+            FluidTileResizeHandler.MEDIA_2X4 -> Pair(twoColW, row4H)
+            FluidTileResizeHandler.MEDIA_2X5 -> Pair(twoColW, fiveRowsH)
+            FluidTileResizeHandler.MEDIA_3X1 -> Pair(threeColW, row1H)
+            FluidTileResizeHandler.MEDIA_3X2 -> Pair(threeColW, row2H)
+            FluidTileResizeHandler.MEDIA_3X3 -> Pair(threeColW, threeRowsH)
+            FluidTileResizeHandler.MEDIA_4X1 -> Pair(fourColW, row1H)
+            FluidTileResizeHandler.MEDIA_4X2 -> Pair(fourColW, row2H)
+            FluidTileResizeHandler.MEDIA_4X3 -> Pair(fourColW, threeRowsH)
+            else -> Pair(twoColW, row2H)
+        }
+    }
 
     private fun lerp(start: Float, end: Float, fraction: Float): Float {
         return start + (end - start) * fraction.coerceIn(0f, 1f)
@@ -6340,7 +6364,7 @@ class TileResizeDragTouchListener(
                         }
                     }
 
-                    val initialRadius = if (initialState == STATE_NORMAL && !isMediaSpec && !isSliderSpec) Math.min(originWidth, originHeight) / 2f else cardRadius
+                    initialRadius = if (initialState == STATE_NORMAL && !isMediaSpec && !isSliderSpec) Math.min(originWidth, originHeight) / 2f else cardRadius
                     ghostDrawable = TileResizeGhostDrawable(density).apply {
                         setOriginBounds(originLeft, originTop, originWidth, originHeight, initialRadius)
                     }
@@ -6792,7 +6816,7 @@ class TileResizeDragTouchListener(
                             FluidTileResizeHandler.MEDIA_1X2 -> FluidTileResizeHandler.MEDIA_2X2
                             else -> FluidTileResizeHandler.MEDIA_2X2
                         }
-                        val (nextW, nextH) = getTargetDims(nextState)
+                        val (nextW, nextH) = getMediaDims(nextState)
                         val minLeft = targetContainer?.paddingLeft?.toFloat() ?: 0f
                         val maxRight = targetContainer?.let { (it.width - it.paddingRight).toFloat() } ?: (originLeft + nextW)
                         val drawL = if (originLeft + nextW > maxRight) (maxRight - nextW).coerceAtLeast(minLeft) else originLeft
@@ -6828,12 +6852,12 @@ class TileResizeDragTouchListener(
                         }
                         val nextW = when (nextState) {
                             STATE_EXPANDED, STATE_LARGE -> twoColW
-                            else -> colW
+                            else -> unitWidth1x1
                         }
                         val nextH = when (nextState) {
-                            STATE_VERTICAL, STATE_LARGE -> tallH
-                            STATE_EXPANDED -> cardH
-                            else -> if (initialState == STATE_NORMAL) originHeight else colW
+                            STATE_VERTICAL, STATE_LARGE -> cardHeight1x2
+                            STATE_EXPANDED -> unitHeight1x1
+                            else -> if (initialState == STATE_NORMAL) originHeight else unitWidth1x1
                         }
                         val nextRadius = if (nextState == STATE_NORMAL) (nextW / 2f) else cardRadius
                         val minLeft = targetContainer?.paddingLeft?.toFloat() ?: 0f
