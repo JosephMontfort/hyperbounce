@@ -5,10 +5,11 @@ import android.graphics.Color
 import android.graphics.drawable.Animatable
 import android.graphics.drawable.Animatable2
 import android.graphics.drawable.Drawable
+import android.graphics.drawable.LayerDrawable
 import android.util.Log
+import android.view.Gravity
 import android.view.View
 import android.widget.ImageView
-import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Manages iOS iconography replacements for Control Center quick setting tiles
@@ -55,6 +56,21 @@ object IosIconographyManager {
     fun isSupportedSpec(spec: String?): Boolean {
         if (spec == null) return false
         return specToDrawableName.containsKey(spec.lowercase())
+    }
+
+    fun getActiveTintColor(spec: String): Int {
+        return when (spec.lowercase()) {
+            "cell", "hotspot" -> Color.parseColor("#34C759") // iOS Green
+            "wifi", "bt", "bluetooth", "location", "gps", "nfc", "screenshot" -> Color.parseColor("#007AFF") // iOS Blue
+            "airplane" -> Color.parseColor("#FF9500") // iOS Orange
+            "flashlight", "battery", "batterysaver", "powersaver" -> Color.parseColor("#FF9500") // iOS Orange/Yellow
+            "mute", "silent", "screenrecord", "screen_recorder" -> Color.parseColor("#FF3B30") // iOS Red
+            "rotation", "auto_rotate" -> Color.parseColor("#FF3B30") // iOS Coral / Red
+            "quiet", "quietmode", "dnd" -> Color.parseColor("#AF52DE") // iOS Purple
+            "paper", "papermode" -> Color.parseColor("#34C759") // iOS Reading Green
+            "dark", "night", "dark_mode" -> Color.parseColor("#1C1C1E") // iOS Dark
+            else -> Color.parseColor("#007AFF") // Default iOS Vibrant Blue
+        }
     }
 
     fun ensureModuleContext(hostContext: Context?): Context? {
@@ -180,18 +196,40 @@ object IosIconographyManager {
 
             val iosDrawable = getIosTileDrawable(ctx, lowerSpec) ?: return
 
+            // Compute appropriate icon size with padding
+            val density = ctx.resources.displayMetrics.density
+            val isShrunkenChild = itemView.getTag(0x7f099994) == true || (itemView.width in 1..(35 * density).toInt())
+            val isCard = itemView.javaClass.name.contains("Card", ignoreCase = true) || (itemView.width > 70 * density)
+            val targetIconPx = when {
+                isShrunkenChild -> (15f * density).toInt()
+                isCard -> (24f * density).toInt()
+                else -> (25f * density).toInt()
+            }
+
             // Tint according to QS Tile state
-            // 2: ACTIVE (pure white on accent background)
-            // 1: INACTIVE (semi-transparent white / 70% opacity)
-            // 0: UNAVAILABLE (dimmed white / 30% opacity)
+            // 2: ACTIVE (vibrant accent color on white background)
+            // 1: INACTIVE (pure white on dark background)
+            // 0: UNAVAILABLE (dimmed white 30% opacity)
             val tintColor = when (stateInt) {
-                2 -> Color.WHITE
-                1 -> Color.argb(179, 255, 255, 255)
+                2 -> getActiveTintColor(lowerSpec)
+                1 -> Color.WHITE
                 else -> Color.argb(77, 255, 255, 255)
             }
             iosDrawable.setTint(tintColor)
 
-            targetImageView.setImageDrawable(iosDrawable)
+            val existing = targetImageView.drawable
+            if (existing is LayerDrawable && existing.numberOfLayers >= 2) {
+                existing.setDrawable(1, iosDrawable)
+                existing.setLayerGravity(1, Gravity.CENTER)
+                existing.setLayerSize(1, targetIconPx, targetIconPx)
+                targetImageView.invalidate()
+            } else {
+                val ld = LayerDrawable(arrayOf(iosDrawable))
+                ld.setLayerGravity(0, Gravity.CENTER)
+                ld.setLayerSize(0, targetIconPx, targetIconPx)
+                targetImageView.setImageDrawable(ld)
+            }
+
             (iosDrawable as? Animatable)?.start()
             (iosDrawable as? Animatable2)?.start()
         } catch (t: Throwable) {
@@ -258,6 +296,57 @@ object IosIconographyManager {
             }
         } catch (t: Throwable) {
             Log.e(TAG, "applyIosMediaIcons error", t)
+        }
+    }
+
+    fun applyIosExpandedMediaIcons(target: Any, isPlaying: Boolean) {
+        if (!ControlCenterConfigHolder.config.isIosIconographyActive) return
+        try {
+            val targetClass = target.javaClass
+            fun findImg(fieldName: String, resIdName: String): ImageView? {
+                val fromField = try {
+                    val f = targetClass.getDeclaredField(fieldName).apply { isAccessible = true }
+                    f.get(target) as? ImageView
+                } catch (_: Throwable) { null }
+                if (fromField != null) return fromField
+
+                if (target is View) {
+                    val resId = target.resources.getIdentifier(resIdName, "id", target.context.packageName)
+                    if (resId != 0) return target.findViewById(resId) as? ImageView
+                }
+                return null
+            }
+
+            val play = findImg("play", "play") ?: findImg("audioPlayView", "play") ?: findImg("videoPlay", "video_play")
+            val prev = findImg("prev", "prev") ?: findImg("audioPrevView", "prev") ?: findImg("videoPrev", "video_rewind")
+            val next = findImg("next", "next") ?: findImg("audioNextView", "next") ?: findImg("videoNext", "video_fastForward")
+            val deviceIcon = findImg("deviceIconView", "device_icon") ?: findImg("deviceIcon", "device_icon")
+            val ctx = play?.context ?: prev?.context ?: (target as? View)?.context ?: return
+
+            val playDrawableName = if (isPlaying) "ic_media_pause_animation" else "ic_media_play"
+            val playDrawable = getIosMediaDrawable(ctx, playDrawableName)
+            if (playDrawable != null && play != null) {
+                play.setImageDrawable(playDrawable)
+                (playDrawable as? Animatable)?.start()
+                (playDrawable as? Animatable2)?.start()
+            }
+
+            val prevDrawable = getIosMediaDrawable(ctx, "ic_media_prev")
+            if (prevDrawable != null && prev != null) {
+                prev.setImageDrawable(prevDrawable)
+            }
+
+            val nextDrawable = getIosMediaDrawable(ctx, "ic_media_next")
+            if (nextDrawable != null && next != null) {
+                next.setImageDrawable(nextDrawable)
+            }
+
+            val deviceDrawable = getIosMediaDrawable(ctx, "ic_media_device_default")
+            if (deviceDrawable != null && deviceIcon != null) {
+                deviceIcon.setImageDrawable(deviceDrawable)
+            }
+        } catch (t: Throwable) {
+            Log.e(TAG, "applyIosExpandedMediaIcons error", t)
         }
     }
 }

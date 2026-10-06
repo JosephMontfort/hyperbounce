@@ -3045,6 +3045,53 @@ object ControlCenterHook {
                             chain.proceed()
                         }
                     }
+            } catch (t: Throwable) {}
+
+            // 16e. Hook QSControlMiPlayDetailHeader & MediaPanelDelegate for expanded media player iOS iconography
+            try {
+                val detailHeaderClass = Class.forName("com.android.systemui.QSControlMiPlayDetailHeader", false, classLoader)
+                for (m in detailHeaderClass.declaredMethods) {
+                    if (m.name == "updatePlayButton" || m.name == "updatePlayButtonWithoutAnim" || m.name == "setPreNextBlur" || m.name == "onFinishInflate") {
+                        m.isAccessible = true
+                        module.hook(m).intercept { chain ->
+                            val result = chain.proceed()
+                            if (ControlCenterConfigHolder.config.isIosIconographyActive) {
+                                val header = chain.thisObject
+                                val isPlaying = try {
+                                    val isAudioPlayingM = header.javaClass.getMethod("isAudioPlaying")
+                                    isAudioPlayingM.invoke(header) as? Boolean
+                                } catch (_: Throwable) { null } ?: try {
+                                    val vmClass = Class.forName("com.android.systemui.MiPlayDetailViewModel", false, classLoader)
+                                    val vm = vmClass.getDeclaredField("INSTANCE").get(null)
+                                    vmClass.getMethod("isLocalPlaying").invoke(vm) as? Boolean
+                                } catch (_: Throwable) { false } ?: false
+                                IosIconographyManager.applyIosExpandedMediaIcons(header, isPlaying)
+                            }
+                            result
+                        }
+                    }
+                }
+            } catch (t: Throwable) {}
+
+            try {
+                val mediaPanelDelegateClass = Class.forName("miui.systemui.controlcenter.panel.secondary.media.MediaPanelDelegate", false, classLoader)
+                for (m in mediaPanelDelegateClass.declaredMethods) {
+                    if (m.name == "initView" || m.name == "updateBlur" || m.name == "updatePlayView") {
+                        m.isAccessible = true
+                        module.hook(m).intercept { chain ->
+                            val result = chain.proceed()
+                            if (ControlCenterConfigHolder.config.isIosIconographyActive) {
+                                val delegate = chain.thisObject
+                                val isPlaying = try {
+                                    val vmClass = Class.forName("com.android.systemui.MiPlayDetailViewModel", false, classLoader)
+                                    val vm = vmClass.getDeclaredField("INSTANCE").get(null)
+                                    vmClass.getMethod("isLocalPlaying").invoke(vm) as? Boolean
+                                } catch (_: Throwable) { false } ?: false
+                                IosIconographyManager.applyIosExpandedMediaIcons(delegate, isPlaying)
+                            }
+                            result
+                        }
+                    }
                 }
             } catch (t: Throwable) {}
 
