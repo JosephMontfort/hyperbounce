@@ -1,5 +1,8 @@
 package dev.joseph.hyperbounce.controlcenter
 
+import android.animation.Animator
+import android.animation.AnimatorListenerAdapter
+import android.animation.ValueAnimator
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.ColorFilter
@@ -8,6 +11,7 @@ import android.graphics.Path
 import android.graphics.PixelFormat
 import android.graphics.RectF
 import android.graphics.drawable.Drawable
+import android.view.animation.DecelerateInterpolator
 
 /**
  * Custom Anti-Aliased Rotate Icon Badge Drawable for 2-Tile Groups.
@@ -173,6 +177,55 @@ class TileResizeGhostDrawable(private val density: Float = 2.75f) : Drawable() {
         fillPaint.colorFilter = colorFilter
         borderPaint.colorFilter = colorFilter
         snapPaint.colorFilter = colorFilter
+    }
+
+    private var morphAnimator: ValueAnimator? = null
+
+    fun animateToAndFadeOut(
+        targetLeft: Float,
+        targetTop: Float,
+        targetWidth: Float,
+        targetHeight: Float,
+        targetRadius: Float,
+        durationMs: Long = 180L,
+        onEnd: (() -> Unit)? = null
+    ) {
+        morphAnimator?.cancel()
+        val startRect = RectF(rect)
+        val targetRect = RectF(targetLeft, targetTop, targetLeft + targetWidth, targetTop + targetHeight)
+        val startRadius = cornerRadius
+        val startAlpha = 255
+
+        val anim = ValueAnimator.ofFloat(0f, 1f).apply {
+            duration = durationMs
+            interpolator = DecelerateInterpolator()
+            addUpdateListener { va ->
+                val f = va.animatedFraction
+                rect.set(
+                    startRect.left + (targetRect.left - startRect.left) * f,
+                    startRect.top + (targetRect.top - startRect.top) * f,
+                    startRect.right + (targetRect.right - startRect.right) * f,
+                    startRect.bottom + (targetRect.bottom - startRect.bottom) * f
+                )
+                cornerRadius = startRadius + (targetRadius - startRadius) * f
+                val currentAlpha = (startAlpha * (1f - f)).toInt().coerceIn(0, 255)
+                setAlpha(currentAlpha)
+                setBounds(rect.left.toInt(), rect.top.toInt(), rect.right.toInt(), rect.bottom.toInt())
+                invalidateSelf()
+            }
+            addListener(object : AnimatorListenerAdapter() {
+                override fun onAnimationEnd(animation: Animator) {
+                    morphAnimator = null
+                    onEnd?.invoke()
+                }
+                override fun onAnimationCancel(animation: Animator) {
+                    morphAnimator = null
+                    onEnd?.invoke()
+                }
+            })
+        }
+        morphAnimator = anim
+        anim.start()
     }
 
     override fun getOpacity(): Int = PixelFormat.TRANSLUCENT

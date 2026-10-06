@@ -54,6 +54,13 @@ class SpannedGridLayoutManager : GridLayoutManager {
         mAttachedRv = null
     }
 
+    override fun prepareForDrop(view: View, target: View, x: Int, y: Int) {
+        if (ControlCenterConfigHolder.sIsEditMode) {
+            return
+        }
+        super.prepareForDrop(view, target, x, y)
+    }
+
     private var mCustomLookupInitialized = false
 
     private fun initCustomSpanLookup() {

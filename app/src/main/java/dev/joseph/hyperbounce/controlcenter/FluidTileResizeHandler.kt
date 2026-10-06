@@ -2463,9 +2463,9 @@ object FluidTileResizeHandler {
                                     var animationEnded = false
                                     var layoutRefreshed = false
 
-                                     fun tryFinish() {
+                                    fun tryFinish() {
                                         if (animationEnded && layoutRefreshed) {
-                                            rv.overlay.clear()
+                                            rv.overlay.remove(ov)
                                             tileView.alpha = 1.0f
                                             overlayView = null
                                         }
@@ -2488,8 +2488,8 @@ object FluidTileResizeHandler {
                                     }
 
                                     val anim = ValueAnimator.ofFloat(0f, 1f).apply {
-                                        duration = 200
-                                        interpolator = OvershootInterpolator(1.05f)
+                                        duration = 180
+                                        interpolator = DecelerateInterpolator()
                                         addUpdateListener { va ->
                                             val f = va.animatedFraction
                                             val r = RectF(
@@ -2501,6 +2501,8 @@ object FluidTileResizeHandler {
                                             val lr = RectF(0f, 0f, r.width(), r.height())
                                             val lib = RectF(16f * density, (r.height() - iconSize) / 2f, 16f * density + iconSize, (r.height() + iconSize) / 2f)
                                             ov.updateMorph(r, lr, fixedCornerRadius, lib, false, LAYOUT_MODE_HORIZONTAL)
+                                            ov.alpha = 1f - f
+                                            tileView.alpha = f
                                             rv.invalidate()
                                         }
                                         addListener(object : AnimatorListenerAdapter() {
@@ -2514,12 +2516,12 @@ object FluidTileResizeHandler {
                                 } else {
                                     for (i in 0 until rv.childCount) {
                                         val child = rv.getChildAt(i) ?: continue
-                                        child.animate().translationX(0f).translationY(0f).setDuration(200).start()
+                                        child.animate().translationX(0f).translationY(0f).setDuration(180).start()
                                     }
 
                                     val anim = ValueAnimator.ofFloat(0f, 1f).apply {
-                                        duration = 200
-                                        interpolator = OvershootInterpolator(1.05f)
+                                        duration = 180
+                                        interpolator = DecelerateInterpolator()
                                         addUpdateListener { va ->
                                             val f = va.animatedFraction
                                             val r = RectF(
@@ -2531,11 +2533,13 @@ object FluidTileResizeHandler {
                                             val lr = RectF(0f, 0f, r.width(), r.height())
                                             val lib = RectF(16f * density, (r.height() - iconSize) / 2f, 16f * density + iconSize, (r.height() + iconSize) / 2f)
                                             ov.updateMorph(r, lr, fixedCornerRadius, lib, false, LAYOUT_MODE_HORIZONTAL)
+                                            ov.alpha = 1f - f
+                                            tileView.alpha = f
                                             rv.invalidate()
                                         }
                                         addListener(object : AnimatorListenerAdapter() {
                                             override fun onAnimationEnd(animation: Animator) {
-                                                rv.overlay.clear()
+                                                rv.overlay.remove(ov)
                                                 tileView.alpha = 1.0f
                                                 overlayView = null
                                             }
@@ -2571,7 +2575,7 @@ object FluidTileResizeHandler {
 
                                     fun tryFinish() {
                                         if (animationEnded && layoutRefreshed) {
-                                            rv.overlay.clear()
+                                            rv.overlay.remove(ov)
                                             tileView.alpha = 1.0f
                                             overlayView = null
                                         }
@@ -2589,8 +2593,8 @@ object FluidTileResizeHandler {
 
                                     val startProgress = ov.morphDrawable.mediaMorphProgress
                                     val anim = ValueAnimator.ofFloat(0f, 1f).apply {
-                                        duration = 200
-                                        interpolator = OvershootInterpolator(1.05f)
+                                        duration = 180
+                                        interpolator = DecelerateInterpolator()
                                         addUpdateListener { va ->
                                             val f = va.animatedFraction
                                             val r = RectF(
@@ -2602,6 +2606,8 @@ object FluidTileResizeHandler {
                                             val lr = RectF(0f, 0f, r.width(), r.height())
                                             val animProgress = lerp(startProgress, 1f, f)
                                             ov.updateMediaMorph(r, lr, fixedCornerRadius, initialState, finalState, animProgress, isMediaPlayingWithTrack)
+                                            ov.alpha = 1f - f
+                                            tileView.alpha = f
                                             rv.invalidate()
                                         }
                                         addListener(object : AnimatorListenerAdapter() {
@@ -2615,13 +2621,13 @@ object FluidTileResizeHandler {
                                 } else {
                                     for (i in 0 until rv.childCount) {
                                         val child = rv.getChildAt(i) ?: continue
-                                        child.animate().translationX(0f).translationY(0f).setDuration(200).start()
+                                        child.animate().translationX(0f).translationY(0f).setDuration(180).start()
                                     }
 
                                     val startProgress = ov.morphDrawable.mediaMorphProgress
                                     val anim = ValueAnimator.ofFloat(0f, 1f).apply {
-                                        duration = 200
-                                        interpolator = OvershootInterpolator(1.05f)
+                                        duration = 180
+                                        interpolator = DecelerateInterpolator()
                                         addUpdateListener { va ->
                                             val f = va.animatedFraction
                                             val r = RectF(
@@ -2633,11 +2639,13 @@ object FluidTileResizeHandler {
                                             val lr = RectF(0f, 0f, r.width(), r.height())
                                             val animProgress = lerp(startProgress, 0f, f)
                                             ov.updateMediaMorph(r, lr, fixedCornerRadius, initialState, candidateTargetState, animProgress, isMediaPlayingWithTrack)
+                                            ov.alpha = 1f - f
+                                            tileView.alpha = f
                                             rv.invalidate()
                                         }
                                         addListener(object : AnimatorListenerAdapter() {
                                             override fun onAnimationEnd(animation: Animator) {
-                                                rv.overlay.clear()
+                                                rv.overlay.remove(ov)
                                                 tileView.alpha = 1.0f
                                                 overlayView = null
                                             }
@@ -2728,7 +2736,7 @@ object FluidTileResizeHandler {
 
                                     fun tryFinish() {
                                         if (animationEnded && layoutRefreshed) {
-                                            rv.overlay.clear()
+                                            rv.overlay.remove(ov)
                                             tileView.alpha = 1.0f
                                             overlayView = null
                                         }
@@ -2745,8 +2753,8 @@ object FluidTileResizeHandler {
                                     }
 
                                     val anim = ValueAnimator.ofFloat(0f, 1f).apply {
-                                        duration = 200
-                                        interpolator = OvershootInterpolator(1.05f)
+                                        duration = 180
+                                        interpolator = DecelerateInterpolator()
                                         addUpdateListener { va ->
                                             val f = va.animatedFraction
                                             val r = RectF(
@@ -2764,6 +2772,8 @@ object FluidTileResizeHandler {
                                                 lerp(startIconBox.bottom, targetIconBox.bottom, f)
                                             )
                                             ov.updateMorph(r, lr, rad, lib, false, finalLayoutMode)
+                                            ov.alpha = 1f - f
+                                            tileView.alpha = f
                                             rv.invalidate()
                                         }
                                         addListener(object : AnimatorListenerAdapter() {
@@ -2778,12 +2788,12 @@ object FluidTileResizeHandler {
                                     // Returned to initial state: smoothly animate neighbours back to 0
                                     for (i in 0 until rv.childCount) {
                                         val child = rv.getChildAt(i) ?: continue
-                                        child.animate().translationX(0f).translationY(0f).setDuration(200).start()
+                                        child.animate().translationX(0f).translationY(0f).setDuration(180).start()
                                     }
 
                                     val anim = ValueAnimator.ofFloat(0f, 1f).apply {
-                                        duration = 200
-                                        interpolator = OvershootInterpolator(1.05f)
+                                        duration = 180
+                                        interpolator = DecelerateInterpolator()
                                         addUpdateListener { va ->
                                             val f = va.animatedFraction
                                             val r = RectF(
@@ -2801,11 +2811,13 @@ object FluidTileResizeHandler {
                                                 lerp(startIconBox.bottom, targetIconBox.bottom, f)
                                             )
                                             ov.updateMorph(r, lr, rad, lib, false, finalLayoutMode)
+                                            ov.alpha = 1f - f
+                                            tileView.alpha = f
                                             rv.invalidate()
                                         }
                                         addListener(object : AnimatorListenerAdapter() {
                                             override fun onAnimationEnd(animation: Animator) {
-                                                rv.overlay.clear()
+                                                rv.overlay.remove(ov)
                                                 tileView.alpha = 1.0f
                                                 overlayView = null
                                             }
@@ -2820,14 +2832,189 @@ object FluidTileResizeHandler {
                             }
                         }
                     } else {
-                        // Regular tap to toggle/cycle
+                        // Regular tap to toggle/cycle with 180ms morph and alpha fade
                         v.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
-                        if (isSliderSpec) {
-                            ControlCenterConfigHolder.cycleSliderWidth(ctx, isBrightnessSpec, tileView)
-                        } else if (isMediaSpec) {
-                            ControlCenterConfigHolder.cycleMediaPlayerSize(ctx, tileView)
+                        val ov = overlayView
+                        val rv = targetContainer
+                        if (ov != null && rv != null) {
+                            rv.overlay.add(ov)
+                            tileView.alpha = 0f
+
+                            if (isSliderSpec) {
+                                val currentCols = if (isBrightnessSpec) ControlCenterConfigHolder.sBrightnessSliderWidth else ControlCenterConfigHolder.sVolumeSliderWidth
+                                val nextCols = when (currentCols) {
+                                    2 -> 3
+                                    3 -> 4
+                                    else -> 2
+                                }
+                                val nextW = when (nextCols) {
+                                    3 -> threeColW
+                                    4 -> fourColW
+                                    else -> twoColW
+                                }
+                                val startRect = RectF(originLeft, originTop, originLeft + originWidth, originTop + originHeight)
+                                val targetRect = RectF(originLeft, originTop, originLeft + nextW, originTop + originHeight)
+
+                                ControlCenterConfigHolder.cycleSliderWidth(ctx, isBrightnessSpec, tileView)
+
+                                val anim = ValueAnimator.ofFloat(0f, 1f).apply {
+                                    duration = 180
+                                    interpolator = DecelerateInterpolator()
+                                    addUpdateListener { va ->
+                                        val f = va.animatedFraction
+                                        val r = RectF(
+                                            lerp(startRect.left, targetRect.left, f),
+                                            lerp(startRect.top, targetRect.top, f),
+                                            lerp(startRect.right, targetRect.right, f),
+                                            lerp(startRect.bottom, targetRect.bottom, f)
+                                        )
+                                        val lr = RectF(0f, 0f, r.width(), r.height())
+                                        val lib = RectF(16f * density, (r.height() - iconSize) / 2f, 16f * density + iconSize, (r.height() + iconSize) / 2f)
+                                        ov.updateMorph(r, lr, fixedCornerRadius, lib, false, LAYOUT_MODE_HORIZONTAL)
+                                        ov.alpha = 1f - f
+                                        tileView.alpha = f
+                                        rv.invalidate()
+                                    }
+                                    addListener(object : AnimatorListenerAdapter() {
+                                        override fun onAnimationEnd(animation: Animator) {
+                                            rv.overlay.remove(ov)
+                                            tileView.alpha = 1.0f
+                                            overlayView = null
+                                        }
+                                    })
+                                }
+                                anim.start()
+                            } else if (isMediaSpec) {
+                                val nextState = when (initialState) {
+                                    MEDIA_2X2 -> MEDIA_2X1
+                                    MEDIA_2X1 -> MEDIA_1X1
+                                    MEDIA_1X1 -> MEDIA_1X2
+                                    MEDIA_1X2 -> MEDIA_2X2
+                                    else -> MEDIA_2X2
+                                }
+                                val (nextW, nextH) = getTargetDims(nextState)
+                                val startRect = RectF(originLeft, originTop, originLeft + originWidth, originTop + originHeight)
+                                val targetRect = RectF(originLeft, originTop, originLeft + nextW, originTop + nextH)
+
+                                ControlCenterConfigHolder.cycleMediaPlayerSize(ctx, tileView)
+
+                                val anim = ValueAnimator.ofFloat(0f, 1f).apply {
+                                    duration = 180
+                                    interpolator = DecelerateInterpolator()
+                                    addUpdateListener { va ->
+                                        val f = va.animatedFraction
+                                        val r = RectF(
+                                            lerp(startRect.left, targetRect.left, f),
+                                            lerp(startRect.top, targetRect.top, f),
+                                            lerp(startRect.right, targetRect.right, f),
+                                            lerp(startRect.bottom, targetRect.bottom, f)
+                                        )
+                                        val lr = RectF(0f, 0f, r.width(), r.height())
+                                        ov.updateMediaMorph(r, lr, fixedCornerRadius, initialState, nextState, f, isMediaPlayingWithTrack)
+                                        ov.alpha = 1f - f
+                                        tileView.alpha = f
+                                        rv.invalidate()
+                                    }
+                                    addListener(object : AnimatorListenerAdapter() {
+                                        override fun onAnimationEnd(animation: Animator) {
+                                            rv.overlay.remove(ov)
+                                            tileView.alpha = 1.0f
+                                            overlayView = null
+                                        }
+                                    })
+                                }
+                                anim.start()
+                            } else {
+                                val isCard = "wifi".equals(spec, ignoreCase = true) || "cell".equals(spec, ignoreCase = true)
+                                val nextState = if (isCard) {
+                                    when {
+                                        ControlCenterConfigHolder.sLargeTileSpecs.contains(spec) -> STATE_VERTICAL
+                                        ControlCenterConfigHolder.sVerticalTileSpecs.contains(spec) -> STATE_NORMAL
+                                        ControlCenterConfigHolder.sCircularCardSpecs.contains(spec) -> STATE_EXPANDED
+                                        else -> STATE_LARGE
+                                    }
+                                } else {
+                                    when {
+                                        ControlCenterConfigHolder.sExpandedTileSpecs.contains(spec) -> STATE_LARGE
+                                        ControlCenterConfigHolder.sLargeTileSpecs.contains(spec) -> STATE_VERTICAL
+                                        ControlCenterConfigHolder.sVerticalTileSpecs.contains(spec) -> STATE_NORMAL
+                                        else -> STATE_EXPANDED
+                                    }
+                                }
+                                val nextW = when (nextState) {
+                                    STATE_EXPANDED, STATE_LARGE -> twoColW
+                                    else -> colW
+                                }
+                                val nextH = when (nextState) {
+                                    STATE_VERTICAL, STATE_LARGE -> tallH
+                                    STATE_EXPANDED -> cardH
+                                    else -> if (initialState == STATE_NORMAL) originHeight else colW
+                                }
+                                val nextRadius = if (nextState == STATE_NORMAL) (nextW / 2f) else stockCardRadius
+                                val nextTargetLeft = if (nextState == STATE_NORMAL) iconFrameLeft else tileLeft
+                                val nextTargetTop = if (nextState == STATE_NORMAL) iconFrameTop else tileTop
+
+                                val startRect = RectF(originLeft, originTop, originLeft + originWidth, originTop + originHeight)
+                                val targetRect = RectF(nextTargetLeft, nextTargetTop, nextTargetLeft + nextW, nextTargetTop + nextH)
+                                val startRad = ov.currentCornerRadius
+                                val startIconBox = RectF(ov.morphDrawable.iconRect)
+                                val targetIconBox = when (nextState) {
+                                    STATE_EXPANDED -> RectF(16f * density, (nextH - iconSize) / 2f, 16f * density + iconSize, (nextH + iconSize) / 2f)
+                                    STATE_VERTICAL -> RectF((nextW - iconSize) / 2f, 16f * density, (nextW + iconSize) / 2f, 16f * density + iconSize)
+                                    STATE_LARGE -> RectF((nextW - iconSize) / 2f, 24f * density, (nextW + iconSize) / 2f, 24f * density + iconSize)
+                                    else -> RectF((nextW - iconSize) / 2f, (nextH - iconSize) / 2f, (nextW + iconSize) / 2f, (nextH + iconSize) / 2f)
+                                }
+                                val nextLayoutMode = when (nextState) {
+                                    STATE_EXPANDED -> LAYOUT_MODE_HORIZONTAL
+                                    STATE_VERTICAL -> LAYOUT_MODE_VERTICAL
+                                    STATE_LARGE -> LAYOUT_MODE_LARGE
+                                    else -> ov.layoutMode
+                                }
+
+                                ControlCenterConfigHolder.toggleTileSize(ctx, spec, tileView)
+
+                                val anim = ValueAnimator.ofFloat(0f, 1f).apply {
+                                    duration = 180
+                                    interpolator = DecelerateInterpolator()
+                                    addUpdateListener { va ->
+                                        val f = va.animatedFraction
+                                        val r = RectF(
+                                            lerp(startRect.left, targetRect.left, f),
+                                            lerp(startRect.top, targetRect.top, f),
+                                            lerp(startRect.right, targetRect.right, f),
+                                            lerp(startRect.bottom, targetRect.bottom, f)
+                                        )
+                                        val rad = lerp(startRad, nextRadius, f)
+                                        val lr = RectF(0f, 0f, r.width(), r.height())
+                                        val lib = RectF(
+                                            lerp(startIconBox.left, targetIconBox.left, f),
+                                            lerp(startIconBox.top, targetIconBox.top, f),
+                                            lerp(startIconBox.right, targetIconBox.right, f),
+                                            lerp(startIconBox.bottom, targetIconBox.bottom, f)
+                                        )
+                                        ov.updateMorph(r, lr, rad, lib, false, nextLayoutMode)
+                                        ov.alpha = 1f - f
+                                        tileView.alpha = f
+                                        rv.invalidate()
+                                    }
+                                    addListener(object : AnimatorListenerAdapter() {
+                                        override fun onAnimationEnd(animation: Animator) {
+                                            rv.overlay.remove(ov)
+                                            tileView.alpha = 1.0f
+                                            overlayView = null
+                                        }
+                                    })
+                                }
+                                anim.start()
+                            }
                         } else {
-                            ControlCenterConfigHolder.toggleTileSize(ctx, spec, tileView)
+                            if (isSliderSpec) {
+                                ControlCenterConfigHolder.cycleSliderWidth(ctx, isBrightnessSpec, tileView)
+                            } else if (isMediaSpec) {
+                                ControlCenterConfigHolder.cycleMediaPlayerSize(ctx, tileView)
+                            } else {
+                                ControlCenterConfigHolder.toggleTileSize(ctx, spec, tileView)
+                            }
                         }
                     }
 
@@ -2841,15 +3028,50 @@ object FluidTileResizeHandler {
                     requestDisallowAll(v, false)
 
                     if (isDragging) {
-                        targetContainer?.overlay?.clear()
-                        targetContainer?.let { rv ->
+                        val ov = overlayView
+                        val rv = targetContainer
+                        if (ov != null && rv != null) {
+                            val startRect = RectF(ov.currentRect)
+                            val targetRect = RectF(originLeft, originTop, originLeft + originWidth, originTop + originHeight)
+                            val startRad = ov.currentCornerRadius
+
                             for (i in 0 until rv.childCount) {
                                 val child = rv.getChildAt(i) ?: continue
                                 child.animate().translationX(0f).translationY(0f).setDuration(180).start()
                             }
+
+                            val anim = ValueAnimator.ofFloat(0f, 1f).apply {
+                                duration = 180
+                                interpolator = DecelerateInterpolator()
+                                addUpdateListener { va ->
+                                    val f = va.animatedFraction
+                                    val r = RectF(
+                                        lerp(startRect.left, targetRect.left, f),
+                                        lerp(startRect.top, targetRect.top, f),
+                                        lerp(startRect.right, targetRect.right, f),
+                                        lerp(startRect.bottom, targetRect.bottom, f)
+                                    )
+                                    val rad = lerp(startRad, fixedCornerRadius, f)
+                                    val lr = RectF(0f, 0f, r.width(), r.height())
+                                    ov.updateMorph(r, lr, rad, RectF(0f, 0f, 0f, 0f), false, ov.layoutMode)
+                                    ov.alpha = 1f - f
+                                    tileView.alpha = f
+                                    rv.invalidate()
+                                }
+                                addListener(object : AnimatorListenerAdapter() {
+                                    override fun onAnimationEnd(animation: Animator) {
+                                        rv.overlay.remove(ov)
+                                        tileView.alpha = 1.0f
+                                        overlayView = null
+                                    }
+                                })
+                            }
+                            anim.start()
+                        } else {
+                            targetContainer?.overlay?.clear()
+                            tileView.alpha = 1.0f
+                            overlayView = null
                         }
-                        tileView.alpha = 1.0f
-                        overlayView = null
                     }
 
                     isDragging = false

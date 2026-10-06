@@ -2947,6 +2947,26 @@ object ControlCenterHook {
                 Log.e(TAG, "Failed to hook GridLayoutManager for True2DGridEngine", t)
             }
 
+            // 16e. Suppress prepareForDrop in LinearLayoutManager during Edit Mode
+            // Suppressing prepareForDrop completely eliminates the violent up-and-down screen scrolling
+            // caused by LinearLayoutManager calling scrollToPositionWithOffset when dragging multi-row components.
+            try {
+                val llmClass = Class.forName("androidx.recyclerview.widget.LinearLayoutManager", false, classLoader)
+                for (m in llmClass.declaredMethods) {
+                    if (m.name == "prepareForDrop") {
+                        m.isAccessible = true
+                        module.hook(m).intercept { chain ->
+                            if (ControlCenterConfigHolder.sIsEditMode) {
+                                return@intercept null
+                            }
+                            chain.proceed()
+                        }
+                    }
+                }
+            } catch (t: Throwable) {
+                Log.e(TAG, "Failed to hook prepareForDrop on LinearLayoutManager", t)
+            }
+
             // 17. Full 100% Unlock (Zero Boundaries & Dynamic Landscape Flow)
             try {
                 ControlCenterFullUnlock.init(module, classLoader)
@@ -6666,23 +6686,58 @@ class TileResizeDragTouchListener(
             MotionEvent.ACTION_UP -> {
                 ControlCenterConfigHolder.sIsDraggingResizeHandle = false
                 requestDisallowAll(v, false)
-                tileView.alpha = 1.0f
 
-                ghostDrawable?.let { gd ->
-                    targetContainer?.overlay?.remove(gd)
-                    targetContainer?.invalidate()
-                }
-
+                val gd = ghostDrawable
                 if (isDragging) {
-                    if (candidateTargetState != -1 && candidateTargetState != initialState) {
+                    val finalState = if (candidateTargetState != -1) candidateTargetState else initialState
+                    var targetW = originWidth
+                    var targetH = originHeight
+                    var targetRadius = cardRadius
+                    var targetDrawLeft = originLeft
+
+                    if (isSliderSpec) {
+                        targetW = when (finalState) {
+                            3 -> threeColW
+                            4 -> fourColW
+                            else -> twoColW
+                        }
+                        targetH = originHeight
+                        targetRadius = cardRadius
+                    } else if (isMediaSpec) {
+                        val (tw, th) = getTargetDims(finalState)
+                        targetW = tw
+                        targetH = th
+                        targetRadius = cardRadius
+                    } else {
+                        targetW = when (finalState) {
+                            STATE_EXPANDED, STATE_LARGE -> twoColW
+                            else -> colW
+                        }
+                        targetH = when (finalState) {
+                            STATE_VERTICAL, STATE_LARGE -> tallH
+                            STATE_EXPANDED -> cardH
+                            else -> if (initialState == STATE_NORMAL) originHeight else colW
+                        }
+                        targetRadius = if (finalState == STATE_NORMAL) (targetW / 2f) else cardRadius
+                    }
+
+                    val minLeft = targetContainer?.paddingLeft?.toFloat() ?: 0f
+                    val maxRight = targetContainer?.let { (it.width - it.paddingRight).toFloat() } ?: (originLeft + targetW)
+                    targetDrawLeft = if (originLeft + targetW > maxRight) {
+                        (maxRight - targetW).coerceAtLeast(minLeft)
+                    } else {
+                        originLeft
+                    }
+
+                    if (finalState != -1 && finalState != initialState) {
                         v.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
                         if (isSliderSpec) {
-                            ControlCenterConfigHolder.setSliderWidth(ctx, isBrightnessSpec, candidateTargetState, tileView)
+                            ControlCenterConfigHolder.setSliderWidth(ctx, isBrightnessSpec, finalState, tileView)
                         } else if (isMediaSpec) {
-                            val targetMediaSize = FluidTileResizeHandler.mediaStateToSizeString(candidateTargetState)
+                            val targetMediaSize = FluidTileResizeHandler.mediaStateToSizeString(finalState)
                             ControlCenterConfigHolder.setMediaSize(ctx, targetMediaSize, tileView)
                         } else {
-                            when (candidateTargetState) {
+                            when (finalState) {
                                 STATE_EXPANDED -> ControlCenterConfigHolder.setTileToExpanded(ctx, spec, tileView)
                                 STATE_VERTICAL -> ControlCenterConfigHolder.setTileToVertical(ctx, spec, tileView)
                                 STATE_LARGE -> ControlCenterConfigHolder.setTileToLarge(ctx, spec, tileView)
@@ -6690,11 +6745,112 @@ class TileResizeDragTouchListener(
                             }
                         }
                     }
+
+                    if (gd != null) {
+                        gd.animateToAndFadeOut(targetDrawLeft, originTop, targetW, targetH, targetRadius, 180L) {
+                            targetContainer?.overlay?.remove(gd)
+                            targetContainer?.invalidate()
+                            ghostDrawable = null
+                        }
+                    }
+                    tileView.animate().alpha(1.0f).setDuration(180).setInterpolator(android.view.animation.DecelerateInterpolator()).start()
                 } else {
                     v.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
                     if (isSliderSpec) {
+                        val currentCols = if (isBrightnessSpec) ControlCenterConfigHolder.sBrightnessSliderWidth else ControlCenterConfigHolder.sVolumeSliderWidth
+                        val nextCols = when (currentCols) {
+                            2 -> 3
+                            3 -> 4
+                            else -> 2
+                        }
+                        val nextW = when (nextCols) {
+                            3 -> threeColW
+                            4 -> fourColW
+                            else -> twoColW
+                        }
+                        val minLeft = targetContainer?.paddingLeft?.toFloat() ?: 0f
+                        val maxRight = targetContainer?.let { (it.width - it.paddingRight).toFloat() } ?: (originLeft + nextW)
+                        val drawL = if (originLeft + nextW > maxRight) (maxRight - nextW).coerceAtLeast(minLeft) else originLeft
+
+                        val previewGd = gd ?: TileResizeGhostDrawable(density).apply {
+                            setOriginBounds(originLeft, originTop, originWidth, originHeight, cardRadius)
+                            targetContainer?.overlay?.add(this)
+                        }
+                        previewGd.animateToAndFadeOut(drawL, originTop, nextW, originHeight, cardRadius, 180L) {
+                            targetContainer?.overlay?.remove(previewGd)
+                            targetContainer?.invalidate()
+                            ghostDrawable = null
+                        }
+                        tileView.alpha = 0f
+                        tileView.animate().alpha(1.0f).setDuration(180).setInterpolator(android.view.animation.DecelerateInterpolator()).start()
                         ControlCenterConfigHolder.cycleSliderWidth(ctx, isBrightnessSpec, tileView)
+                    } else if (isMediaSpec) {
+                        val nextState = when (initialState) {
+                            FluidTileResizeHandler.MEDIA_2X2 -> FluidTileResizeHandler.MEDIA_2X1
+                            FluidTileResizeHandler.MEDIA_2X1 -> FluidTileResizeHandler.MEDIA_1X1
+                            FluidTileResizeHandler.MEDIA_1X1 -> FluidTileResizeHandler.MEDIA_1X2
+                            FluidTileResizeHandler.MEDIA_1X2 -> FluidTileResizeHandler.MEDIA_2X2
+                            else -> FluidTileResizeHandler.MEDIA_2X2
+                        }
+                        val (nextW, nextH) = getTargetDims(nextState)
+                        val minLeft = targetContainer?.paddingLeft?.toFloat() ?: 0f
+                        val maxRight = targetContainer?.let { (it.width - it.paddingRight).toFloat() } ?: (originLeft + nextW)
+                        val drawL = if (originLeft + nextW > maxRight) (maxRight - nextW).coerceAtLeast(minLeft) else originLeft
+
+                        val previewGd = gd ?: TileResizeGhostDrawable(density).apply {
+                            setOriginBounds(originLeft, originTop, originWidth, originHeight, cardRadius)
+                            targetContainer?.overlay?.add(this)
+                        }
+                        previewGd.animateToAndFadeOut(drawL, originTop, nextW, nextH, cardRadius, 180L) {
+                            targetContainer?.overlay?.remove(previewGd)
+                            targetContainer?.invalidate()
+                            ghostDrawable = null
+                        }
+                        tileView.alpha = 0f
+                        tileView.animate().alpha(1.0f).setDuration(180).setInterpolator(android.view.animation.DecelerateInterpolator()).start()
+                        ControlCenterConfigHolder.cycleMediaPlayerSize(ctx, tileView)
                     } else {
+                        val isCard = "wifi".equals(spec, ignoreCase = true) || "cell".equals(spec, ignoreCase = true)
+                        val nextState = if (isCard) {
+                            when {
+                                ControlCenterConfigHolder.sLargeTileSpecs.contains(spec) -> STATE_VERTICAL
+                                ControlCenterConfigHolder.sVerticalTileSpecs.contains(spec) -> STATE_NORMAL
+                                ControlCenterConfigHolder.sCircularCardSpecs.contains(spec) -> STATE_EXPANDED
+                                else -> STATE_LARGE
+                            }
+                        } else {
+                            when {
+                                ControlCenterConfigHolder.sExpandedTileSpecs.contains(spec) -> STATE_LARGE
+                                ControlCenterConfigHolder.sLargeTileSpecs.contains(spec) -> STATE_VERTICAL
+                                ControlCenterConfigHolder.sVerticalTileSpecs.contains(spec) -> STATE_NORMAL
+                                else -> STATE_EXPANDED
+                            }
+                        }
+                        val nextW = when (nextState) {
+                            STATE_EXPANDED, STATE_LARGE -> twoColW
+                            else -> colW
+                        }
+                        val nextH = when (nextState) {
+                            STATE_VERTICAL, STATE_LARGE -> tallH
+                            STATE_EXPANDED -> cardH
+                            else -> if (initialState == STATE_NORMAL) originHeight else colW
+                        }
+                        val nextRadius = if (nextState == STATE_NORMAL) (nextW / 2f) else cardRadius
+                        val minLeft = targetContainer?.paddingLeft?.toFloat() ?: 0f
+                        val maxRight = targetContainer?.let { (it.width - it.paddingRight).toFloat() } ?: (originLeft + nextW)
+                        val drawL = if (originLeft + nextW > maxRight) (maxRight - nextW).coerceAtLeast(minLeft) else originLeft
+
+                        val previewGd = gd ?: TileResizeGhostDrawable(density).apply {
+                            setOriginBounds(originLeft, originTop, originWidth, originHeight, initialRadius)
+                            targetContainer?.overlay?.add(this)
+                        }
+                        previewGd.animateToAndFadeOut(drawL, originTop, nextW, nextH, nextRadius, 180L) {
+                            targetContainer?.overlay?.remove(previewGd)
+                            targetContainer?.invalidate()
+                            ghostDrawable = null
+                        }
+                        tileView.alpha = 0f
+                        tileView.animate().alpha(1.0f).setDuration(180).setInterpolator(android.view.animation.DecelerateInterpolator()).start()
                         ControlCenterConfigHolder.toggleTileSize(ctx, spec, tileView)
                     }
                 }
@@ -6708,8 +6864,11 @@ class TileResizeDragTouchListener(
                 requestDisallowAll(v, false)
                 tileView.alpha = 1.0f
                 ghostDrawable?.let { gd ->
-                    targetContainer?.overlay?.remove(gd)
-                    targetContainer?.invalidate()
+                    gd.animateToAndFadeOut(originLeft, originTop, originWidth, originHeight, initialRadius, 180L) {
+                        targetContainer?.overlay?.remove(gd)
+                        targetContainer?.invalidate()
+                        ghostDrawable = null
+                    }
                 }
                 isDragging = false
                 candidateTargetState = -1
