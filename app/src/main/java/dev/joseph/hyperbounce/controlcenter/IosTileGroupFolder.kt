@@ -309,14 +309,6 @@ object IosTileGroupFolder {
             clipChildren = true
             background = null
 
-            val radiusResId = context.resources.getIdentifier("control_center_universal_corner_radius", "dimen", context.packageName)
-            val cornerRadius = if (radiusResId != 0) context.resources.getDimension(radiusResId) else (18 * context.resources.displayMetrics.density)
-            outlineProvider = object : android.view.ViewOutlineProvider() {
-                override fun getOutline(view: View, outline: android.graphics.Outline) {
-                    outline.setRoundRect(0, 0, view.width, view.height, cornerRadius)
-                }
-            }
-
             setOnClickListener {
                 if (ControlCenterConfigHolder.sIsEditMode) return@setOnClickListener
                 val parentCluster = parent as? IosClusterContainer ?: return@setOnClickListener
@@ -392,7 +384,6 @@ object IosTileGroupFolder {
                             }
                         }
                         iconFrame.background = null
-                        iconFrame.outlineProvider = null
                     }
                     child.background = null
                     child.outlineProvider = null
@@ -444,20 +435,6 @@ object IosTileGroupFolder {
                 child.isLongClickable = false
                 child.isFocusable = false
 
-                if (child.getTag(0x7f099992) == null) {
-                    child.setTag(0x7f099992, true)
-                    child.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
-                        if (child.scaleX != scale || child.scaleY != scale || child.translationX != 0f || child.translationY != 0f) {
-                            child.pivotX = halfBase
-                            child.pivotY = halfBase
-                            child.scaleX = scale
-                            child.scaleY = scale
-                            child.translationX = 0f
-                            child.translationY = 0f
-                        }
-                    }
-                }
-
                 try {
                     val tileLabelId = context.resources.getIdentifier("tile_label", "id", context.packageName)
                     if (tileLabelId != 0) {
@@ -486,7 +463,6 @@ object IosTileGroupFolder {
                             }
                         }
                         iconFrame.background = null
-                        iconFrame.outlineProvider = null
                     }
                     child.background = null
                     child.outlineProvider = null

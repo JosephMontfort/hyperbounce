@@ -209,11 +209,9 @@ object ControlCenterHook {
     }
 
     fun isChildOfContainer(view: View?): Boolean {
-        if (view == null) return false
-        if (view.getTag(0x7f099996) == java.lang.Boolean.TRUE || view.getTag(0x7f099993) != null) return true
-        var cur = view.parent
+        var cur = view?.parent
         while (cur != null) {
-            if (cur is View && (cur.id == 0x7f099995 || cur.getTag(0x7f099995) != null || cur.getTag(0x7f099993) != null || cur.getTag(0x7f099996) == java.lang.Boolean.TRUE || cur is IosTileGroupFolder.IosClusterContainer || cur is IosTileGroupFolder.MiniClusterView || cur is IosTileGroupFolder.IosFolderExpandedOverlay)) {
+            if (cur is View && (cur.id == 0x7f099995 || cur.getTag(0x7f099995) != null || cur.getTag(0x7f099993) != null || cur is IosTileGroupFolder.IosClusterContainer || cur is IosTileGroupFolder.MiniClusterView || cur is IosTileGroupFolder.IosFolderExpandedOverlay)) {
                 return true
             }
             if (cur is View && cur.javaClass.name.contains("RecyclerView")) return false
@@ -354,7 +352,7 @@ object ControlCenterHook {
                 Log.e(TAG, "Failed to initialize FlashlightBrightnessHook", t)
             }
 
-            // 0b. Hook QSTileItemView.getShowLabel and getShowMark for child tiles inside groups
+            // 0b. Hook QSTileItemView.getShowLabel to return false in EDIT mode or for circular grouped child tiles
             try {
                 val qstileItemViewClass = Class.forName("miui.systemui.controlcenter.qs.tileview.QSTileItemView", false, classLoader)
                 for (m in qstileItemViewClass.declaredMethods) {
@@ -374,14 +372,7 @@ object ControlCenterHook {
                                 if (!isCard) {
                                     return@intercept false
                                 }
-                            }
-                            chain.proceed()
-                        }
-                    } else if (m.name == "getShowMark" || m.name == "isShowMark") {
-                        m.isAccessible = true
-                        module.hook(m).intercept { chain ->
-                            val v = chain.thisObject as? View
-                            if (isChildOfContainer(v)) {
+                            } else if (ControlCenterConfigHolder.sIsEditMode) {
                                 return@intercept false
                             }
                             chain.proceed()
@@ -446,7 +437,6 @@ object ControlCenterHook {
                     if (m.name == "set_mode" || m.name == "setMode" || m.name == "update_mode" || m.name == "updateMode") {
                         m.isAccessible = true
                         module.hook(m).intercept { chain ->
-                            val result = chain.proceed()
                             try {
                                 val rawArgs = chain.args
                                 val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as? Array<*>
@@ -501,7 +491,7 @@ object ControlCenterHook {
                                     }
                                 }
                             } catch (t: Throwable) {}
-                            result
+                            chain.proceed()
                         }
                     }
                 }
@@ -3113,13 +3103,8 @@ object ControlCenterHook {
                     if (m.name == "layoutChunk") {
                         m.isAccessible = true
                         module.hook(m).intercept { chain ->
-                            if (!ControlCenterConfigHolder.config.isTrue2dGridActive || ControlCenterConfigHolder.sIsEditMode) {
-                                return@intercept try {
-                                    chain.proceed()
-                                } catch (e: IndexOutOfBoundsException) {
-                                    Log.e(TAG, "Absorbed layoutChunk IndexOutOfBoundsException in edit/stock mode", e)
-                                    null
-                                }
+                            if (!ControlCenterConfigHolder.config.isTrue2dGridActive) {
+                                return@intercept chain.proceed()
                             }
                             try {
                                 val glm = chain.thisObject
@@ -3140,12 +3125,7 @@ object ControlCenterHook {
                             } catch (t: Throwable) {
                                 Log.e(TAG, "Error in True2DGridEngine layoutChunk intercept", t)
                             }
-                            try {
-                                chain.proceed()
-                            } catch (e: IndexOutOfBoundsException) {
-                                Log.e(TAG, "Absorbed layoutChunk IndexOutOfBoundsException", e)
-                                null
-                            }
+                            chain.proceed()
                         }
                     }
                 }
@@ -3155,7 +3135,7 @@ object ControlCenterHook {
                     if (m.name == "getSpanGroupIndex" || m.name == "getCachedSpanGroupIndex") {
                         m.isAccessible = true
                         module.hook(m).intercept { chain ->
-                            if (ControlCenterConfigHolder.config.isTrue2dGridActive && !ControlCenterConfigHolder.sIsEditMode) {
+                            if (ControlCenterConfigHolder.config.isTrue2dGridActive) {
                                 try {
                                     val rawArgs = chain.args
                                     val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as? Array<*>
