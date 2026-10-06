@@ -466,14 +466,7 @@ fun LiquidNavigationBar(
                                     if (barBlurIntensity > 0.001f) {
                                         blur(8f.dp.toPx() * effectMultiplier * barBlurIntensity)
                                     }
-                                    val barH = currentBarHeight.toPx()
-                                    val lensH = lerp(20f.dp.toPx(), barH / 2f, (1f - barBlurIntensity.coerceIn(0f, 1f))) * effectMultiplier
-                                    liquidLens(
-                                        refractionHeight = lensH,
-                                        refractionAmount = 18f.dp.toPx() * effectMultiplier,
-                                        depthEffect = (barBlurIntensity < 0.75f),
-                                        chromaticAberration = true
-                                    )
+                                    lens(18f.dp.toPx() * effectMultiplier, 18f.dp.toPx() * effectMultiplier)
                                 },
                                 layerBlock = {
                                     val progress = dampedDragAnimation.pressProgress
@@ -540,13 +533,9 @@ fun LiquidNavigationBar(
                                         if (barBlurIntensity > 0.001f) {
                                             blur(8f.dp.toPx() * effectMultiplier * barBlurIntensity)
                                         }
-                                        val barH = currentBarHeight.toPx()
-                                        val lensH = lerp(20f.dp.toPx(), barH / 2f, (1f - barBlurIntensity.coerceIn(0f, 1f))) * effectMultiplier
-                                        liquidLens(
-                                            refractionHeight = lensH * progress,
-                                            refractionAmount = 18f.dp.toPx() * progress * effectMultiplier,
-                                            depthEffect = (barBlurIntensity < 0.75f),
-                                            chromaticAberration = true
+                                        lens(
+                                            18f.dp.toPx() * progress * effectMultiplier,
+                                            18f.dp.toPx() * progress * effectMultiplier,
                                         )
                                     },
                                     highlight = {

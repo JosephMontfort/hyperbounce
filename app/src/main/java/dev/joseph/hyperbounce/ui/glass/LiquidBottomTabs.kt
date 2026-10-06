@@ -240,14 +240,7 @@ fun LiquidBottomTabs(
                         if (glass.blurDp > 0.001f) {
                             blur(glass.blurDp.dp.toPx())
                         }
-                        val fullBarH = 64f.dp.toPx()
-                        val lensH = if (glass.blurDp <= 0.001f) (fullBarH / 2f) else glass.refractionHeightDp.dp.toPx()
-                        liquidLens(
-                            lensH,
-                            glass.refractionAmountDp.dp.toPx(),
-                            depthEffect = (glass.blurDp <= 0.001f),
-                            chromaticAberration = glass.chromaticAberration
-                        )
+                        lens(glass.refractionHeightDp.dp.toPx(), glass.refractionAmountDp.dp.toPx(), chromaticAberration = glass.chromaticAberration)
                     },
                     layerBlock = {
                         val progress = dampedDragAnimation.pressProgress
@@ -287,12 +280,9 @@ fun LiquidBottomTabs(
                             if (glass.blurDp > 0.001f) {
                                 blur(glass.blurDp.dp.toPx())
                             }
-                            val fullBarH = 56f.dp.toPx()
-                            val lensH = if (glass.blurDp <= 0.001f) (fullBarH / 2f) else glass.refractionHeightDp.dp.toPx()
-                            liquidLens(
-                                lensH * progress,
+                            lens(
+                                glass.refractionHeightDp.dp.toPx() * progress,
                                 glass.refractionAmountDp.dp.toPx() * progress,
-                                depthEffect = (glass.blurDp <= 0.001f),
                                 chromaticAberration = glass.chromaticAberration
                             )
                         },

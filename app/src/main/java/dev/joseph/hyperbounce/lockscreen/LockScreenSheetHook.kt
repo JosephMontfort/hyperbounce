@@ -416,9 +416,9 @@ object LockScreenSheetHook {
                                         }
                                     }
 
-                                    // 1b. Dynamic dimming up to 0.65f matching the pinpad screen
-                                    val targetDim = 0.65f
-                                    val dimAlpha = (swipeProgress * targetDim).coerceIn(0.0f, targetDim)
+                                    // 1b. Maximum dimming right from start so glass sheet immediately contrasts with underlying layer
+                                    val targetDim = 0.45f
+                                    val dimAlpha = targetDim
                                     if (abs(lastAppliedDimAlpha - dimAlpha) >= 0.005f) {
                                         lastAppliedDimAlpha = dimAlpha
                                         val dimLayer = ensureWallpaperDimInjected(rootView)
@@ -427,15 +427,11 @@ object LockScreenSheetHook {
                                             dimLayer.alpha = dimAlpha
                                         }
                                         if (depthSubjectView is ImageView) {
-                                            if (dimAlpha > 0.001f) {
-                                                val alphaInt = (dimAlpha * 255).toInt().coerceIn(0, 255)
-                                                depthSubjectView.colorFilter = PorterDuffColorFilter(
-                                                    Color.argb(alphaInt, 0, 0, 0),
-                                                    PorterDuff.Mode.SRC_ATOP
-                                                )
-                                            } else {
-                                                depthSubjectView.clearColorFilter()
-                                            }
+                                            val alphaInt = (dimAlpha * 255).toInt().coerceIn(0, 255)
+                                            depthSubjectView.colorFilter = PorterDuffColorFilter(
+                                                Color.argb(alphaInt, 0, 0, 0),
+                                                PorterDuff.Mode.SRC_ATOP
+                                            )
                                         }
                                     }
 

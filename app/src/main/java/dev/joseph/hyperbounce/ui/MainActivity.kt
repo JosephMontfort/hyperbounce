@@ -1,9 +1,18 @@
 package dev.joseph.hyperbounce.ui
 
+import android.os.Build
 import android.os.Bundle
+import android.view.RoundedCorner
 import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.shape.AbsoluteRoundedCornerShape
+import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Dp
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.spring
@@ -127,6 +136,13 @@ import top.yukonga.miuix.kmp.theme.lightColorScheme
 class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        enableEdgeToEdge(
+            statusBarStyle = SystemBarStyle.auto(android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT),
+            navigationBarStyle = SystemBarStyle.auto(android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT)
+        )
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            window.isNavigationBarContrastEnforced = false
+        }
         super.onCreate(savedInstanceState)
 
         setContent {
@@ -134,6 +150,28 @@ class MainActivity : ComponentActivity() {
             HyperiOSApp(repository)
         }
     }
+}
+
+@Composable
+private fun rememberNavSystemCornerRadius(): Dp {
+    val context = LocalContext.current
+    val density = LocalDensity.current.density
+    val view = LocalView.current
+    val insets = view.rootWindowInsets
+    val radiusPx = remember(context, view, insets) {
+        val fromInsets = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            insets?.getRoundedCorner(RoundedCorner.POSITION_BOTTOM_LEFT)?.radius?.takeIf { it > 0 }
+        } else {
+            null
+        }
+        val fromRes = if (fromInsets == null) {
+            val id = context.resources.getIdentifier("rounded_corner_radius_bottom", "dimen", "android")
+            if (id > 0) context.resources.getDimensionPixelSize(id) else 0
+        } else null
+        fromInsets ?: fromRes ?: 0
+    }
+    val dp = (radiusPx / density).dp
+    return if (dp > 0.dp) dp else 28.dp
 }
 
 @Composable
@@ -145,13 +183,19 @@ private fun HyperiOSApp(repository: SettingsRepository) {
         AppTheme.Dark -> true
     }
 
-    // Update status bar icons: dark icons in light mode so they are never blinded
+    // Update status bar & system navigation bar appearance: transparent bar with matching icon contrast
     val view = LocalView.current
     if (!view.isInEditMode) {
         SideEffect {
             val window = (view.context as? android.app.Activity)?.window
             if (window != null) {
-                WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = !isDark
+                val insetsController = WindowCompat.getInsetsController(window, view)
+                insetsController.isAppearanceLightStatusBars = !isDark
+                insetsController.isAppearanceLightNavigationBars = !isDark
+                window.navigationBarColor = android.graphics.Color.TRANSPARENT
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    window.isNavigationBarContrastEnforced = false
+                }
             }
         }
     }
@@ -303,6 +347,7 @@ private fun HyperiOSApp(repository: SettingsRepository) {
                     if (backStack.isNotEmpty()) {
                         val parentDest = if (backStack.size > 1) backStack[backStack.size - 2] else null
                         val currentDest = backStack.last()
+                        val systemCornerRadius = rememberNavSystemCornerRadius()
 
                         Box(Modifier.fillMaxSize()) {
                             // 1. Parent subpage underneath with parallax (when backStack.size >= 2)
@@ -346,7 +391,19 @@ private fun HyperiOSApp(repository: SettingsRepository) {
                                     .fillMaxSize()
                                     .graphicsLayer {
                                         translationX = dragOffset.value
-                                        shadowElevation = if (dragOffset.value > 0f) 16.dp.toPx() else 0f
+                                        val isSwiping = dragOffset.value > 0f
+                                        shadowElevation = if (isSwiping) 20.dp.toPx() else 0f
+                                        clip = isSwiping
+                                        shape = if (isSwiping) {
+                                            AbsoluteRoundedCornerShape(
+                                                topLeft = systemCornerRadius,
+                                                bottomLeft = systemCornerRadius,
+                                                topRight = 0.dp,
+                                                bottomRight = 0.dp
+                                            )
+                                        } else {
+                                            RectangleShape
+                                        }
                                     }
                                     .background(colors.background)
                                     .pointerInput(currentDest) {

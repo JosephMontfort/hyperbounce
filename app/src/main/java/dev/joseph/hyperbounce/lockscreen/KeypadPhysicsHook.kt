@@ -71,32 +71,20 @@ object KeypadPhysicsHook {
     private val appearAnimators = WeakHashMap<View, ValueAnimator>()
     private val releaseAnimators = WeakHashMap<View, ValueAnimator>()
 
-    private var cachedDepthSubjectViewRef: WeakReference<ImageView>? = null
-
-    private fun findDepthSubjectView(root: View?): ImageView? {
-        val cached = cachedDepthSubjectViewRef?.get()
-        if (cached != null && cached.isAttachedToWindow) return cached
-
-        val vg = root as? ViewGroup ?: return null
-        fun search(viewGroup: ViewGroup): ImageView? {
-            for (i in 0 until viewGroup.childCount) {
-                val child = viewGroup.getChildAt(i)
-                val name = child.javaClass.simpleName.lowercase()
-                if (child is ImageView && (name.contains("deducted") || name.contains("depth"))) {
-                    return child
-                }
-                if (child is ViewGroup && child.childCount > 0) {
-                    val found = search(child)
-                    if (found != null) return found
-                }
+    private fun isNormalPinPadKey(view: View): Boolean {
+        if (view.background !is LiquidGlassKeyOptimizedDrawable) return false
+        var p = view.parent
+        while (p != null) {
+            val name = p.javaClass.name
+            if (name.contains("SimPin") || name.contains("SimPuk") || name.contains("KeyguardSim")) {
+                return false
             }
-            return null
+            if (name == "com.android.keyguard.widget.MiuiKeyguardPINView" || name.endsWith(".MiuiKeyguardPINView")) {
+                return true
+            }
+            p = (p as? View)?.parent
         }
-        val found = search(vg)
-        if (found != null) {
-            cachedDepthSubjectViewRef = WeakReference(found)
-        }
-        return found
+        return false
     }
 
     private var isSettingsReceiverRegistered = false
@@ -405,6 +393,9 @@ object KeypadPhysicsHook {
                             }
 
                             if (view != null && event != null) {
+                                if (!isNormalPinPadKey(view)) {
+                                    return chain.proceed()
+                                }
                                 val liquidDrawable = view.background as? LiquidGlassKeyOptimizedDrawable
                                 val density = view.context.resources.displayMetrics.density
                                 val baseTransX = getBaseTranslationX(view, cfg, density)
@@ -722,14 +713,6 @@ object KeypadPhysicsHook {
                                 iv?.setImageDrawable(null)
                                 iv?.visibility = View.GONE
                             }
-                            val depthSubject = findDepthSubjectView(root)
-                            if (depthSubject != null) {
-                                val alphaInt = (0.65f * 255).toInt().coerceIn(0, 255)
-                                depthSubject.colorFilter = PorterDuffColorFilter(
-                                    Color.argb(alphaInt, 0, 0, 0),
-                                    PorterDuff.Mode.SRC_ATOP
-                                )
-                            }
                         }
 
                         // Ensure parent ViewGroup doesn't clip when lifting or expanding
@@ -998,11 +981,6 @@ object KeypadPhysicsHook {
                             val cfg = LockScreenConfigHolder.keypad
                             if (!cfg.enabled) return chain.proceed()
 
-                            try {
-                                findDepthSubjectView(pinView.rootView)?.clearColorFilter()
-                                cachedDepthSubjectViewRef?.get()?.clearColorFilter()
-                            } catch (_: Throwable) {}
-
                             for (anim in appearAnimators.values) {
                                 anim.cancel()
                             }
@@ -1071,10 +1049,6 @@ object KeypadPhysicsHook {
                                 releaseAnimators.clear()
                                 val pinView = chain.thisObject as? View
                                 if (pinView != null) {
-                                    try {
-                                        findDepthSubjectView(pinView.rootView)?.clearColorFilter()
-                                        cachedDepthSubjectViewRef?.get()?.clearColorFilter()
-                                    } catch (_: Throwable) {}
                                     val ctx = pinView.context
                                     val numKeyIds = intArrayOf(
                                         ctx.resources.getIdentifier("key1", "id", "com.android.systemui"),
@@ -1159,8 +1133,8 @@ object KeypadPhysicsHook {
                                         val behindAlphaField = scrimStateClass.getDeclaredField("mBehindAlpha").apply { isAccessible = true }
                                         val behindTintField = scrimStateClass.getDeclaredField("mBehindTint").apply { isAccessible = true }
                                         val target = chain.thisObject ?: bouncerObj
-                                        // 0.65f dimming (65% pure black scrim) matching lockscreen sheet swipe dimming
-                                        behindAlphaField.setFloat(target, 0.65f)
+                                        // 0.45f dimming (45% pure black scrim)
+                                        behindAlphaField.setFloat(target, 0.45f)
                                         behindTintField.setInt(target, 0xFF000000.toInt())
                                     } catch (t: Throwable) {
                                         Log.e(TAG, "Failed to apply ScrimState.BOUNCER dimming", t)
