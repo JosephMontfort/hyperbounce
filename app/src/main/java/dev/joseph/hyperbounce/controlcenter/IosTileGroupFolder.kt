@@ -255,25 +255,26 @@ object IosTileGroupFolder {
                 child.translationX = 0f
                 child.translationY = 0f
 
-                if (child.getTag(0x7f099996) != java.lang.Boolean.TRUE) {
-                    val tileLabelId = getTileLabelResId(context)
-                    if (tileLabelId != 0) {
-                        val tileLabel = child.findViewById<View>(tileLabelId)
-                        tileLabel?.visibility = View.GONE
-                        tileLabel?.alpha = 0f
-                    }
+                val tileLabelId = getTileLabelResId(context)
+                if (tileLabelId != 0) {
+                    val tileLabel = child.findViewById<View>(tileLabelId)
+                    tileLabel?.visibility = View.GONE
+                    tileLabel?.alpha = 0f
+                }
 
-                    val markId = getMarkResId(context)
-                    if (markId != 0) {
-                        val mark = child.findViewById<View>(markId)
-                        mark?.visibility = View.GONE
-                    }
+                val markId = getMarkResId(context)
+                if (markId != 0) {
+                    val mark = child.findViewById<View>(markId)
+                    mark?.visibility = View.GONE
+                    mark?.alpha = 0f
+                }
 
-                    val iconFrameId = getIconFrameResId(context)
-                    val iconFrame = if (iconFrameId != 0) child.findViewById<View>(iconFrameId) else null
-                    if (iconFrame != null) {
-                        val iflp = iconFrame.layoutParams
-                        if (iflp is FrameLayout.LayoutParams) {
+                val iconFrameId = getIconFrameResId(context)
+                val iconFrame = if (iconFrameId != 0) child.findViewById<View>(iconFrameId) else null
+                if (iconFrame != null) {
+                    val iflp = iconFrame.layoutParams
+                    if (iflp is FrameLayout.LayoutParams) {
+                        if (iflp.gravity != Gravity.CENTER || iflp.topMargin != 0 || iflp.bottomMargin != 0 || iflp.leftMargin != 0 || iflp.rightMargin != 0) {
                             iflp.gravity = Gravity.CENTER
                             iflp.topMargin = 0
                             iflp.bottomMargin = 0
@@ -281,10 +282,13 @@ object IosTileGroupFolder {
                             iflp.rightMargin = 0
                             iconFrame.layoutParams = iflp
                         }
-                        iconFrame.background = null
                     }
-                    child.setTag(0x7f099996, java.lang.Boolean.TRUE)
+                    iconFrame.background = null
                 }
+                child.background = null
+                child.outlineProvider = null
+                child.clipToOutline = false
+                child.setTag(0x7f099996, java.lang.Boolean.TRUE)
             } catch (t: Throwable) {}
         }
     }
@@ -301,8 +305,8 @@ object IosTileGroupFolder {
         init {
             isClickable = true
             isFocusable = true
-            clipToOutline = false
-            clipChildren = false
+            clipToOutline = true
+            clipChildren = true
             background = null
 
             setOnClickListener {
@@ -352,21 +356,25 @@ object IosTileGroupFolder {
 
             for (i in 0 until childCount) {
                 val child = getChildAt(i) ?: continue
-                if (child.getTag(0x7f099996) != java.lang.Boolean.TRUE) {
-                    try {
-                        val tileLabelId = getTileLabelResId(context)
-                        if (tileLabelId != 0) {
-                            child.findViewById<View>(tileLabelId)?.visibility = View.GONE
-                        }
-                        val markId = getMarkResId(context)
-                        if (markId != 0) {
-                            child.findViewById<View>(markId)?.visibility = View.GONE
-                        }
-                        val iconFrameId = getIconFrameResId(context)
-                        val iconFrame = if (iconFrameId != 0) child.findViewById<View>(iconFrameId) else null
-                        if (iconFrame != null) {
-                            val lp = iconFrame.layoutParams
-                            if (lp is FrameLayout.LayoutParams) {
+                try {
+                    val tileLabelId = getTileLabelResId(context)
+                    if (tileLabelId != 0) {
+                        val tileLabel = child.findViewById<View>(tileLabelId)
+                        tileLabel?.visibility = View.GONE
+                        tileLabel?.alpha = 0f
+                    }
+                    val markId = getMarkResId(context)
+                    if (markId != 0) {
+                        val mark = child.findViewById<View>(markId)
+                        mark?.visibility = View.GONE
+                        mark?.alpha = 0f
+                    }
+                    val iconFrameId = getIconFrameResId(context)
+                    val iconFrame = if (iconFrameId != 0) child.findViewById<View>(iconFrameId) else null
+                    if (iconFrame != null) {
+                        val lp = iconFrame.layoutParams
+                        if (lp is FrameLayout.LayoutParams) {
+                            if (lp.gravity != Gravity.CENTER || lp.topMargin != 0 || lp.bottomMargin != 0 || lp.leftMargin != 0 || lp.rightMargin != 0) {
                                 lp.gravity = Gravity.CENTER
                                 lp.topMargin = 0
                                 lp.bottomMargin = 0
@@ -374,11 +382,14 @@ object IosTileGroupFolder {
                                 lp.rightMargin = 0
                                 iconFrame.layoutParams = lp
                             }
-                            iconFrame.background = null
                         }
-                        child.setTag(0x7f099996, java.lang.Boolean.TRUE)
-                    } catch (t: Throwable) {}
-                }
+                        iconFrame.background = null
+                    }
+                    child.background = null
+                    child.outlineProvider = null
+                    child.clipToOutline = false
+                    child.setTag(0x7f099996, java.lang.Boolean.TRUE)
+                } catch (t: Throwable) {}
 
                 child.measure(childSpec, childSpec)
             }
@@ -415,6 +426,8 @@ object IosTileGroupFolder {
                 child.pivotY = halfBase
                 child.scaleX = scale
                 child.scaleY = scale
+                child.translationX = 0f
+                child.translationY = 0f
                 child.visibility = View.VISIBLE
                 child.alpha = 1.0f
 
@@ -425,26 +438,35 @@ object IosTileGroupFolder {
                 try {
                     val tileLabelId = context.resources.getIdentifier("tile_label", "id", context.packageName)
                     if (tileLabelId != 0) {
-                        child.findViewById<View>(tileLabelId)?.visibility = View.GONE
+                        val tileLabel = child.findViewById<View>(tileLabelId)
+                        tileLabel?.visibility = View.GONE
+                        tileLabel?.alpha = 0f
                     }
                     val markId = context.resources.getIdentifier("mark", "id", context.packageName)
                     if (markId != 0) {
-                        child.findViewById<View>(markId)?.visibility = View.GONE
+                        val mark = child.findViewById<View>(markId)
+                        mark?.visibility = View.GONE
+                        mark?.alpha = 0f
                     }
                     val iconFrameId = context.resources.getIdentifier("icon_frame", "id", context.packageName)
                     val iconFrame = child.findViewById<View>(iconFrameId)
                     if (iconFrame != null) {
                         val lp = iconFrame.layoutParams
                         if (lp is FrameLayout.LayoutParams) {
-                            lp.gravity = Gravity.CENTER
-                            lp.topMargin = 0
-                            lp.bottomMargin = 0
-                            lp.leftMargin = 0
-                            lp.rightMargin = 0
-                            iconFrame.layoutParams = lp
+                            if (lp.gravity != Gravity.CENTER || lp.topMargin != 0 || lp.bottomMargin != 0 || lp.leftMargin != 0 || lp.rightMargin != 0) {
+                                lp.gravity = Gravity.CENTER
+                                lp.topMargin = 0
+                                lp.bottomMargin = 0
+                                lp.leftMargin = 0
+                                lp.rightMargin = 0
+                                iconFrame.layoutParams = lp
+                            }
                         }
                         iconFrame.background = null
                     }
+                    child.background = null
+                    child.outlineProvider = null
+                    child.clipToOutline = false
                 } catch (t: Throwable) {}
             }
         }

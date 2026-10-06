@@ -1567,7 +1567,8 @@ object ControlCenterConfigHolder {
                 val isLarge = sLargeTileSpecs.contains(spec)
                 val isCircCard = isCard && sCircularCardSpecs.contains(spec)
                 val isCircular = isCircCard || (!isCard && !isExpanded && !isVertical && !isLarge && !itemView.javaClass.name.contains("Card") && (itemView.javaClass.name.contains("Tile") || itemView.javaClass.name.contains("QSTileItemView")))
-                if (isCircular) {
+                val isGroup = itemView.findViewById<ViewGroup>(0x7f099995) != null || isGroupAnchor(spec) != null || itemView.getTag(0x7f099994) != null
+                if (isCircular && !isGroup) {
                     ControlCenterHook.setCircularTileLabelVisibility(itemView, true)
                 }
 

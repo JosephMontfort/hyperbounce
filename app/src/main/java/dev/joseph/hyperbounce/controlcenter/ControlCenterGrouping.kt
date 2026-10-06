@@ -206,6 +206,7 @@ object ControlCenterGrouping {
             val inferred = mutableListOf<String>()
             val effectiveType = group.getEffectiveLayoutType()
             when (effectiveType) {
+                "7_IOS_CLUSTER" -> for (s in group.specs) inferred.add("C")
                 "2_EXPANDED" -> for (s in group.specs) inferred.add("E")
                 "2_VERTICAL" -> for (s in group.specs) inferred.add("V")
                 "1_EXP_2_CIRC" -> {
@@ -1114,10 +1115,10 @@ object ControlCenterGrouping {
                 f?.getInt(resolvedState) ?: 1
             } catch (t: Throwable) { 1 }
 
-            val isCard = childView.javaClass.name.contains("QSCardItemView") || (try {
+            val isCard = !childView.javaClass.name.contains("QSTileItemView") && (childView.javaClass.name.contains("QSCardItemView") || (try {
                 val f = childView.javaClass.getDeclaredField("card").apply { isAccessible = true }
                 f.getBoolean(childView)
-            } catch (t: Throwable) { false })
+            } catch (t: Throwable) { false }))
             if (isCard) {
                 val enabledColorResId = ctx.resources.getIdentifier("qs_card_enabled_color", "color", ctx.packageName)
                 val disabledColorResId = ctx.resources.getIdentifier("qs_card_disabled_color", "color", ctx.packageName)
@@ -1140,6 +1141,9 @@ object ControlCenterGrouping {
                 }
                 childView.clipToOutline = true
             } else {
+                childView.background = null
+                childView.outlineProvider = null
+                childView.clipToOutline = false
                 val iconView = try {
                     val f = childView.javaClass.getDeclaredField("icon")
                     f.isAccessible = true
@@ -1402,12 +1406,12 @@ object ControlCenterGrouping {
 
                         try {
                             val modeClass = Class.forName("miui.systemui.controlcenter.panel.main.MainPanelController\$Mode", false, classLoader)
-                            val currentMode = modeClass.getMethod("valueOf", String::class.java).invoke(null, if (isEdit) "EDIT" else "NORMAL")
+                            val normalMode = modeClass.getMethod("valueOf", String::class.java).invoke(null, "NORMAL")
                             val updateModeMethod = childRecord.javaClass.getMethod("updateMode", modeClass, Boolean::class.javaPrimitiveType)
-                            updateModeMethod.invoke(childRecord, currentMode, false)
+                            updateModeMethod.invoke(childRecord, normalMode, false)
                             try {
                                 val onModeChangedM = childView.javaClass.getMethod("onModeChanged", modeClass, Boolean::class.javaPrimitiveType)
-                                onModeChangedM.invoke(childView, currentMode, false)
+                                onModeChangedM.invoke(childView, normalMode, false)
                             } catch (t: Throwable) {}
                         } catch (t: Throwable) {}
 
@@ -1441,12 +1445,35 @@ object ControlCenterGrouping {
                             }
                         } catch (t: Throwable) {}
 
+                        // Ensure stock minus button stays hidden inside group
+                        val markResId = childView.context.resources.getIdentifier("mark", "id", childView.context.packageName)
+                        if (markResId != 0) {
+                            childView.findViewById<View>(markResId)?.apply {
+                                visibility = View.GONE
+                                alpha = 0f
+                            }
+                        }
+                        // Ensure tile label stays hidden inside group for circular 1x1 tiles
+                        val tileLabelId = childView.context.resources.getIdentifier("tile_label", "id", childView.context.packageName)
+                        if (tileLabelId != 0) {
+                            val isCard = (childSpec == "wifi" || childSpec == "cell" ||
+                                ControlCenterConfigHolder.sExpandedTileSpecs.contains(childSpec) ||
+                                ControlCenterConfigHolder.sVerticalTileSpecs.contains(childSpec) ||
+                                ControlCenterConfigHolder.sLargeTileSpecs.contains(childSpec))
+                            if (!isCard) {
+                                childView.findViewById<View>(tileLabelId)?.apply {
+                                    visibility = View.GONE
+                                    alpha = 0f
+                                }
+                            }
+                        }
+
                         if (isEdit) {
                             childView.isClickable = false
                             childView.isLongClickable = false
                             childView.isFocusable = false
                         } else {
-                            val isIosMiniTile = resolvedGroup.getEffectiveLayoutType() == "7_IOS_CLUSTER" && i >= 3
+                            val isIosMiniTile = (resolvedGroup.getEffectiveLayoutType() == "7_IOS_CLUSTER" || resolvedGroup.specs.size == 7) && i >= 3
                             if (isIosMiniTile) {
                                 childView.isClickable = false
                                 childView.isLongClickable = false

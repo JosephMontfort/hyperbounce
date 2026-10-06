@@ -271,6 +271,9 @@ object ControlCenterHook {
             if (!cName.contains("Tile") || cName.contains("Card")) {
                 return
             }
+            if (isChildOfContainer(itemView) || itemView.findViewById<View>(0x7f099995) != null || itemView.getTag(0x7f099994) != null) {
+                return
+            }
             val ctx = itemView.context
             val isWordless = try {
                 android.provider.Settings.Secure.getInt(ctx.contentResolver, "wordless_mode", 0) != 0
@@ -304,6 +307,10 @@ object ControlCenterHook {
 
             fun process(v: View) {
                 if (iconFrameId != 0 && v.id == iconFrameId) return
+                if (v.id == 0x7f099995 || v.getTag(0x7f099995) != null || v.getTag(0x7f099994) != null ||
+                    v is IosTileGroupFolder.IosClusterContainer || v is IosTileGroupFolder.MiniClusterView) {
+                    return
+                }
                 if (v is TextView) {
                     v.visibility = if (shouldShow) View.VISIBLE else View.GONE
                     v.alpha = if (shouldShow) 1.0f else 0.0f
@@ -345,7 +352,7 @@ object ControlCenterHook {
                 Log.e(TAG, "Failed to initialize FlashlightBrightnessHook", t)
             }
 
-            // 0b. Hook QSTileItemView.getShowLabel to return false in EDIT mode
+            // 0b. Hook QSTileItemView.getShowLabel to return false in EDIT mode or for circular grouped child tiles
             try {
                 val qstileItemViewClass = Class.forName("miui.systemui.controlcenter.qs.tileview.QSTileItemView", false, classLoader)
                 for (m in qstileItemViewClass.declaredMethods) {
@@ -353,11 +360,20 @@ object ControlCenterHook {
                         m.isAccessible = true
                         module.hook(m).intercept { chain ->
                             val v = chain.thisObject as? View
-                            if (ControlCenterConfigHolder.sIsEditMode) {
-                                val isSubTile = isChildOfContainer(v)
-                                if (!isSubTile) {
+                            val isSubTile = isChildOfContainer(v)
+                            if (isSubTile) {
+                                val spec = (v?.getTag(0x7f099990) as? String) ?: v?.let { ControlCenterConfigHolder.getOrResolveTileSpec(it) }
+                                val isCard = spec != null && (
+                                    ControlCenterConfigHolder.sExpandedTileSpecs.contains(spec) ||
+                                    ControlCenterConfigHolder.sVerticalTileSpecs.contains(spec) ||
+                                    ControlCenterConfigHolder.sLargeTileSpecs.contains(spec) ||
+                                    spec == "wifi" || spec == "cell"
+                                )
+                                if (!isCard) {
                                     return@intercept false
                                 }
+                            } else if (ControlCenterConfigHolder.sIsEditMode) {
+                                return@intercept false
                             }
                             chain.proceed()
                         }
@@ -1972,6 +1988,28 @@ object ControlCenterHook {
                                     val isSubTile = ControlCenterConfigHolder.isGroupChild(spec) || isChildOfContainer(itemView)
                                     if (isSubTile) {
                                         hideAllCustomBadges(itemView)
+                                        val markResId = itemView.context.resources.getIdentifier("mark", "id", itemView.context.packageName)
+                                        if (markResId != 0) {
+                                            itemView.findViewById<View>(markResId)?.apply {
+                                                visibility = View.GONE
+                                                alpha = 0f
+                                            }
+                                        }
+                                        val tileLabelId = itemView.context.resources.getIdentifier("tile_label", "id", itemView.context.packageName)
+                                        if (tileLabelId != 0) {
+                                            val isCard = spec != null && (
+                                                ControlCenterConfigHolder.sExpandedTileSpecs.contains(spec) ||
+                                                ControlCenterConfigHolder.sVerticalTileSpecs.contains(spec) ||
+                                                ControlCenterConfigHolder.sLargeTileSpecs.contains(spec) ||
+                                                spec == "wifi" || spec == "cell"
+                                            )
+                                            if (!isCard) {
+                                                itemView.findViewById<View>(tileLabelId)?.apply {
+                                                    visibility = View.GONE
+                                                    alpha = 0f
+                                                }
+                                            }
+                                        }
                                         if (isEdit) {
                                             itemView.isClickable = false
                                             itemView.isLongClickable = false
@@ -2121,7 +2159,8 @@ object ControlCenterHook {
                                         val iconFrameId = ctx.resources.getIdentifier("icon_frame", "id", ctx.packageName)
                                         val iconFrame = if (iconFrameId != 0) itemView.findViewById<View>(iconFrameId) else null
 
-                                        if (isCircular) {
+                                        val isGroup = itemView.findViewById<View>(0x7f099995) != null || itemView.getTag(0x7f099994) != null
+                                        if (isCircular && !isGroup) {
                                             setCircularTileLabelVisibility(itemView, !isEdit)
                                         }
 
