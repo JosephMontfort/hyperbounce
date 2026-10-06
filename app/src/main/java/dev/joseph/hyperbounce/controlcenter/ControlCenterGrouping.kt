@@ -57,6 +57,13 @@ class DynamicGroupContainer(context: Context) : ViewGroup(context) {
 
         for (i in 0 until childCount) {
             val child = getChildAt(i) ?: continue
+            if (child is IosTileGroupFolder.IosClusterContainer) {
+                child.measure(
+                    MeasureSpec.makeMeasureSpec(w, MeasureSpec.EXACTLY),
+                    MeasureSpec.makeMeasureSpec(h, MeasureSpec.EXACTLY)
+                )
+                continue
+            }
             val pt = if (i < placedTiles.size) placedTiles[i] else null
             val colSpan = pt?.colSpan ?: 1
             val rowSpan = pt?.rowSpan ?: 1
@@ -83,6 +90,12 @@ class DynamicGroupContainer(context: Context) : ViewGroup(context) {
 
         for (i in 0 until childCount) {
             val child = getChildAt(i) ?: continue
+            if (child is IosTileGroupFolder.IosClusterContainer) {
+                child.layout(0, 0, r - l, b - t)
+                if (child.visibility != View.VISIBLE) child.visibility = View.VISIBLE
+                if (child.alpha < 1.0f && !ControlCenterConfigHolder.sIsEditMode) child.alpha = 1.0f
+                continue
+            }
             val pt = if (i < placedTiles.size) placedTiles[i] else null
             val col = pt?.col ?: (i % 2)
             val row = pt?.row ?: (i / 2)
@@ -1152,12 +1165,30 @@ object ControlCenterGrouping {
                 val iconFrameId = ctx.resources.getIdentifier("icon_frame", "id", ctx.packageName)
                 if (iconFrameId != 0) {
                     val iconFrame = childView.findViewById<View>(iconFrameId)
-                    iconFrame?.background = null
+                    if (isChildOfIosCluster(childView)) {
+                        val discBg = GradientDrawable().apply {
+                            shape = GradientDrawable.OVAL
+                            setColor(Color.parseColor("#38FFFFFF"))
+                            setStroke(Math.max(1, (1.5f * density).toInt()), Color.parseColor("#80FFFFFF"))
+                        }
+                        iconFrame?.background = discBg
+                    } else {
+                        iconFrame?.background = null
+                    }
                 }
             }
         } catch (t: Throwable) {
             Log.e(TAG, "applyNonAdvancedStyleToChildTile error", t)
         }
+    }
+
+    fun isChildOfIosCluster(view: View): Boolean {
+        var p = view.parent
+        while (p != null) {
+            if (p is IosTileGroupFolder.IosClusterContainer || p is IosTileGroupFolder.MiniClusterView) return true
+            p = p.parent
+        }
+        return false
     }
 
     fun rebindGroupContainer(
@@ -1273,6 +1304,8 @@ object ControlCenterGrouping {
                                 attachSubHolder(h)
                                 dynamicSubHolders[i] = h
                             }
+                            iosCluster.addView(iosCluster.miniClusterView)
+                            container.placedTiles = layoutRes.placedTiles
                             anchorView.setTag(0x7f099993, dynamicSubHolders)
                         } else {
                             container.placedTiles = layoutRes.placedTiles
