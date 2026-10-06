@@ -331,9 +331,30 @@ class SettingsRepository(context: Context) {
         // current behavior — WhatsApp in particular used a taller/wider/more-rounded bar
         // (70/92/36) than Instagram and YouTube's shared defaults (64/64/32).
         private val defaults = when (app) {
-            NavApp.WhatsApp -> NavBarAppSettings(barHeight = 70f, tabWidth = 92f, cornerRadius = 36f, bottomMargin = 40f, accent = AccentPreset.Green)
-            NavApp.YouTube -> NavBarAppSettings(bottomMargin = 28f, accent = AccentPreset.Auto)
-            NavApp.Instagram -> NavBarAppSettings(bottomMargin = 40f, accent = AccentPreset.Auto)
+            NavApp.WhatsApp -> NavBarAppSettings(
+                barHeight = 70f,
+                tabWidth = 92f,
+                cornerRadius = 36f,
+                bottomMargin = 40f,
+                autoShrinkScale = 0.70f,
+                accent = AccentPreset.Green
+            )
+            NavApp.YouTube -> NavBarAppSettings(
+                barHeight = 50f,
+                tabWidth = 75f,
+                cornerRadius = 32f,
+                bottomMargin = 20f,
+                autoShrinkScale = 0.85f,
+                accent = AccentPreset.Auto
+            )
+            NavApp.Instagram -> NavBarAppSettings(
+                barHeight = 50f,
+                tabWidth = 75f,
+                cornerRadius = 32f,
+                bottomMargin = 20f,
+                autoShrinkScale = 0.85f,
+                accent = AccentPreset.Auto
+            )
         }
 
         var enabled by prefsBooleanState("${prefix}_enabled", defaults.enabled)
@@ -386,7 +407,14 @@ class SettingsRepository(context: Context) {
         @JvmName("setEnabledPref")
         fun setEnabled(v: Boolean) { enabled = v }
         @JvmName("setLiquidGlassPref")
-        fun setLiquidGlass(v: Boolean) { liquidGlass = v }
+        fun setLiquidGlass(v: Boolean) {
+            liquidGlass = v
+            if (!v) {
+                containerOpacity = 0.90f
+            } else {
+                containerOpacity = defaults.containerOpacity
+            }
+        }
         @JvmName("setGlassIntensityPref")
         fun setGlassIntensity(v: Float) { glassIntensity = v }
         @JvmName("setBarBlurIntensityPref")

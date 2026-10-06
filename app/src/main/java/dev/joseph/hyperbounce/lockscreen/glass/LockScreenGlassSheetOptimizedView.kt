@@ -86,7 +86,7 @@ class LockScreenGlassSheetOptimizedView @JvmOverloads constructor(
         val rightRefract = cfg.sideRefraction * density * smoothIncoming
         val bottomRefract = cfg.bottomRefraction * density * smoothIncoming
         val maxRefract = max(max(leftRefract, rightRefract), bottomRefract)
-        val cornerRadius = cfg.cornerRadius * density * smoothIncoming
+        val cornerRadius = cfg.cornerRadius * density
 
         // Multi-cycle squeeze and unsqueeze breathing as swipe progresses (3 full cycles between 0.15 and 1.0)
         val squeezeProgress = ((swipeProgress - 0.15f) / 0.85f).coerceIn(0.0f, 1.0f)

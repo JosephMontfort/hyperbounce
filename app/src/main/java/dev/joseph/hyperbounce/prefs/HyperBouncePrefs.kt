@@ -79,19 +79,19 @@ class HyperBouncePrefs(module: XposedInterface) {
         prefs.getFloat("app_${appKey}_bar_blur_intensity", 1.0f)
 
     fun appContainerOpacity(appKey: String): Float =
-        prefs.getFloat("app_${appKey}_container_opacity", 0.4f)
+        prefs.getFloat("app_${appKey}_container_opacity", if (!appLiquidGlass(appKey)) 0.90f else 0.4f)
 
     fun appCornerRadius(appKey: String): Float =
         prefs.getFloat("app_${appKey}_corner_radius", if (appKey == "whatsapp") 36f else 32f)
 
     fun appBarHeight(appKey: String): Float =
-        prefs.getFloat("app_${appKey}_bar_height", if (appKey == "whatsapp") 70f else 64f)
+        prefs.getFloat("app_${appKey}_bar_height", if (appKey == "whatsapp") 70f else 50f)
 
     fun appTabWidth(appKey: String): Float =
-        prefs.getFloat("app_${appKey}_tab_width", if (appKey == "whatsapp") 92f else 64f)
+        prefs.getFloat("app_${appKey}_tab_width", if (appKey == "whatsapp") 92f else 75f)
 
     fun appBottomMargin(appKey: String): Float =
-        prefs.getFloat("app_${appKey}_bottom_margin", if (appKey == "youtube") 28f else 40f)
+        prefs.getFloat("app_${appKey}_bottom_margin", if (appKey == "whatsapp") 40f else 20f)
 
     /** One of "System" | "Light" | "Dark" — matches ui.state.ThemeMode's enum names. */
     fun appThemeMode(appKey: String): String =
@@ -121,7 +121,7 @@ class HyperBouncePrefs(module: XposedInterface) {
         prefs.getBoolean("app_${appKey}_auto_shrink", true)
 
     fun appAutoShrinkScale(appKey: String): Float =
-        prefs.getFloat("app_${appKey}_auto_shrink_scale", 0.70f)
+        prefs.getFloat("app_${appKey}_auto_shrink_scale", if (appKey == "whatsapp") 0.70f else 0.85f)
 
     fun appAutoShrinkSensitivity(appKey: String): Float =
         prefs.getFloat("app_${appKey}_auto_shrink_sensitivity", 1.0f)

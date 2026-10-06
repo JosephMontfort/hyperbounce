@@ -42,8 +42,46 @@ internal object LiquidSliderHost {
     }
 
     @JvmStatic
+    fun isExempt(target: View?): Boolean {
+        if (target == null) return false
+        val className = target.javaClass.name
+        if (className.contains("MiPlay") || className.contains("HyperProgressSeekBar")) return true
+        try {
+            val id = target.id
+            if (id != View.NO_ID && target.resources != null) {
+                val entry = target.resources.getResourceEntryName(id)
+                if (entry == "media_progress_bar" || entry == "volume_row_slider" || entry == "device_volume_bar") {
+                    return true
+                }
+            }
+        } catch (_: Throwable) {}
+        var p = target.parent
+        while (p != null) {
+            val pName = p.javaClass.name
+            if (pName.contains("MiPlay") || pName.contains("MediaPlayerDetail") || pName.contains("MediaDetail")) {
+                return true
+            }
+            if (p is View) {
+                try {
+                    val pid = p.id
+                    if (pid != View.NO_ID && p.resources != null) {
+                        val pEntry = p.resources.getResourceEntryName(pid)
+                        if (pEntry != null && (pEntry.contains("miplay") || pEntry.contains("media_progress") || pEntry.contains("volume_bar_container"))) {
+                            return true
+                        }
+                    }
+                } catch (_: Throwable) {}
+                p = p.parent
+            } else {
+                break
+            }
+        }
+        return false
+    }
+
+    @JvmStatic
     fun ensure(target: View) {
-        if (target !is ProgressBar) return
+        if (target !is ProgressBar || isExempt(target)) return
         if (target.width <= 0 || target.height <= 0) return
         if (!target.isAttachedToWindow) return
         if (hosts.containsKey(target)) {

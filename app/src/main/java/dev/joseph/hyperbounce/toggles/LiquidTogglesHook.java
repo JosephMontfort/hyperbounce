@@ -921,11 +921,14 @@ public class LiquidTogglesHook extends XposedModule {
             Object thisObj = chain.getThisObject();
             if (!clazz.isInstance(thisObj)) return result;
             View view = (View) thisObj;
+            if (dev.joseph.hyperbounce.toggles.LiquidSliderHost.isExempt(view)) return result;
             view.addOnAttachStateChangeListener(new View.OnAttachStateChangeListener() {
                 @Override
                 public void onViewAttachedToWindow(View v) {
+                    if (dev.joseph.hyperbounce.toggles.LiquidSliderHost.isExempt(v)) return;
                     v.post(() -> {
                         if (clazz.isInstance(v)) {
+                            if (dev.joseph.hyperbounce.toggles.LiquidSliderHost.isExempt(v)) return;
                             disableClipping(v);
                             if (USE_LIQUID_GLASS_SLIDER) {
                                 dev.joseph.hyperbounce.toggles.LiquidSliderHost.ensure(v);
@@ -935,12 +938,14 @@ public class LiquidTogglesHook extends XposedModule {
                 }
                 @Override
                 public void onViewDetachedFromWindow(View v) {
+                    if (dev.joseph.hyperbounce.toggles.LiquidSliderHost.isExempt(v)) return;
                     if (USE_LIQUID_GLASS_SLIDER && clazz.isInstance(v)) {
                         dev.joseph.hyperbounce.toggles.LiquidSliderHost.remove(v);
                     }
                 }
             });
             view.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> {
+                if (dev.joseph.hyperbounce.toggles.LiquidSliderHost.isExempt(v)) return;
                 if (r - l > 0 && b - t > 0 && clazz.isInstance(v)) {
                     disableClipping(v);
                     if (USE_LIQUID_GLASS_SLIDER) {
@@ -953,45 +958,60 @@ public class LiquidTogglesHook extends XposedModule {
 
         hookMethod(clazz, "setProgress", new Class<?>[]{int.class}, chain -> {
             Object result = chain.proceed();
-            if (USE_LIQUID_GLASS_SLIDER && clazz.isInstance(chain.getThisObject())) {
+            if (clazz.isInstance(chain.getThisObject())) {
                 View view = (View) chain.getThisObject();
-                int progress = (Integer) chain.getArg(0);
-                dev.joseph.hyperbounce.toggles.LiquidSliderHost.syncProgress(view, progress);
+                if (dev.joseph.hyperbounce.toggles.LiquidSliderHost.isExempt(view)) return result;
+                if (USE_LIQUID_GLASS_SLIDER) {
+                    int progress = (Integer) chain.getArg(0);
+                    dev.joseph.hyperbounce.toggles.LiquidSliderHost.syncProgress(view, progress);
+                }
             }
             return result;
         });
 
         hookMethod(clazz, "setProgress", new Class<?>[]{int.class, boolean.class}, chain -> {
             Object result = chain.proceed();
-            if (USE_LIQUID_GLASS_SLIDER && clazz.isInstance(chain.getThisObject())) {
+            if (clazz.isInstance(chain.getThisObject())) {
                 View view = (View) chain.getThisObject();
-                int progress = (Integer) chain.getArg(0);
-                dev.joseph.hyperbounce.toggles.LiquidSliderHost.syncProgress(view, progress);
+                if (dev.joseph.hyperbounce.toggles.LiquidSliderHost.isExempt(view)) return result;
+                if (USE_LIQUID_GLASS_SLIDER) {
+                    int progress = (Integer) chain.getArg(0);
+                    dev.joseph.hyperbounce.toggles.LiquidSliderHost.syncProgress(view, progress);
+                }
             }
             return result;
         });
 
         hookMethod(clazz, "setVisibility", new Class<?>[]{int.class}, chain -> {
             Object result = chain.proceed();
-            if (USE_LIQUID_GLASS_SLIDER && clazz.isInstance(chain.getThisObject())) {
-                int vis = (Integer) chain.getArg(0);
-                dev.joseph.hyperbounce.toggles.LiquidSliderHost.syncVisibility((View) chain.getThisObject(), vis == View.VISIBLE);
+            if (clazz.isInstance(chain.getThisObject())) {
+                View view = (View) chain.getThisObject();
+                if (dev.joseph.hyperbounce.toggles.LiquidSliderHost.isExempt(view)) return result;
+                if (USE_LIQUID_GLASS_SLIDER) {
+                    int vis = (Integer) chain.getArg(0);
+                    dev.joseph.hyperbounce.toggles.LiquidSliderHost.syncVisibility(view, vis == View.VISIBLE);
+                }
             }
             return result;
         });
 
         hookMethod(clazz, "onDetachedFromWindow", new Class<?>[]{}, chain -> {
             Object result = chain.proceed();
-            if (USE_LIQUID_GLASS_SLIDER && clazz.isInstance(chain.getThisObject())) {
-                dev.joseph.hyperbounce.toggles.LiquidSliderHost.remove((View) chain.getThisObject());
+            if (clazz.isInstance(chain.getThisObject())) {
+                View view = (View) chain.getThisObject();
+                if (dev.joseph.hyperbounce.toggles.LiquidSliderHost.isExempt(view)) return result;
+                if (USE_LIQUID_GLASS_SLIDER) {
+                    dev.joseph.hyperbounce.toggles.LiquidSliderHost.remove(view);
+                }
             }
             return result;
         });
 
         hookMethod(clazz, "onTouchEvent", new Class<?>[]{MotionEvent.class}, chain -> {
             if (!clazz.isInstance(chain.getThisObject())) return chain.proceed();
+            View view = (View) chain.getThisObject();
+            if (dev.joseph.hyperbounce.toggles.LiquidSliderHost.isExempt(view)) return chain.proceed();
             if (USE_LIQUID_GLASS_SLIDER) {
-                View view = (View) chain.getThisObject();
                 if (!view.isEnabled()) return false;
                 MotionEvent event = (MotionEvent) chain.getArg(0);
                 int action = event.getActionMasked();
@@ -1020,7 +1040,6 @@ public class LiquidTogglesHook extends XposedModule {
 
             // FALLBACK TO THE FULLY CUSTOM SLIDER ENGINE
             Object result = chain.proceed();
-            View view = (View) chain.getThisObject();
             if (!view.isEnabled()) return false;
             disableClipping(view);
             MotionEvent event = (MotionEvent) chain.getArg(0);
@@ -1053,6 +1072,7 @@ public class LiquidTogglesHook extends XposedModule {
         hookMethod(clazz, "onDraw", new Class<?>[]{android.graphics.Canvas.class}, chain -> {
             if (!clazz.isInstance(chain.getThisObject())) return chain.proceed();
             View view = (View) chain.getThisObject();
+            if (dev.joseph.hyperbounce.toggles.LiquidSliderHost.isExempt(view)) return chain.proceed();
             Canvas canvas = (Canvas) chain.getArg(0);
             int w = view.getWidth(), h = view.getHeight();
             if (w <= 0 || h <= 0) return null;

@@ -68,9 +68,9 @@ data class NavBarAppSettings(
     val barBlurIntensity: Float = 1.0f,
     val containerOpacity: Float = 0.4f,
     val cornerRadius: Float = 32f,
-    val barHeight: Float = 64f,
-    val tabWidth: Float = 64f,
-    val bottomMargin: Float = 40f,
+    val barHeight: Float = 50f,
+    val tabWidth: Float = 75f,
+    val bottomMargin: Float = 20f,
     val themeMode: ThemeMode = ThemeMode.System,
     val accent: AccentPreset = AccentPreset.Auto,
     val customAccentColor: Long = 0xFF0088FFL,
@@ -79,7 +79,7 @@ data class NavBarAppSettings(
     val pillChromaticAberration: Boolean = true,
     val pillShadow: Boolean = true,
     val autoShrink: Boolean = true,
-    val autoShrinkScale: Float = 0.70f,
+    val autoShrinkScale: Float = 0.85f,
     val autoShrinkSensitivity: Float = 1.0f,
     val reelsFullscreenZoom: Boolean = false
 )

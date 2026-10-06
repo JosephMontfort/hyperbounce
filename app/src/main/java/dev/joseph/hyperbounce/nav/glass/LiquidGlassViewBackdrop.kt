@@ -7,6 +7,7 @@ import android.graphics.Paint
 import android.graphics.PorterDuff
 import android.graphics.PorterDuffXfermode
 import android.graphics.Rect
+import android.graphics.RectF
 import android.os.Handler
 import android.os.HandlerThread
 import android.os.Looper
@@ -339,14 +340,34 @@ internal class LiquidGlassViewBackdrop(
         for (buffer in surfaceBuffers.values) {
             val bmp = buffer.frontBitmap ?: continue
             if (bmp.isRecycled) continue
-            canvas.drawBitmap(bmp, buffer.left.toFloat(), buffer.top.toFloat(), null)
+            val view = buffer.view
+            if (!view.isShown || !view.isAttachedToWindow || view.width <= 0 || view.height <= 0) continue
 
-            val bottomY = buffer.top + buffer.height
-            if (bottomY < scaledHeight && bmp.height > 1) {
-                val srcStrip = Rect(0, bmp.height - 1, bmp.width, bmp.height)
-                val dstStrip = Rect(buffer.left, bottomY, buffer.left + buffer.width, scaledHeight)
-                canvas.drawBitmap(bmp, srcStrip, dstStrip, null)
-            }
+            val surfaceLocation = IntArray(2)
+            view.getLocationInWindow(surfaceLocation)
+            val sX = surfaceLocation[0]
+            val sY = surfaceLocation[1]
+            val sW = view.width
+            val sH = view.height
+
+            val left = sX.toFloat()
+            val top = sY.toFloat()
+            val right = left + sW
+            val bottom = top + sH
+
+            val overlapLeft = maxOf(currentRegion.left, left)
+            val overlapTop = maxOf(currentRegion.top, top)
+            val overlapRight = minOf(currentRegion.left + currentRegion.width, right)
+            val overlapBottom = minOf(currentRegion.top + currentRegion.height, bottom)
+            if (overlapRight <= overlapLeft || overlapBottom <= overlapTop) continue
+
+            val targetLeft = (overlapLeft - currentRegion.left) * scale
+            val targetTop = (overlapTop - currentRegion.top) * scale
+            val targetWidth = (overlapRight - overlapLeft) * scale
+            val targetHeight = (overlapBottom - overlapTop) * scale
+
+            val dstRect = RectF(targetLeft, targetTop, targetLeft + targetWidth, targetTop + targetHeight)
+            canvas.drawBitmap(bmp, null, dstRect, null)
         }
     }
 
