@@ -6728,19 +6728,19 @@ class TileResizeDragTouchListener(
                         targetH = originHeight
                         targetRadius = cardRadius
                     } else if (isMediaSpec) {
-                        val (tw, th) = getTargetDims(finalState)
+                        val (tw, th) = getMediaDims(finalState)
                         targetW = tw
                         targetH = th
                         targetRadius = cardRadius
                     } else {
                         targetW = when (finalState) {
                             STATE_EXPANDED, STATE_LARGE -> twoColW
-                            else -> colW
+                            else -> unitWidth1x1
                         }
                         targetH = when (finalState) {
-                            STATE_VERTICAL, STATE_LARGE -> tallH
-                            STATE_EXPANDED -> cardH
-                            else -> if (initialState == STATE_NORMAL) originHeight else colW
+                            STATE_VERTICAL, STATE_LARGE -> cardHeight1x2
+                            STATE_EXPANDED -> unitHeight1x1
+                            else -> if (initialState == STATE_NORMAL) originHeight else unitWidth1x1
                         }
                         targetRadius = if (finalState == STATE_NORMAL) (targetW / 2f) else cardRadius
                     }
