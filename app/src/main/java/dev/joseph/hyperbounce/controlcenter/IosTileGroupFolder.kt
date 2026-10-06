@@ -417,7 +417,7 @@ object IosTileGroupFolder {
             val availH = Math.max(0, (b - t) - 2 * pad - gap)
             val subH = availH / 2f
 
-            val baseSize = getBaseTileSize()
+            val baseSize = getBaseTileSize(context)
             val targetSize = Math.min(subW, subH)
             val scale = if (baseSize > 0 && targetSize > 10) (targetSize / baseSize.toFloat()).coerceIn(0.2f, 0.6f) else 0.42f
             val halfBase = baseSize / 2f
