@@ -4,12 +4,14 @@ import android.animation.Animator
 import android.animation.AnimatorListenerAdapter
 import android.animation.ValueAnimator
 import android.content.Context
+import android.content.res.Configuration
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
 import android.provider.Settings
 import android.util.AttributeSet
 import android.util.Log
 import android.view.Gravity
+import android.view.HapticFeedbackConstants
 import android.view.KeyEvent
 import android.view.LayoutInflater
 import android.view.MotionEvent
@@ -392,6 +394,7 @@ object IosTileGroupFolder {
 
         private val scrimView = View(context)
         private val cardContainer = FrameLayout(context)
+        private var cardCurrentRadius = 0f
         private var isClosing = false
         private var isDismissed = false
         private val originalHolders = HashMap<Any, Any?>()
@@ -435,18 +438,38 @@ object IosTileGroupFolder {
 
             // 2. Centered Card Container styled identically to the collapsed group container
             val density = resources.displayMetrics.density
-            val cardPadding = (14 * density).toInt()
+            val isLandscape = resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+            val screenWidth = resources.displayMetrics.widthPixels
+            val cardPadding = (if (isLandscape) 10 * density else 14 * density).toInt()
 
-            val cardLp = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply {
-                gravity = Gravity.CENTER
-                marginStart = (14 * density).toInt()
-                marginEnd = (14 * density).toInt()
+            val radiusResId = context.resources.getIdentifier("control_center_universal_corner_radius", "dimen", context.packageName)
+            cardCurrentRadius = if (radiusResId != 0) context.resources.getDimension(radiusResId) else 20f * density
+
+            val cardLp = if (isLandscape) {
+                val cardW = Math.min((460 * density).toInt(), (screenWidth * 0.62f).toInt())
+                LayoutParams(cardW, LayoutParams.WRAP_CONTENT).apply {
+                    gravity = Gravity.CENTER
+                }
+            } else {
+                LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply {
+                    gravity = Gravity.CENTER
+                    marginStart = (14 * density).toInt()
+                    marginEnd = (14 * density).toInt()
+                }
             }
             cardContainer.layoutParams = cardLp
             cardContainer.setPadding(cardPadding, cardPadding, cardPadding, cardPadding)
 
             val classLoader = sourceContainer.classLoader ?: context.classLoader
             ControlCenterGrouping.applyGroupContainerStyle(cardContainer, classLoader, sourceContainer.group)
+
+            cardContainer.outlineProvider = object : android.view.ViewOutlineProvider() {
+                override fun getOutline(v: View, outline: android.graphics.Outline) {
+                    outline.setRoundRect(0, 0, v.width, v.height, Math.max(0f, cardCurrentRadius))
+                }
+            }
+            cardContainer.clipToOutline = true
+            cardContainer.clipChildren = true
 
             buildExpandedCardContent()
             addView(cardContainer)
@@ -510,8 +533,13 @@ object IosTileGroupFolder {
                 }
             }
 
+            val isLandscape = context.resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
             val res2RowsId = context.resources.getIdentifier("control_center_universal_2_rows_size", "dimen", context.packageName)
-            val quadHeight = if (res2RowsId != 0) context.resources.getDimensionPixelSize(res2RowsId) else (158 * density).toInt()
+            val quadHeight = if (isLandscape) {
+                (118 * density).toInt()
+            } else {
+                if (res2RowsId != 0) context.resources.getDimensionPixelSize(res2RowsId) else (158 * density).toInt()
+            }
 
             val quadWeightLp = {
                 LinearLayout.LayoutParams(0, quadHeight, 1f).apply {
@@ -587,6 +615,9 @@ object IosTileGroupFolder {
                 val iconFrameId = context.resources.getIdentifier("icon_frame", "id", context.packageName)
                 val iconFrame = if (iconFrameId != 0) circView.findViewById<View>(iconFrameId) else null
 
+                circView.scaleX = 1.0f
+                circView.scaleY = 1.0f
+
                 if (showLabels) {
                     tileLabel?.visibility = View.VISIBLE
                     tileLabel?.alpha = 1.0f
@@ -607,8 +638,6 @@ object IosTileGroupFolder {
                         iflp.bottomMargin = 0
                         iconFrame.layoutParams = iflp
                     }
-                    circView.scaleX = 0.78f
-                    circView.scaleY = 0.78f
                 } else {
                     tileLabel?.visibility = View.GONE
                     tileLabel?.alpha = 0.0f
@@ -619,8 +648,6 @@ object IosTileGroupFolder {
                         iflp.bottomMargin = 0
                         iconFrame.layoutParams = iflp
                     }
-                    circView.scaleX = 0.90f
-                    circView.scaleY = 0.90f
                 }
                 iconFrame?.background = null
 
@@ -770,14 +797,52 @@ object IosTileGroupFolder {
 
                 view.setOnLongClickListener { clickedView ->
                     try {
+                        clickedView.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                        val tObj = childRecord.javaClass.getMethod("getTile").invoke(childRecord)
+                        if (tObj != null) {
+                            val stateObj = try { tObj.javaClass.getMethod("getState").invoke(tObj) } catch (t: Throwable) { null }
+                            val isDualTarget = try {
+                                val f = stateObj?.javaClass?.getField("dualTarget")
+                                f?.getBoolean(stateObj) ?: false
+                            } catch (t: Throwable) { false }
+
+                            if (isDualTarget) {
+                                try {
+                                    tObj.javaClass.getMethod("secondaryClick").invoke(tObj)
+                                } catch (t: Throwable) {
+                                    try { tObj.javaClass.getMethod("longClick").invoke(tObj) } catch (t2: Throwable) {}
+                                }
+                            } else {
+                                try {
+                                    tObj.javaClass.getMethod("longClick").invoke(tObj)
+                                } catch (t: Throwable) {
+                                    try { tObj.javaClass.getMethod("secondaryClick").invoke(tObj) } catch (t2: Throwable) {}
+                                }
+                            }
+                            dismissOverlay()
+                            return@setOnLongClickListener true
+                        }
+                    } catch (t: Throwable) {
+                        Log.e(TAG, "Tile onLongClick error: $spec", t)
+                    }
+
+                    try {
                         val f = childRecord.javaClass.getDeclaredField("longClickAction")
                         f.isAccessible = true
-                        val action = f.get(childRecord) as? kotlin.jvm.functions.Function1<View, Boolean>
+                        val action = f.get(childRecord)
                         if (action != null) {
-                            action.invoke(clickedView)
-                            true
-                        } else false
-                    } catch (t: Throwable) { false }
+                            for (m in action.javaClass.methods) {
+                                if (m.name == "invoke") {
+                                    m.isAccessible = true
+                                    if (m.parameterTypes.size == 1) m.invoke(action, clickedView)
+                                    else if (m.parameterTypes.isEmpty()) m.invoke(action)
+                                    dismissOverlay()
+                                    return@setOnLongClickListener true
+                                }
+                            }
+                        }
+                    } catch (t: Throwable) {}
+                    false
                 }
             } catch (t: Throwable) {
                 Log.e(TAG, "bindTileDirectly error: $spec", t)
@@ -805,12 +870,22 @@ object IosTileGroupFolder {
 
                 val deltaX = (sourceX + sourceW / 2f) - (cardX + cardW / 2f)
                 val deltaY = (sourceY + sourceH / 2f) - (cardY + cardH / 2f)
-                val initialScale = if (cardW > 0) Math.min(1f, sourceW / cardW) else 0.5f
+                val initialScaleX = if (cardW > 0) sourceW / cardW else 0.5f
+                val initialScaleY = if (cardH > 0) sourceH / cardH else 0.5f
 
+                val radiusResId = context.resources.getIdentifier("control_center_universal_corner_radius", "dimen", context.packageName)
+                val targetRadius = if (radiusResId != 0) context.resources.getDimension(radiusResId) else 20f * resources.displayMetrics.density
+                val avgInitialScale = Math.max(0.01f, Math.sqrt((initialScaleX * initialScaleY).toDouble()).toFloat())
+                val startLocalRadius = targetRadius / avgInitialScale
+
+                cardContainer.pivotX = cardW / 2f
+                cardContainer.pivotY = cardH / 2f
                 cardContainer.translationX = deltaX
                 cardContainer.translationY = deltaY
-                cardContainer.scaleX = initialScale
-                cardContainer.scaleY = initialScale
+                cardContainer.scaleX = initialScaleX
+                cardContainer.scaleY = initialScaleY
+                cardCurrentRadius = startLocalRadius
+                cardContainer.invalidateOutline()
 
                 scrimView.animate()
                     .alpha(1f)
@@ -824,15 +899,21 @@ object IosTileGroupFolder {
                     ?.setInterpolator(FOLME_SPRING_INTERPOLATOR)
                     ?.start()
 
-                cardContainer.animate()
-                    .translationX(0f)
-                    .translationY(0f)
-                    .scaleX(1f)
-                    .scaleY(1f)
-                    .alpha(1f)
-                    .setDuration(280)
-                    .setInterpolator(FOLME_SPRING_INTERPOLATOR)
-                    .start()
+                val openAnim = ValueAnimator.ofFloat(0f, 1f).apply {
+                    duration = 280
+                    interpolator = FOLME_SPRING_INTERPOLATOR
+                    addUpdateListener { va ->
+                        val t = va.animatedValue as Float
+                        cardContainer.translationX = deltaX * (1f - t)
+                        cardContainer.translationY = deltaY * (1f - t)
+                        cardContainer.scaleX = initialScaleX + (1f - initialScaleX) * t
+                        cardContainer.scaleY = initialScaleY + (1f - initialScaleY) * t
+                        cardCurrentRadius = startLocalRadius + (targetRadius - startLocalRadius) * t
+                        cardContainer.invalidateOutline()
+                        cardContainer.alpha = Math.min(1f, 0.35f + 0.65f * t)
+                    }
+                }
+                openAnim.start()
             }
         }
 
@@ -878,7 +959,16 @@ object IosTileGroupFolder {
 
             val targetDeltaX = (sourceX + sourceW / 2f) - (cardX + cardW / 2f)
             val targetDeltaY = (sourceY + sourceH / 2f) - (cardY + cardH / 2f)
-            val targetScale = if (cardW > 0) Math.min(1f, sourceW / cardW) else 0.5f
+            val targetScaleX = if (cardW > 0) sourceW / cardW else 0.5f
+            val targetScaleY = if (cardH > 0) sourceH / cardH else 0.5f
+
+            val radiusResId = context.resources.getIdentifier("control_center_universal_corner_radius", "dimen", context.packageName)
+            val targetRadius = if (radiusResId != 0) context.resources.getDimension(radiusResId) else 20f * resources.displayMetrics.density
+            val avgScale = Math.max(0.01f, Math.sqrt((targetScaleX * targetScaleY).toDouble()).toFloat())
+            val endLocalRadius = targetRadius / avgScale
+
+            cardContainer.pivotX = cardW / 2f
+            cardContainer.pivotY = cardH / 2f
 
             val mainPanel = findMainPanel()
             mainPanel?.animate()
@@ -892,18 +982,26 @@ object IosTileGroupFolder {
                 .setDuration(200)
                 .start()
 
-            cardContainer.animate()
-                .translationX(targetDeltaX)
-                .translationY(targetDeltaY)
-                .scaleX(targetScale)
-                .scaleY(targetScale)
-                .alpha(0f)
-                .setDuration(240)
-                .setInterpolator(FOLME_SPRING_INTERPOLATOR)
-                .withEndAction {
-                    dismissImmediately()
+            val closeAnim = ValueAnimator.ofFloat(1f, 0f).apply {
+                duration = 240
+                interpolator = FOLME_SPRING_INTERPOLATOR
+                addUpdateListener { va ->
+                    val t = va.animatedValue as Float
+                    cardContainer.translationX = targetDeltaX * (1f - t)
+                    cardContainer.translationY = targetDeltaY * (1f - t)
+                    cardContainer.scaleX = targetScaleX + (1f - targetScaleX) * t
+                    cardContainer.scaleY = targetScaleY + (1f - targetScaleY) * t
+                    cardCurrentRadius = endLocalRadius + (targetRadius - endLocalRadius) * t
+                    cardContainer.invalidateOutline()
+                    cardContainer.alpha = Math.max(0f, t)
                 }
-                .start()
+                addListener(object : AnimatorListenerAdapter() {
+                    override fun onAnimationEnd(animation: Animator) {
+                        dismissImmediately()
+                    }
+                })
+            }
+            closeAnim.start()
         }
 
         fun dismissImmediately() {

@@ -1215,6 +1215,7 @@ object ControlCenterGrouping {
                 ?: return
 
             anchorView.setTag(0x7f099994, resolvedGroup)
+            anchorView.setTag(0x7f099995, java.lang.Boolean.TRUE)
             applyGroupContainerStyle(anchorView, classLoader, resolvedGroup)
 
             val ctx = anchorView.context
@@ -1274,8 +1275,10 @@ object ControlCenterGrouping {
                 if (s != null && !recordMap.containsKey(s) && r != null) recordMap[s] = r
             }
 
+            var viewsRebuilt = false
             if (container is DynamicGroupContainer) {
                 if (forceRebuild || container.childCount == 0 || container.getTag(0x7f099997) != resolvedGroup.id) {
+                    viewsRebuilt = true
                     container.removeAllViews()
                     container.setTag(0x7f099997, resolvedGroup.id)
                     container.rowCount = rowCount
@@ -1455,7 +1458,9 @@ object ControlCenterGrouping {
                     }
                 }
             }
-            container.requestLayout()
+            if (viewsRebuilt) {
+                container.requestLayout()
+            }
         } catch (t: Throwable) {
             Log.e(TAG, "rebindGroupContainer error", t)
         }
