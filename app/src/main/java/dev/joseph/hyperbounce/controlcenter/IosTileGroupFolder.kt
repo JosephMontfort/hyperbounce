@@ -5,23 +5,22 @@ import android.animation.AnimatorListenerAdapter
 import android.animation.ValueAnimator
 import android.content.Context
 import android.graphics.Color
-import android.graphics.Outline
 import android.graphics.drawable.GradientDrawable
-import android.os.Handler
-import android.os.Looper
+import android.provider.Settings
 import android.util.AttributeSet
 import android.util.Log
 import android.view.Gravity
 import android.view.KeyEvent
+import android.view.LayoutInflater
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
-import android.view.ViewOutlineProvider
 import android.view.animation.PathInterpolator
 import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.TextView
 import java.lang.ref.WeakReference
+import java.lang.reflect.Constructor
 
 /**
  * iOS-style 7-Tile Cluster Container and Expanded Overlay for HyperOS Control Center.
@@ -32,25 +31,48 @@ import java.lang.ref.WeakReference
  *   - Slot (0,1): Tile 3 (Normal 1x1 circular)
  *   - Slot (1,1): Shrunken 4-Tile Sub-Cluster (2x2 sub-grid)
  *     * The 4 shrunken tiles do not trigger tile clicks directly.
- *     * Tapping anywhere on the (1,1) quadrant triggers opening of the Expanded Overlay.
+ *     * No separate background layer underneath the 4 mini tiles.
+ *     * Tapping anywhere on quadrant (1,1) triggers opening of the Expanded Overlay.
  *
  * Expanded State (Full-Screen Overlay):
- *   - High-fidelity Xiaomi native blur (MiBlurCompat) and dark scrim backdrop.
- *   - The underlying Control Center main panel fades out smoothly during expansion.
+ *   - Native Xiaomi blur (MiBlurCompat) and dark scrim backdrop.
+ *   - Underlying Control Center panel fades out smoothly during expansion.
  *   - Symmetrical 2x2 Macro Layout mirroring collapsed state:
- *     * Macro Slot (0,0): Tile 1 expanded to large 2x2 card
- *     * Macro Slot (1,0): Tile 2 expanded to large 2x2 card
- *     * Macro Slot (0,1): Tile 3 expanded to large 2x2 card
- *     * Macro Slot (1,1): 4 circular tiles scaled to standard 1x1 circular tiles with full labels
- *   - Tapping anywhere on the empty blurred backdrop dismisses the folder back into the card.
- *   - Back key presses dismiss the folder.
- *   - Authentic Folme spring physics curve (PathInterpolator(0.33f, 0f, 0.2f, 1f)).
+ *     * Quadrant (0,0): Tile 1 expanded to true 2x2 vertical card (with proper On/Off status)
+ *     * Quadrant (1,0): Tile 2 expanded to true 2x2 vertical card (with proper On/Off status)
+ *     * Quadrant (0,1): Tile 3 expanded to true 2x2 vertical card (with proper On/Off status)
+ *     * Quadrant (1,1): 4 circular tiles in 2x2 sub-grid at standard 1x1 size
+ *       - Label visibility strictly respects wordless_mode ("Show icon labels in control center").
+ *       - When labels enabled, no text overlap with tile icon.
+ *   - All tiles fully receive touches and update their live state/colors.
+ *   - Tapping empty space or swiping up dismisses the overlay with authentic Folme spring physics.
+ *   - If Control Center is dismissed by swipe-up gesture, the overlay closes immediately with it.
  */
 object IosTileGroupFolder {
     private const val TAG = "HyperBounce_IosFolder"
 
     // Folme authentic spring / morph interpolator
     val FOLME_SPRING_INTERPOLATOR = PathInterpolator(0.33f, 0.0f, 0.20f, 1.0f)
+
+    private var activeOverlayRef: WeakReference<IosFolderExpandedOverlay>? = null
+
+    fun isExpandedOverlayActive(): Boolean {
+        val overlay = activeOverlayRef?.get()
+        return overlay != null && overlay.parent != null
+    }
+
+    fun getActiveOverlay(): IosFolderExpandedOverlay? {
+        return activeOverlayRef?.get()
+    }
+
+    fun dismissActiveOverlay(animated: Boolean = false) {
+        val overlay = activeOverlayRef?.get() ?: return
+        if (animated) {
+            overlay.dismissOverlay()
+        } else {
+            overlay.dismissImmediately()
+        }
+    }
 
     /**
      * Collapsed 2x2 Container for the 7-Tile Cluster.
@@ -92,7 +114,6 @@ object IosTileGroupFolder {
             val cellWSpec = MeasureSpec.makeMeasureSpec(colW, MeasureSpec.EXACTLY)
             val cellHSpec = MeasureSpec.makeMeasureSpec(rowH, MeasureSpec.EXACTLY)
 
-            // Measure children
             for (i in 0 until childCount) {
                 val child = getChildAt(i) ?: continue
                 child.measure(cellWSpec, cellHSpec)
@@ -110,11 +131,6 @@ object IosTileGroupFolder {
             val availH = Math.max(0, (b - t) - 2 * pad - gap)
             val rowH = Math.max(0, availH / 2)
 
-            // Layout slots:
-            // Slot 0 (0,0): child 0
-            // Slot 1 (1,0): child 1
-            // Slot 2 (0,1): child 2
-            // Slot 3 (1,1): miniClusterView
             var normalIndex = 0
             for (i in 0 until childCount) {
                 val child = getChildAt(i) ?: continue
@@ -141,12 +157,11 @@ object IosTileGroupFolder {
                 if (child.visibility != View.VISIBLE) child.visibility = View.VISIBLE
                 if (child.alpha < 1.0f && !ControlCenterConfigHolder.sIsEditMode) child.alpha = 1.0f
 
-                // Style circular tile inside collapsed slot
-                styleCollapsedNormalTile(child, density)
+                styleCollapsedNormalTile(child)
             }
         }
 
-        private fun styleCollapsedNormalTile(child: View, density: Float) {
+        private fun styleCollapsedNormalTile(child: View) {
             try {
                 val tileLabelId = context.resources.getIdentifier("tile_label", "id", context.packageName)
                 if (tileLabelId != 0) {
@@ -173,15 +188,7 @@ object IosTileGroupFolder {
                         iflp.rightMargin = 0
                         iconFrame.layoutParams = iflp
                     }
-
-                    if (iconFrame.background == null) {
-                        val discBg = GradientDrawable().apply {
-                            shape = GradientDrawable.OVAL
-                            setColor(Color.parseColor("#38FFFFFF"))
-                            setStroke(Math.max(1, (1.5f * density).toInt()), Color.parseColor("#80FFFFFF"))
-                        }
-                        iconFrame.background = discBg
-                    }
+                    iconFrame.background = null
                 }
             } catch (t: Throwable) {}
         }
@@ -189,6 +196,7 @@ object IosTileGroupFolder {
 
     /**
      * Sub-container housing the 4 shrunken mini circular tiles in 2 rows x 2 columns.
+     * No separate background layer underneath.
      */
     class MiniClusterView(context: Context) : ViewGroup(context) {
 
@@ -198,31 +206,16 @@ object IosTileGroupFolder {
         init {
             isClickable = true
             isFocusable = true
-            clipToOutline = true
+            clipToOutline = false
             clipChildren = false
-            val density = resources.displayMetrics.density
-            val radius = 18 * density
-            outlineProvider = object : ViewOutlineProvider() {
-                override fun getOutline(view: View, outline: Outline) {
-                    outline.setRoundRect(0, 0, view.width, view.height, radius)
-                }
-            }
+            background = null
 
-            // Subtle iOS-style translucent container background
-            val miniBg = GradientDrawable().apply {
-                cornerRadius = radius
-                setColor(Color.parseColor("#1FFFFFFF"))
-            }
-            background = miniBg
-
-            // Tapping opens the expanded folder overlay
             setOnClickListener {
                 val parentCluster = parent as? IosClusterContainer ?: return@setOnClickListener
                 openExpandedFolder(parentCluster)
             }
         }
 
-        // Intercept all touches so child tiles never receive direct clicks
         override fun onInterceptTouchEvent(ev: MotionEvent?): Boolean = true
 
         override fun onTouchEvent(event: MotionEvent): Boolean {
@@ -265,7 +258,7 @@ object IosTileGroupFolder {
 
         override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {
             val density = resources.displayMetrics.density
-            val pad = (4 * density).toInt()
+            val pad = (2 * density).toInt()
             val gap = (4 * density).toInt()
 
             val availW = Math.max(0, (r - l) - 2 * pad - gap)
@@ -294,7 +287,6 @@ object IosTileGroupFolder {
                 child.isLongClickable = false
                 child.isFocusable = false
 
-                // Style mini tile
                 try {
                     val tileLabelId = context.resources.getIdentifier("tile_label", "id", context.packageName)
                     if (tileLabelId != 0) {
@@ -306,13 +298,17 @@ object IosTileGroupFolder {
                     }
                     val iconFrameId = context.resources.getIdentifier("icon_frame", "id", context.packageName)
                     val iconFrame = child.findViewById<View>(iconFrameId)
-                    if (iconFrame != null && iconFrame.background == null) {
-                        val discBg = GradientDrawable().apply {
-                            shape = GradientDrawable.OVAL
-                            setColor(Color.parseColor("#38FFFFFF"))
-                            setStroke(Math.max(1, (1.5f * density).toInt()), Color.parseColor("#80FFFFFF"))
+                    if (iconFrame != null) {
+                        val lp = iconFrame.layoutParams
+                        if (lp is FrameLayout.LayoutParams) {
+                            lp.gravity = Gravity.CENTER
+                            lp.topMargin = 0
+                            lp.bottomMargin = 0
+                            lp.leftMargin = 0
+                            lp.rightMargin = 0
+                            iconFrame.layoutParams = lp
                         }
-                        iconFrame.background = discBg
+                        iconFrame.background = null
                     }
                 } catch (t: Throwable) {}
             }
@@ -338,12 +334,11 @@ object IosTileGroupFolder {
             isFocusable = true
             isFocusableInTouchMode = true
 
-            // 1. Full-screen Scrim / Blur Backdrop
+            // 1. Full-screen Native Blur Scrim Backdrop
             scrimView.layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT)
             scrimView.setBackgroundColor(Color.parseColor("#80000000"))
             addView(scrimView)
 
-            // Apply authentic Xiaomi MiBlurCompat
             val classLoader = sourceContainer.classLoader ?: context.classLoader
             try {
                 val miBlurClass = Class.forName("miui.systemui.util.MiBlurCompat", false, classLoader)
@@ -359,48 +354,98 @@ object IosTileGroupFolder {
                 } catch (t2: Throwable) {}
             }
 
-            // Tapping empty blurred space closes the overlay
+            // Tapping or swiping outside the card closes the overlay
             scrimView.setOnClickListener {
                 dismissOverlay()
             }
+            var scrimDownY = 0f
+            scrimView.setOnTouchListener { v, event ->
+                when (event.action) {
+                    MotionEvent.ACTION_DOWN -> {
+                        scrimDownY = event.y
+                        false
+                    }
+                    MotionEvent.ACTION_UP -> {
+                        val dy = scrimDownY - event.y
+                        if (Math.abs(dy) > 40 * resources.displayMetrics.density) {
+                            dismissOverlay()
+                            true
+                        } else {
+                            v.performClick()
+                            true
+                        }
+                    }
+                    else -> false
+                }
+            }
 
-            // 2. Centered Card Container (Mirroring 2x2 layout at 2x scale)
+            // 2. Centered Card Container respecting advanced textures vs normal blur
             val density = resources.displayMetrics.density
-            val cardPadding = (16 * density).toInt()
+            val cardPadding = (14 * density).toInt()
             val cardCornerRadius = 32 * density
 
             val cardLp = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply {
                 gravity = Gravity.CENTER
-                marginStart = cardPadding
-                marginEnd = cardPadding
+                marginStart = (14 * density).toInt()
+                marginEnd = (14 * density).toInt()
             }
             cardContainer.layoutParams = cardLp
             cardContainer.setPadding(cardPadding, cardPadding, cardPadding, cardPadding)
             cardContainer.clipToOutline = true
-            cardContainer.outlineProvider = object : ViewOutlineProvider() {
-                override fun getOutline(view: View, outline: Outline) {
+            cardContainer.outlineProvider = object : android.view.ViewOutlineProvider() {
+                override fun getOutline(view: View, outline: android.graphics.Outline) {
                     outline.setRoundRect(0, 0, view.width, view.height, cardCornerRadius)
                 }
             }
 
-            // Card background styling
-            val cardBg = GradientDrawable().apply {
-                cornerRadius = cardCornerRadius
-                setColor(Color.parseColor("#331A1A1A"))
-                setStroke(Math.max(1, (1.5f * density).toInt()), Color.parseColor("#38FFFFFF"))
+            val isBlur = ControlCenterGrouping.isAdvancedTexturesEnabled(context, classLoader)
+            if (isBlur) {
+                try {
+                    val miBlurClass = Class.forName("miui.systemui.util.MiBlurCompat", false, classLoader)
+                    val setModeMethod = miBlurClass.getMethod("setMiViewBlurModeCompat", View::class.java, Int::class.javaPrimitiveType)
+                    setModeMethod.invoke(null, cardContainer, 1)
+
+                    val tokenClass = Class.forName("miui.systemui.util.MiuiColorBlendToken", false, classLoader)
+                    val tokenInst = tokenClass.getDeclaredField("INSTANCE").get(null)
+                    val getBlendMethod = tokenClass.getMethod("getCC_TILE_DEFAULT_BLEND_COLORS")
+                    val blendColors = getBlendMethod.invoke(tokenInst)
+
+                    val setBlendMethod = miBlurClass.getMethod("setMiBackgroundBlendColors", View::class.java, blendColors.javaClass)
+                    setBlendMethod.invoke(null, cardContainer, blendColors)
+                } catch (t: Throwable) {}
+
+                val cardBg = GradientDrawable().apply {
+                    cornerRadius = cardCornerRadius
+                    setColor(Color.parseColor("#331A1A1A"))
+                }
+                cardContainer.background = cardBg
+            } else {
+                val cardBg = GradientDrawable().apply {
+                    cornerRadius = cardCornerRadius
+                    setColor(Color.parseColor("#E6202020"))
+                }
+                cardContainer.background = cardBg
             }
-            cardContainer.background = cardBg
 
-            // Apply blur mode to card container
-            try {
-                val miBlurClass = Class.forName("miui.systemui.util.MiBlurCompat", false, classLoader)
-                val setModeMethod = miBlurClass.getMethod("setMiViewBlurModeCompat", View::class.java, Int::class.javaPrimitiveType)
-                setModeMethod.invoke(null, cardContainer, 1)
-            } catch (t: Throwable) {}
-
-            // Populate expanded 2x2 macro grid
             buildExpandedCardContent()
             addView(cardContainer)
+        }
+
+        override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
+            parent?.requestDisallowInterceptTouchEvent(true)
+            return super.dispatchTouchEvent(ev)
+        }
+
+        private fun createExpanded2x2CardView(classLoader: ClassLoader): ViewGroup {
+            val density = resources.displayMetrics.density
+            val qsListCtrl = sourceContainer.qsListCtrl
+            val holder = ControlCenterGrouping.createLargeCardViewHolder(cardContainer, qsListCtrl, classLoader)
+            val cardView = ControlCenterGrouping.getViewHolderItemView(holder) as? ViewGroup
+            if (cardView != null) return cardView
+
+            val fallback = ControlCenterGrouping.inflateTileForType("E", cardContainer, qsListCtrl, classLoader) as ViewGroup
+            ControlCenterGrouping.adjustCardToVertical(fallback, density, context)
+            return fallback
         }
 
         private fun buildExpandedCardContent() {
@@ -412,13 +457,11 @@ object IosTileGroupFolder {
             val mainPanelController = ControlCenterGrouping.getMainPanelController(qsListCtrl)
                 ?: ControlCenterGrouping.getMainPanelController(ControlCenterConfigHolder.sQSListController)
 
-            // Symmetrical 2x2 Macro Layout:
-            // Macro Row 1:
-            //   - Quadrant (0,0): Tile 1 (Expanded into 2x2 vertical card)
-            //   - Quadrant (1,0): Tile 2 (Expanded into 2x2 vertical card)
-            // Macro Row 2:
-            //   - Quadrant (0,1): Tile 3 (Expanded into 2x2 vertical card)
-            //   - Quadrant (1,1): 2x2 sub-grid of Tiles 4, 5, 6, 7 (Normal 1x1 circular tiles with full labels)
+            val isWordless = try {
+                Settings.Secure.getInt(context.contentResolver, "wordless_mode", 0) != 0
+            } catch (t: Throwable) { false }
+            val showLabels = !isWordless
+
             val macroGrid = LinearLayout(context).apply {
                 orientation = LinearLayout.VERTICAL
                 layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
@@ -438,38 +481,37 @@ object IosTileGroupFolder {
                     LinearLayout.LayoutParams.MATCH_PARENT,
                     LinearLayout.LayoutParams.WRAP_CONTENT
                 ).apply {
-                    topMargin = (12 * density).toInt()
+                    topMargin = (10 * density).toInt()
                 }
             }
 
-            val quadHeight = (156 * density).toInt()
+            val res2RowsId = context.resources.getIdentifier("control_center_universal_2_rows_size", "dimen", context.packageName)
+            val quadHeight = if (res2RowsId != 0) context.resources.getDimensionPixelSize(res2RowsId) else (158 * density).toInt()
+
             val quadWeightLp = {
                 LinearLayout.LayoutParams(0, quadHeight, 1f).apply {
-                    marginStart = (6 * density).toInt()
-                    marginEnd = (6 * density).toInt()
+                    marginStart = (5 * density).toInt()
+                    marginEnd = (5 * density).toInt()
                 }
             }
 
             // Quadrant (0,0): Tile 1
             if (group.specs.isNotEmpty()) {
-                val tile1 = ControlCenterGrouping.inflateTileForType("E", cardContainer, qsListCtrl, classLoader)
-                ControlCenterGrouping.adjustCardToVertical(tile1, density, context)
+                val tile1 = createExpanded2x2CardView(classLoader)
                 macroRow1.addView(tile1, quadWeightLp())
                 bindTileDirectly(tile1, group.specs[0], mainPanelController, classLoader)
             }
 
             // Quadrant (1,0): Tile 2
             if (group.specs.size > 1) {
-                val tile2 = ControlCenterGrouping.inflateTileForType("E", cardContainer, qsListCtrl, classLoader)
-                ControlCenterGrouping.adjustCardToVertical(tile2, density, context)
+                val tile2 = createExpanded2x2CardView(classLoader)
                 macroRow1.addView(tile2, quadWeightLp())
                 bindTileDirectly(tile2, group.specs[1], mainPanelController, classLoader)
             }
 
             // Quadrant (0,1): Tile 3
             if (group.specs.size > 2) {
-                val tile3 = ControlCenterGrouping.inflateTileForType("E", cardContainer, qsListCtrl, classLoader)
-                ControlCenterGrouping.adjustCardToVertical(tile3, density, context)
+                val tile3 = createExpanded2x2CardView(classLoader)
                 macroRow2.addView(tile3, quadWeightLp())
                 bindTileDirectly(tile3, group.specs[2], mainPanelController, classLoader)
             }
@@ -499,30 +541,58 @@ object IosTileGroupFolder {
                     0,
                     1f
                 ).apply {
-                    topMargin = (4 * density).toInt()
+                    topMargin = (6 * density).toInt()
                 }
             }
 
             val circLp = {
                 LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f).apply {
-                    marginStart = (2 * density).toInt()
-                    marginEnd = (2 * density).toInt()
+                    marginStart = (3 * density).toInt()
+                    marginEnd = (3 * density).toInt()
                 }
             }
 
             for (i in 3 until Math.min(7, group.specs.size)) {
                 val spec = group.specs[i]
-                val circView = ControlCenterGrouping.inflateTileForType("C", miniSubGrid, qsListCtrl, classLoader)
+                val targetSubRow = if (i < 5) subRow1 else subRow2
+                val circView = ControlCenterGrouping.inflateTileForType("C", targetSubRow, qsListCtrl, classLoader)
 
-                // Ensure labels and icons are fully visible in expanded mode
                 val tileLabelId = context.resources.getIdentifier("tile_label", "id", context.packageName)
-                if (tileLabelId != 0) {
-                    val tileLabel = circView.findViewById<TextView>(tileLabelId)
+                val tileLabel = if (tileLabelId != 0) circView.findViewById<TextView>(tileLabelId) else null
+                val iconFrameId = context.resources.getIdentifier("icon_frame", "id", context.packageName)
+                val iconFrame = if (iconFrameId != 0) circView.findViewById<View>(iconFrameId) else null
+
+                if (showLabels) {
                     tileLabel?.visibility = View.VISIBLE
                     tileLabel?.alpha = 1.0f
+                    val tlp = tileLabel?.layoutParams as? FrameLayout.LayoutParams
+                    if (tlp != null) {
+                        tlp.gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
+                        tlp.bottomMargin = (2 * density).toInt()
+                        tlp.topMargin = 0
+                        tlp.height = (18 * density).toInt()
+                        tileLabel.layoutParams = tlp
+                    }
+                    val iflp = iconFrame?.layoutParams as? FrameLayout.LayoutParams
+                    if (iflp != null) {
+                        iflp.gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
+                        iflp.topMargin = (2 * density).toInt()
+                        iflp.bottomMargin = 0
+                        iconFrame.layoutParams = iflp
+                    }
+                } else {
+                    tileLabel?.visibility = View.GONE
+                    tileLabel?.alpha = 0.0f
+                    val iflp = iconFrame?.layoutParams as? FrameLayout.LayoutParams
+                    if (iflp != null) {
+                        iflp.gravity = Gravity.CENTER
+                        iflp.topMargin = 0
+                        iflp.bottomMargin = 0
+                        iconFrame.layoutParams = iflp
+                    }
                 }
+                iconFrame?.background = null
 
-                val targetSubRow = if (i < 5) subRow1 else subRow2
                 targetSubRow.addView(circView, circLp())
                 bindTileDirectly(circView, spec, mainPanelController, classLoader)
             }
@@ -589,6 +659,12 @@ object IosTileGroupFolder {
                 val currentMode = modeClass.getMethod("valueOf", String::class.java).invoke(null, "NORMAL")
                 val updateModeMethod = childRecord.javaClass.getMethod("updateMode", modeClass, Boolean::class.javaPrimitiveType)
                 updateModeMethod.invoke(childRecord, currentMode, false)
+                try {
+                    val onModeChangedM = view.javaClass.getMethod("onModeChanged", modeClass, Boolean::class.javaPrimitiveType)
+                    onModeChangedM.invoke(view, currentMode, false)
+                } catch (t: Throwable) {}
+
+                val isConnected = (spec == "wifi" || spec == "cell")
 
                 val getTileM = childRecord.javaClass.getMethod("getTile")
                 val tileObj = getTileM.invoke(childRecord)
@@ -604,7 +680,7 @@ object IosTileGroupFolder {
                         for (vm in view.javaClass.methods) {
                             if (vm.name == "updateState" && vm.parameterTypes.size == 3) {
                                 vm.isAccessible = true
-                                vm.invoke(view, curState, true, false)
+                                vm.invoke(view, curState, isConnected, false)
                                 ControlCenterGrouping.applyNonAdvancedStyleToChildTile(view, curState, classLoader)
                                 break
                             }
@@ -612,20 +688,58 @@ object IosTileGroupFolder {
                     }
                 }
 
-                // Explicit click handling to ensure toggles always work in expanded view
                 view.isClickable = true
                 view.isLongClickable = true
                 view.isFocusable = true
-                view.setOnClickListener {
+                view.setOnClickListener { clickedView ->
                     try {
-                        val clickM = childRecord.javaClass.getMethod("click", View::class.java)
-                        clickM.invoke(childRecord, view)
+                        val f = childRecord.javaClass.getDeclaredField("clickAction")
+                        f.isAccessible = true
+                        val action = f.get(childRecord) as? kotlin.jvm.functions.Function1<View, *>
+                        if (action != null) {
+                            action.invoke(clickedView)
+                        } else {
+                            val tObj = childRecord.javaClass.getMethod("getTile").invoke(childRecord)
+                            tObj?.javaClass?.getMethod("click")?.invoke(tObj)
+                        }
                     } catch (t: Throwable) {
                         try {
                             val tObj = childRecord.javaClass.getMethod("getTile").invoke(childRecord)
-                            tObj?.javaClass?.getMethod("click", View::class.java)?.invoke(tObj, view)
+                            tObj?.javaClass?.getMethod("click")?.invoke(tObj)
                         } catch (t2: Throwable) {}
                     }
+
+                    clickedView.postDelayed({
+                        try {
+                            val tObj = childRecord.javaClass.getMethod("getTile").invoke(childRecord)
+                            if (tObj != null) {
+                                tObj.javaClass.getMethod("refreshState").invoke(tObj)
+                                val curState = tObj.javaClass.getMethod("getState").invoke(tObj)
+                                if (curState != null) {
+                                    for (vm in clickedView.javaClass.methods) {
+                                        if (vm.name == "updateState" && vm.parameterTypes.size == 3) {
+                                            vm.isAccessible = true
+                                            vm.invoke(clickedView, curState, isConnected, false)
+                                            ControlCenterGrouping.applyNonAdvancedStyleToChildTile(clickedView, curState, classLoader)
+                                            break
+                                        }
+                                    }
+                                }
+                            }
+                        } catch (t: Throwable) {}
+                    }, 50)
+                }
+
+                view.setOnLongClickListener { clickedView ->
+                    try {
+                        val f = childRecord.javaClass.getDeclaredField("longClickAction")
+                        f.isAccessible = true
+                        val action = f.get(childRecord) as? kotlin.jvm.functions.Function1<View, Boolean>
+                        if (action != null) {
+                            action.invoke(clickedView)
+                            true
+                        } else false
+                    } catch (t: Throwable) { false }
                 }
             } catch (t: Throwable) {
                 Log.e(TAG, "bindTileDirectly error: $spec", t)
@@ -660,10 +774,8 @@ object IosTileGroupFolder {
                 cardContainer.scaleX = initialScale
                 cardContainer.scaleY = initialScale
 
-                // Fade out underlying Control Center panel
                 findMainPanel()?.animate()?.alpha(0f)?.setDuration(220)?.start()
 
-                // Folme spring animation
                 val anim = ValueAnimator.ofFloat(0f, 1f).apply {
                     duration = 320
                     interpolator = FOLME_SPRING_INTERPOLATOR
@@ -684,6 +796,7 @@ object IosTileGroupFolder {
         fun dismissOverlay() {
             if (isClosing) return
             isClosing = true
+            activeOverlayRef = null
 
             val sourceLoc = IntArray(2)
             sourceContainer.getLocationOnScreen(sourceLoc)
@@ -703,7 +816,6 @@ object IosTileGroupFolder {
             val targetDeltaY = (sourceY + sourceH / 2f) - (cardY + cardH / 2f)
             val targetScale = if (cardW > 0) Math.min(1f, sourceW / cardW) else 0.5f
 
-            // Fade in underlying Control Center panel
             findMainPanel()?.animate()?.alpha(1f)?.setDuration(240)?.start()
 
             val anim = ValueAnimator.ofFloat(1f, 0f).apply {
@@ -721,7 +833,7 @@ object IosTileGroupFolder {
                 addListener(object : AnimatorListenerAdapter() {
                     override fun onAnimationEnd(animation: Animator) {
                         (parent as? ViewGroup)?.removeView(this@IosFolderExpandedOverlay)
-                        // Refresh collapsed group tiles state
+                        findMainPanel()?.alpha = 1f
                         sourceContainer.classLoader?.let { cl ->
                             ControlCenterGrouping.rebindGroupContainer(
                                 sourceContainer.parent as? View ?: sourceContainer,
@@ -737,8 +849,24 @@ object IosTileGroupFolder {
             anim.start()
         }
 
+        fun dismissImmediately() {
+            if (isClosing) return
+            isClosing = true
+            activeOverlayRef = null
+            findMainPanel()?.alpha = 1f
+            (parent as? ViewGroup)?.removeView(this)
+            sourceContainer.classLoader?.let { cl ->
+                ControlCenterGrouping.rebindGroupContainer(
+                    sourceContainer.parent as? View ?: sourceContainer,
+                    sourceContainer.group,
+                    sourceContainer.qsListCtrl,
+                    cl,
+                    forceRebuild = false
+                )
+            }
+        }
+
         private fun findMainPanel(): View? {
-            // First search parent hierarchy of sourceContainer
             var curr: View? = sourceContainer
             while (curr != null) {
                 val idName = try { curr.resources.getResourceEntryName(curr.id) } catch (t: Throwable) { "" }
@@ -747,7 +875,6 @@ object IosTileGroupFolder {
                 }
                 curr = curr.parent as? View
             }
-            // Fallback to searching from root
             val root = rootView ?: return null
             val panelIds = arrayOf("main_panel", "right_main_panel", "left_main_panel", "control_center_main_panel", "main_panel_container")
             for (idStr in panelIds) {
@@ -799,6 +926,7 @@ object IosTileGroupFolder {
             if (existing != null) return
 
             val overlay = IosFolderExpandedOverlay(clusterContainer.context, clusterContainer)
+            activeOverlayRef = WeakReference(overlay)
             rootWindow.addView(overlay)
             overlay.playOpenAnimation()
             overlay.requestFocus()

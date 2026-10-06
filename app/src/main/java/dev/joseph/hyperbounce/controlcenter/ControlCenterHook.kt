@@ -211,7 +211,7 @@ object ControlCenterHook {
     fun isChildOfContainer(view: View?): Boolean {
         var cur = view?.parent
         while (cur != null) {
-            if (cur is View && (cur.id == 0x7f099995 || cur.getTag(0x7f099995) != null || cur.getTag(0x7f099993) != null)) {
+            if (cur is View && (cur.id == 0x7f099995 || cur.getTag(0x7f099995) != null || cur.getTag(0x7f099993) != null || cur is IosTileGroupFolder.IosClusterContainer || cur is IosTileGroupFolder.MiniClusterView || cur is IosTileGroupFolder.IosFolderExpandedOverlay)) {
                 return true
             }
             if (cur is View && cur.javaClass.name.contains("RecyclerView")) return false
@@ -500,6 +500,9 @@ object ControlCenterHook {
                                             ControlCenterConfigHolder.sPendingOrientationRebind = false
                                             ControlCenterConfigHolder.wakeAndRefreshAllGroupedTiles()
                                         } else if ("STOPPED" == stateStr || "DESTROYED" == stateStr) {
+                                            try {
+                                                IosTileGroupFolder.dismissActiveOverlay(animated = false)
+                                            } catch (t: Throwable) {}
                                             if (ControlCenterConfigHolder.sIsEditMode) {
                                                 val windowView = chain.thisObject as? View
                                                 ControlCenterConfigHolder.onExitEditMode(windowView, windowView?.context)
@@ -509,6 +512,25 @@ object ControlCenterHook {
                                 }
                             } catch (t: Throwable) {}
                             result
+                        }
+                    }
+                    if (m.name == "onInterceptTouchEvent") {
+                        m.isAccessible = true
+                        module.hook(m).intercept { chain ->
+                            if (IosTileGroupFolder.isExpandedOverlayActive()) {
+                                val ev = chain.args.getOrNull(0) as? MotionEvent
+                                val overlay = IosTileGroupFolder.getActiveOverlay()
+                                if (overlay != null && ev != null) {
+                                    val screenHeight = overlay.resources.displayMetrics.heightPixels
+                                    val navBarSlop = 48 * overlay.resources.displayMetrics.density
+                                    if (ev.rawY >= screenHeight - navBarSlop) {
+                                        return@intercept chain.proceed()
+                                    }
+                                    return@intercept false
+                                }
+                                return@intercept false
+                            }
+                            chain.proceed()
                         }
                     }
                 }
@@ -528,6 +550,9 @@ object ControlCenterHook {
                     if (m.name == "hidePanel") {
                         m.isAccessible = true
                         module.hook(m).intercept { chain ->
+                            try {
+                                IosTileGroupFolder.dismissActiveOverlay(animated = false)
+                            } catch (t: Throwable) {}
                             if (System.currentTimeMillis() - ControlCenterConfigHolder.sLastTouchTime > 350) {
                                 ControlCenterConfigHolder.sIsUserFlicking = false
                                 ControlCenterConfigHolder.sCurrentVelocityY = 0.0f
@@ -2539,6 +2564,49 @@ object ControlCenterHook {
                             } else {
                                 chain.proceed()
                             }
+                        }
+                    }
+                }
+            } catch (t: Throwable) {}
+
+            // 14c-2. Ensure child tiles inside grouped containers update visually on state changes
+            try {
+                val tileViewClass = Class.forName("miui.systemui.controlcenter.qs.tileview.QSTileItemView", false, classLoader)
+                for (m in tileViewClass.declaredMethods) {
+                    if (m.name == "updateState") {
+                        m.isAccessible = true
+                        module.hook(m).intercept { chain ->
+                            val result = chain.proceed()
+                            val itemView = chain.thisObject as? View
+                            if (itemView != null && isChildOfContainer(itemView)) {
+                                val state = chain.args.getOrNull(0) ?: try {
+                                    val f = itemView.javaClass.getDeclaredField("state").apply { isAccessible = true }
+                                    f.get(itemView)
+                                } catch (t: Throwable) { null }
+                                ControlCenterGrouping.applyNonAdvancedStyleToChildTile(itemView, state, classLoader)
+                            }
+                            result
+                        }
+                    }
+                }
+            } catch (t: Throwable) {}
+
+            try {
+                val cardViewClass = Class.forName("miui.systemui.controlcenter.qs.tileview.QSCardItemView", false, classLoader)
+                for (m in cardViewClass.declaredMethods) {
+                    if (m.name == "updateState") {
+                        m.isAccessible = true
+                        module.hook(m).intercept { chain ->
+                            val result = chain.proceed()
+                            val itemView = chain.thisObject as? View
+                            if (itemView != null && isChildOfContainer(itemView)) {
+                                val state = chain.args.getOrNull(0) ?: try {
+                                    val f = itemView.javaClass.getDeclaredField("state").apply { isAccessible = true }
+                                    f.get(itemView)
+                                } catch (t: Throwable) { null }
+                                ControlCenterGrouping.applyNonAdvancedStyleToChildTile(itemView, state, classLoader)
+                            }
+                            result
                         }
                     }
                 }
