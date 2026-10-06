@@ -319,8 +319,8 @@ fun LiquidBottomTabs(
                         val progress = dampedDragAnimation.pressProgress
                         vibrancy()
                         liquidLens(
-                            10f.dp.toPx() * progress,
-                            14f.dp.toPx() * progress,
+                            8f.dp.toPx() * progress,
+                            11f.dp.toPx() * progress,
                             chromaticAberration = glass.chromaticAberration
                         )
                     },

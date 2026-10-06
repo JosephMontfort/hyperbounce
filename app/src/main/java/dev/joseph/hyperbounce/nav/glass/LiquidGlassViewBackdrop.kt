@@ -424,8 +424,6 @@ internal class LiquidGlassViewBackdrop(
 
     private fun ensureBuffers(width: Int, height: Int) {
         if (front?.width != width || front?.height != height) {
-            front?.recycle()
-            back?.recycle()
             front = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
             back = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
         }
@@ -454,11 +452,9 @@ internal class LiquidGlassViewBackdrop(
 
         fun ensureBuffers(w: Int, h: Int) {
             if (frontBitmap == null || frontBitmap?.isRecycled == true || frontBitmap?.width != w || frontBitmap?.height != h) {
-                frontBitmap?.recycle()
                 frontBitmap = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
             }
             if (backBitmap == null || backBitmap?.isRecycled == true || backBitmap?.width != w || backBitmap?.height != h) {
-                backBitmap?.recycle()
                 backBitmap = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
             }
         }
@@ -466,7 +462,6 @@ internal class LiquidGlassViewBackdrop(
         fun ensureFullBuffer(w: Int, h: Int): Bitmap {
             var fb = fullBuffer
             if (fb == null || fb.isRecycled || fb.width != w || fb.height != h) {
-                fb?.recycle()
                 fb = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
                 fullBuffer = fb
             }
@@ -514,15 +509,19 @@ internal class LiquidGlassViewBackdrop(
     ) {
         val frame = capturedFrame ?: return
         val coords = coordinates ?: return
+        val bmp = frame.bitmap
+        if (bmp.isRecycled) return
 
         val targetPosition = coords.positionInWindow()
         val drawOffset = targetPosition - frame.originInWindow
 
-        scale(2f, 2f, Offset.Zero) {
-            drawImage(
-                image = frame.bitmap.asImageBitmap(),
-                topLeft = -drawOffset * 0.5f,
-            )
-        }
+        try {
+            scale(2f, 2f, Offset.Zero) {
+                drawImage(
+                    image = bmp.asImageBitmap(),
+                    topLeft = -drawOffset * 0.5f,
+                )
+            }
+        } catch (_: Throwable) {}
     }
 }

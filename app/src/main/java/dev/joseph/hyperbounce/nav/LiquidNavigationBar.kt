@@ -594,8 +594,8 @@ fun LiquidNavigationBar(
                                     effects = {
                                         val progress = dampedDragAnimation.pressProgress
                                         liquidLens(
-                                            10f.dp.toPx() * progress * pillGlassIntensity,
-                                            14f.dp.toPx() * progress * pillGlassIntensity,
+                                            8f.dp.toPx() * progress * pillGlassIntensity,
+                                            11f.dp.toPx() * progress * pillGlassIntensity,
                                             chromaticAberration = pillChromaticAberration,
                                         )
                                     },
