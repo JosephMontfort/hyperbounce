@@ -405,7 +405,7 @@ object IosTileGroupFolder {
 
             // 1. Full-screen Clean Scrim Backdrop over existing CC window blur
             scrimView.layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT)
-            scrimView.setBackgroundColor(Color.parseColor("#B3000000"))
+            scrimView.setBackgroundColor(Color.parseColor("#4D000000"))
             addView(scrimView)
 
             // Tapping or swiping outside the card closes the overlay
@@ -817,7 +817,13 @@ object IosTileGroupFolder {
                     .setDuration(240)
                     .start()
 
-                cardContainer.setLayerType(View.LAYER_TYPE_HARDWARE, null)
+                val mainPanel = findMainPanel()
+                mainPanel?.animate()
+                    ?.alpha(0f)
+                    ?.setDuration(280)
+                    ?.setInterpolator(FOLME_SPRING_INTERPOLATOR)
+                    ?.start()
+
                 cardContainer.animate()
                     .translationX(0f)
                     .translationY(0f)
@@ -826,10 +832,6 @@ object IosTileGroupFolder {
                     .alpha(1f)
                     .setDuration(280)
                     .setInterpolator(FOLME_SPRING_INTERPOLATOR)
-                    .withEndAction {
-                        cardContainer.setLayerType(View.LAYER_TYPE_NONE, null)
-                        findMainPanel()?.alpha = 0f
-                    }
                     .start()
             }
         }
@@ -878,14 +880,18 @@ object IosTileGroupFolder {
             val targetDeltaY = (sourceY + sourceH / 2f) - (cardY + cardH / 2f)
             val targetScale = if (cardW > 0) Math.min(1f, sourceW / cardW) else 0.5f
 
-            findMainPanel()?.alpha = 1f
+            val mainPanel = findMainPanel()
+            mainPanel?.animate()
+                ?.alpha(1f)
+                ?.setDuration(240)
+                ?.setInterpolator(FOLME_SPRING_INTERPOLATOR)
+                ?.start()
 
             scrimView.animate()
                 .alpha(0f)
                 .setDuration(200)
                 .start()
 
-            cardContainer.setLayerType(View.LAYER_TYPE_HARDWARE, null)
             cardContainer.animate()
                 .translationX(targetDeltaX)
                 .translationY(targetDeltaY)
@@ -895,7 +901,6 @@ object IosTileGroupFolder {
                 .setDuration(240)
                 .setInterpolator(FOLME_SPRING_INTERPOLATOR)
                 .withEndAction {
-                    cardContainer.setLayerType(View.LAYER_TYPE_NONE, null)
                     dismissImmediately()
                 }
                 .start()
@@ -906,7 +911,9 @@ object IosTileGroupFolder {
             isDismissed = true
             isClosing = true
             activeOverlayRef = null
-            findMainPanel()?.alpha = 1f
+            val mainPanel = findMainPanel()
+            mainPanel?.animate()?.cancel()
+            mainPanel?.alpha = 1f
             restoreOriginalHolders()
             val p = parent as? ViewGroup
             p?.removeView(this)
@@ -915,7 +922,9 @@ object IosTileGroupFolder {
         override fun onDetachedFromWindow() {
             super.onDetachedFromWindow()
             activeOverlayRef = null
-            findMainPanel()?.alpha = 1f
+            val mainPanel = findMainPanel()
+            mainPanel?.animate()?.cancel()
+            mainPanel?.alpha = 1f
         }
 
         private fun findMainPanel(): View? {

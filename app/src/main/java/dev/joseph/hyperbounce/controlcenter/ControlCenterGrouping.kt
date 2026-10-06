@@ -1077,7 +1077,6 @@ object ControlCenterGrouping {
 
     fun applyNonAdvancedStyleToChildTile(childView: View?, curState: Any?, classLoader: ClassLoader) {
         if (childView == null) return
-        if (isAdvancedTexturesEnabled(childView.context, classLoader)) return
         try {
             val ctx = childView.context
             val density = ctx.resources.displayMetrics.density
