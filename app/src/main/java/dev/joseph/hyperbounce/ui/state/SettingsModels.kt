@@ -341,6 +341,7 @@ data class ControlCenterSettings(
     val flashlightMaxBrightness: Int = 100,
     val true2dGridEnabled: Boolean = true,
     val fluidResizeEnabled: Boolean = true,
+    val iosIconographyEnabled: Boolean = false,
     val landscapeRightMaxRows: Int = 3
 )
 

@@ -52,6 +52,7 @@ data class ControlCenterConfig(
     var flashlightMaxBrightness: Int = 100,
     var true2dGridEnabled: Boolean = true,
     var fluidResizeEnabled: Boolean = true,
+    var iosIconographyEnabled: Boolean = false,
     var landscapeRightMaxRows: Int = 3
 ) {
     val isModularEditActive: Boolean get() = masterEnabled && modularEditEnabled
@@ -59,6 +60,7 @@ data class ControlCenterConfig(
     val isJellyActive: Boolean get() = masterEnabled && jellyEnabled
     val isFlashlightActive: Boolean get() = masterEnabled && lowEndFlashlightEnabled
     val isTrue2dGridActive: Boolean get() = isModularEditActive && true2dGridEnabled
+    val isIosIconographyActive: Boolean get() = masterEnabled && iosIconographyEnabled
     fun isLowEndAnim(): Boolean = animEngineMode == 1
 }
 
@@ -246,6 +248,7 @@ object ControlCenterConfigHolder {
             flashlightMaxBrightness = prefs.getInt("cc_flashlight_max_brightness", 100),
             true2dGridEnabled = prefs.getBoolean("cc_true_2d_grid_enabled", true),
             fluidResizeEnabled = prefs.getBoolean("cc_fluid_resize_enabled", true),
+            iosIconographyEnabled = prefs.getBoolean("cc_ios_iconography_enabled", false),
             landscapeRightMaxRows = prefs.getInt("cc_landscape_right_max_rows", 3)
         )
     }

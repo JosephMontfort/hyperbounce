@@ -1278,6 +1278,7 @@ class SettingsRepository(context: Context) {
         var flashlightMaxBrightness by prefsIntState("cc_flashlight_max_brightness", defaults.flashlightMaxBrightness); private set
         var true2dGridEnabled by prefsBooleanState("cc_true_2d_grid_enabled", defaults.true2dGridEnabled); private set
         var fluidResizeEnabled by prefsBooleanState("cc_fluid_resize_enabled", defaults.fluidResizeEnabled); private set
+        var iosIconographyEnabled by prefsBooleanState("cc_ios_iconography_enabled", defaults.iosIconographyEnabled); private set
         var landscapeRightMaxRows by prefsIntState("cc_landscape_right_max_rows", defaults.landscapeRightMaxRows); private set
 
         fun snapshot(): ControlCenterSettings = ControlCenterSettings(
@@ -1288,13 +1289,14 @@ class SettingsRepository(context: Context) {
             tileShowResponse, tileShowDamping, tileHideResponse, tileHideDamping,
             tileShrinkResponse, tileShrinkDamping, tileDelayScale, frictionMultiplier,
             lowEndFlashlightEnabled, flashlightMaxBrightness, true2dGridEnabled, fluidResizeEnabled,
-            landscapeRightMaxRows
+            iosIconographyEnabled, landscapeRightMaxRows
         )
 
         @JvmName("setCcMasterEnabledPref") fun setMasterEnabled(v: Boolean) { masterEnabled = v }
         @JvmName("setCcLandscapeRightMaxRowsPref") fun setLandscapeRightMaxRows(v: Int) { landscapeRightMaxRows = v.coerceIn(1, 6) }
         @JvmName("setCcTrue2dGridEnabledPref") fun setTrue2dGridEnabled(v: Boolean) { true2dGridEnabled = v }
         @JvmName("setCcFluidResizeEnabledPref") fun setFluidResizeEnabled(v: Boolean) { fluidResizeEnabled = v }
+        @JvmName("setCcIosIconographyEnabledPref") fun setIosIconographyEnabled(v: Boolean) { iosIconographyEnabled = v }
         @JvmName("setCcModularEditEnabledPref") fun setModularEditEnabled(v: Boolean) { modularEditEnabled = v }
         @JvmName("setCcAnimEnabledPref") fun setAnimEnabled(v: Boolean) { animEnabled = v }
         @JvmName("setCcJellyEnabledPref") fun setJellyEnabled(v: Boolean) { jellyEnabled = v }
@@ -1324,6 +1326,7 @@ class SettingsRepository(context: Context) {
             modularEditEnabled = defaults.modularEditEnabled
             true2dGridEnabled = defaults.true2dGridEnabled
             fluidResizeEnabled = defaults.fluidResizeEnabled
+            iosIconographyEnabled = defaults.iosIconographyEnabled
             animEnabled = defaults.animEnabled
             jellyEnabled = defaults.jellyEnabled
             animEngineMode = defaults.animEngineMode

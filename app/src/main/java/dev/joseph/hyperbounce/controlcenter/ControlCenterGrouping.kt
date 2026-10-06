@@ -1185,6 +1185,13 @@ object ControlCenterGrouping {
                     val iconFrame = childView.findViewById<View>(iconFrameId)
                     iconFrame?.background = null
                 }
+
+                if (ControlCenterConfigHolder.config.isIosIconographyActive) {
+                    val spec = (childView.getTag(0x7f099990) as? String) ?: ControlCenterConfigHolder.getOrResolveTileSpec(childView)
+                    if (spec != null) {
+                        IosIconographyManager.applyIosIconToTile(childView, spec, curState)
+                    }
+                }
             }
         } catch (t: Throwable) {
             Log.e(TAG, "applyNonAdvancedStyleToChildTile error", t)

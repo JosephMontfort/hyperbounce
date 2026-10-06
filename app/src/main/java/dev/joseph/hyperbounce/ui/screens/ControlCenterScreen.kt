@@ -107,6 +107,16 @@ fun ControlCenterScreen(
                         onCheckedChange = cc::setFluidResizeEnabled,
                         enabled = cc.masterEnabled
                     )
+                    RowDivider(colors.separator)
+                    SettingsToggleRow(
+                        title = "iOS iconography",
+                        subtitle = "replace supported tiles icons with iOS-style ones",
+                        colors = colors,
+                        backdrop = backdrop,
+                        checked = cc.iosIconographyEnabled,
+                        onCheckedChange = cc::setIosIconographyEnabled,
+                        enabled = cc.masterEnabled
+                    )
                 }
             }
         }

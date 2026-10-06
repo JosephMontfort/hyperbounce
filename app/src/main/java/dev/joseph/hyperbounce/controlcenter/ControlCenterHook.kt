@@ -2608,21 +2608,29 @@ object ControlCenterHook {
                 }
             } catch (t: Throwable) {}
 
-            // 14c-2. Ensure child tiles inside grouped containers update visually on state changes
+            // 14c-2. Ensure child tiles inside grouped containers update visually on state changes, and apply iOS iconography if active
             try {
                 val tileViewClass = Class.forName("miui.systemui.controlcenter.qs.tileview.QSTileItemView", false, classLoader)
                 for (m in tileViewClass.declaredMethods) {
-                    if (m.name == "updateState") {
+                    if (m.name == "updateState" || m.name == "updateCustomizeState") {
                         m.isAccessible = true
                         module.hook(m).intercept { chain ->
                             val result = chain.proceed()
                             val itemView = chain.thisObject as? View
-                            if (itemView != null && isChildOfContainer(itemView)) {
+                            if (itemView != null) {
                                 val state = chain.args.getOrNull(0) ?: try {
                                     val f = itemView.javaClass.getDeclaredField("state").apply { isAccessible = true }
                                     f.get(itemView)
                                 } catch (t: Throwable) { null }
-                                ControlCenterGrouping.applyNonAdvancedStyleToChildTile(itemView, state, classLoader)
+                                if (isChildOfContainer(itemView)) {
+                                    ControlCenterGrouping.applyNonAdvancedStyleToChildTile(itemView, state, classLoader)
+                                }
+                                if (ControlCenterConfigHolder.config.isIosIconographyActive) {
+                                    val spec = (itemView.getTag(0x7f099990) as? String) ?: ControlCenterConfigHolder.getOrResolveTileSpec(itemView)
+                                    if (spec != null) {
+                                        IosIconographyManager.applyIosIconToTile(itemView, spec, state)
+                                    }
+                                }
                             }
                             result
                         }
@@ -2633,17 +2641,79 @@ object ControlCenterHook {
             try {
                 val cardViewClass = Class.forName("miui.systemui.controlcenter.qs.tileview.QSCardItemView", false, classLoader)
                 for (m in cardViewClass.declaredMethods) {
-                    if (m.name == "updateState") {
+                    if (m.name == "updateState" || m.name == "updateCustomizeState") {
                         m.isAccessible = true
                         module.hook(m).intercept { chain ->
                             val result = chain.proceed()
                             val itemView = chain.thisObject as? View
-                            if (itemView != null && isChildOfContainer(itemView)) {
+                            if (itemView != null) {
                                 val state = chain.args.getOrNull(0) ?: try {
                                     val f = itemView.javaClass.getDeclaredField("state").apply { isAccessible = true }
                                     f.get(itemView)
                                 } catch (t: Throwable) { null }
-                                ControlCenterGrouping.applyNonAdvancedStyleToChildTile(itemView, state, classLoader)
+                                if (isChildOfContainer(itemView)) {
+                                    ControlCenterGrouping.applyNonAdvancedStyleToChildTile(itemView, state, classLoader)
+                                }
+                                if (ControlCenterConfigHolder.config.isIosIconographyActive) {
+                                    val spec = (itemView.getTag(0x7f099990) as? String) ?: ControlCenterConfigHolder.getOrResolveTileSpec(itemView)
+                                    if (spec != null) {
+                                        IosIconographyManager.applyIosIconToTile(itemView, spec, state)
+                                    }
+                                }
+                            }
+                            result
+                        }
+                    }
+                }
+            } catch (t: Throwable) {}
+
+            try {
+                val iconViewClass = Class.forName("miui.systemui.controlcenter.qs.tileview.QSTileItemIconView", false, classLoader)
+                for (m in iconViewClass.declaredMethods) {
+                    if (m.name == "updateIcon" || m.name == "updateIconInternal") {
+                        m.isAccessible = true
+                        module.hook(m).intercept { chain ->
+                            val result = chain.proceed()
+                            if (ControlCenterConfigHolder.config.isIosIconographyActive) {
+                                val iconView = chain.thisObject as? View
+                                val state = chain.args.getOrNull(0)
+                                val spec = try {
+                                    val sf = state?.javaClass?.getField("spec")
+                                    sf?.get(state) as? String
+                                } catch (t: Throwable) { null } ?: run {
+                                    val p = (iconView?.parent as? View) ?: (iconView?.parent?.parent as? View)
+                                    p?.let { (it.getTag(0x7f099990) as? String) ?: ControlCenterConfigHolder.getOrResolveTileSpec(it) }
+                                }
+                                if (iconView != null && spec != null) {
+                                    IosIconographyManager.applyIosIconToTile(iconView, spec, state)
+                                }
+                            }
+                            result
+                        }
+                    }
+                }
+            } catch (t: Throwable) {}
+
+            try {
+                val cardIconViewClass = Class.forName("miui.systemui.controlcenter.qs.tileview.QSCardItemIconView", false, classLoader)
+                for (m in cardIconViewClass.declaredMethods) {
+                    if (m.name == "setIcon") {
+                        m.isAccessible = true
+                        module.hook(m).intercept { chain ->
+                            val result = chain.proceed()
+                            if (ControlCenterConfigHolder.config.isIosIconographyActive) {
+                                val iconView = chain.thisObject as? View
+                                val state = chain.args.getOrNull(0)
+                                val spec = try {
+                                    val sf = state?.javaClass?.getField("spec")
+                                    sf?.get(state) as? String
+                                } catch (t: Throwable) { null } ?: run {
+                                    val p = (iconView?.parent as? View) ?: (iconView?.parent?.parent as? View)
+                                    p?.let { (it.getTag(0x7f099990) as? String) ?: ControlCenterConfigHolder.getOrResolveTileSpec(it) }
+                                }
+                                if (iconView != null && spec != null) {
+                                    IosIconographyManager.applyIosIconToTile(iconView, spec, state)
+                                }
                             }
                             result
                         }
@@ -2829,7 +2899,7 @@ object ControlCenterHook {
                             } catch (t: Throwable) {}
                             result
                         }
-                    } else if (m.name == "updateSize" || m.name == "setDetailAvailable") {
+                    } else if (m.name == "updateSize" || m.name == "setDetailAvailable" || m.name == "updatePlayRes" || m.name == "updateIconsInfo" || m.name == "updateResources") {
                         m.isAccessible = true
                         module.hook(m).intercept { chain ->
                             val result = chain.proceed()
@@ -5996,6 +6066,19 @@ object ControlCenterHook {
                 resizeHandle?.setOnClickListener(null)
                 resizeHandle?.setOnTouchListener(null)
                 resizeHandle?.isClickable = false
+            }
+
+            if (ControlCenterConfigHolder.config.isIosIconographyActive) {
+                val holderClass = holder.javaClass
+                val playRes = try {
+                    val f = holderClass.getDeclaredField("playRes").apply { isAccessible = true }
+                    f.getInt(holder)
+                } catch (t: Throwable) { 0 }
+                val resName = if (playRes != 0) {
+                    try { ctx.resources.getResourceEntryName(playRes) } catch (t: Throwable) { "" }
+                } else ""
+                val isPlaying = resName.contains("pause", ignoreCase = true)
+                IosIconographyManager.applyIosMediaIcons(holder, isPlaying)
             }
         } catch (t: Throwable) {
             Log.e(TAG, "applyMediaPlayerLayout error", t)
