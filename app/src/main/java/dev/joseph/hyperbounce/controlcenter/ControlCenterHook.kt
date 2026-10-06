@@ -3045,6 +3045,7 @@ object ControlCenterHook {
                             chain.proceed()
                         }
                     }
+                }
             } catch (t: Throwable) {}
 
             // 16e. Hook QSControlMiPlayDetailHeader & MediaPanelDelegate for expanded media player iOS iconography
