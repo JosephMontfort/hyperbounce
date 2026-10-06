@@ -65,12 +65,26 @@ object IosTileGroupFolder {
         return activeOverlayRef?.get()
     }
 
-    fun dismissActiveOverlay(animated: Boolean = false) {
-        val overlay = activeOverlayRef?.get() ?: return
-        if (animated) {
-            overlay.dismissOverlay()
-        } else {
-            overlay.dismissImmediately()
+    fun dismissActiveOverlay(rootView: View? = null, animated: Boolean = false) {
+        val overlay = activeOverlayRef?.get()
+        activeOverlayRef = null
+        if (overlay != null) {
+            if (animated) {
+                overlay.dismissOverlay()
+            } else {
+                overlay.dismissImmediately()
+            }
+        }
+        if (rootView != null) {
+            try {
+                val root = rootView.rootView as? ViewGroup
+                val orphan = root?.findViewById<View>(0x7f09999b)
+                if (orphan is IosFolderExpandedOverlay) {
+                    orphan.dismissImmediately()
+                } else if (orphan != null) {
+                    root.removeView(orphan)
+                }
+            } catch (t: Throwable) {}
         }
     }
 
@@ -138,7 +152,8 @@ object IosTileGroupFolder {
                     val miniLeft = pad + 1 * (colW + gap)
                     val miniTop = pad + 1 * (rowH + gap)
                     child.layout(miniLeft, miniTop, miniLeft + colW, miniTop + rowH)
-                    if (child.visibility != View.VISIBLE) child.visibility = View.VISIBLE
+                    child.visibility = View.VISIBLE
+                    child.alpha = 1.0f
                     continue
                 }
 
@@ -154,8 +169,12 @@ object IosTileGroupFolder {
                 val childTop = pad + row * (rowH + gap)
                 child.layout(childLeft, childTop, childLeft + colW, childTop + rowH)
 
-                if (child.visibility != View.VISIBLE) child.visibility = View.VISIBLE
-                if (child.alpha < 1.0f && !ControlCenterConfigHolder.sIsEditMode) child.alpha = 1.0f
+                child.visibility = View.VISIBLE
+                if (!ControlCenterConfigHolder.sIsEditMode) child.alpha = 1.0f
+                child.scaleX = 1.0f
+                child.scaleY = 1.0f
+                child.translationX = 0f
+                child.translationY = 0f
 
                 styleCollapsedNormalTile(child)
             }
@@ -163,6 +182,13 @@ object IosTileGroupFolder {
 
         private fun styleCollapsedNormalTile(child: View) {
             try {
+                child.visibility = View.VISIBLE
+                if (!ControlCenterConfigHolder.sIsEditMode) child.alpha = 1.0f
+                child.scaleX = 1.0f
+                child.scaleY = 1.0f
+                child.translationX = 0f
+                child.translationY = 0f
+
                 val tileLabelId = context.resources.getIdentifier("tile_label", "id", context.packageName)
                 if (tileLabelId != 0) {
                     val tileLabel = child.findViewById<View>(tileLabelId)
@@ -302,7 +328,7 @@ object IosTileGroupFolder {
 
             val baseSize = getBaseTileSize()
             val targetSize = Math.min(subW, subH)
-            val scale = if (baseSize > 0) targetSize / baseSize.toFloat() else 0.45f
+            val scale = if (baseSize > 0 && targetSize > 10) (targetSize / baseSize.toFloat()).coerceIn(0.2f, 0.6f) else 0.42f
             val halfBase = baseSize / 2f
 
             for (i in 0 until childCount) {
@@ -321,6 +347,8 @@ object IosTileGroupFolder {
                 child.pivotY = halfBase
                 child.scaleX = scale
                 child.scaleY = scale
+                child.visibility = View.VISIBLE
+                child.alpha = 1.0f
 
                 child.isClickable = false
                 child.isLongClickable = false
@@ -365,6 +393,8 @@ object IosTileGroupFolder {
         private val scrimView = View(context)
         private val cardContainer = FrameLayout(context)
         private var isClosing = false
+        private var isDismissed = false
+        private val originalHolders = HashMap<Any, Any?>()
 
         init {
             id = 0x7f09999b
@@ -416,14 +446,18 @@ object IosTileGroupFolder {
             cardContainer.setPadding(cardPadding, cardPadding, cardPadding, cardPadding)
 
             val classLoader = sourceContainer.classLoader ?: context.classLoader
-            ControlCenterGrouping.applyGroupContainerStyle(cardContainer, classLoader)
+            ControlCenterGrouping.applyGroupContainerStyle(cardContainer, classLoader, sourceContainer.group)
 
             buildExpandedCardContent()
             addView(cardContainer)
         }
 
         override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
-            parent?.requestDisallowInterceptTouchEvent(true)
+            val screenHeight = resources.displayMetrics.heightPixels
+            val navBarSlop = 48 * resources.displayMetrics.density
+            if (ev.rawY < screenHeight - navBarSlop) {
+                parent?.requestDisallowInterceptTouchEvent(true)
+            }
             return super.dispatchTouchEvent(ev)
         }
 
@@ -557,11 +591,11 @@ object IosTileGroupFolder {
                     tileLabel?.visibility = View.VISIBLE
                     tileLabel?.alpha = 1.0f
                     tileLabel?.maxLines = 1
-                    tileLabel?.textSize = 10.5f
+                    tileLabel?.textSize = 10f
                     val tlp = tileLabel?.layoutParams as? FrameLayout.LayoutParams
                     if (tlp != null) {
                         tlp.gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
-                        tlp.bottomMargin = 0
+                        tlp.bottomMargin = (2 * density).toInt()
                         tlp.topMargin = 0
                         tlp.height = (15 * density).toInt()
                         tileLabel.layoutParams = tlp
@@ -569,12 +603,12 @@ object IosTileGroupFolder {
                     val iflp = iconFrame?.layoutParams as? FrameLayout.LayoutParams
                     if (iflp != null) {
                         iflp.gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
-                        iflp.topMargin = 0
+                        iflp.topMargin = (2 * density).toInt()
                         iflp.bottomMargin = 0
                         iconFrame.layoutParams = iflp
                     }
-                    circView.scaleX = 0.85f
-                    circView.scaleY = 0.85f
+                    circView.scaleX = 0.78f
+                    circView.scaleY = 0.78f
                 } else {
                     tileLabel?.visibility = View.GONE
                     tileLabel?.alpha = 0.0f
@@ -585,8 +619,8 @@ object IosTileGroupFolder {
                         iflp.bottomMargin = 0
                         iconFrame.layoutParams = iflp
                     }
-                    circView.scaleX = 0.95f
-                    circView.scaleY = 0.95f
+                    circView.scaleX = 0.90f
+                    circView.scaleY = 0.90f
                 }
                 iconFrame?.background = null
 
@@ -634,6 +668,13 @@ object IosTileGroupFolder {
                 }
 
                 val childRecord = recordMap[spec] ?: return
+                try {
+                    val origH = childRecord.javaClass.getMethod("getHolder").invoke(childRecord)
+                    if (origH != null && !originalHolders.containsKey(childRecord)) {
+                        originalHolders[childRecord] = origH
+                    }
+                } catch (t: Throwable) {}
+
                 val subHolder = ControlCenterGrouping.createSubHolderForView(view, mainPanelController, classLoader) ?: return
                 ControlCenterGrouping.attachSubHolder(subHolder)
 
@@ -793,8 +834,29 @@ object IosTileGroupFolder {
             }
         }
 
+        private fun restoreOriginalHolders() {
+            try {
+                val classLoader = sourceContainer.classLoader ?: context.classLoader
+                val holderClass = Class.forName("miui.systemui.controlcenter.panel.main.recyclerview.MainPanelItemViewHolder", false, classLoader)
+                for ((record, origHolder) in originalHolders) {
+                    if (origHolder != null) {
+                        try {
+                            val setHolderMethod = record.javaClass.getMethod("setHolder", holderClass)
+                            setHolderMethod.invoke(record, origHolder)
+                            val onBindMethod = record.javaClass.getMethod("onBindViewHolder")
+                            onBindMethod.invoke(record)
+                        } catch (t: Throwable) {}
+                    }
+                }
+                originalHolders.clear()
+                ControlCenterConfigHolder.wakeAndRefreshAllGroupedTiles()
+            } catch (t: Throwable) {
+                Log.e(TAG, "restoreOriginalHolders error", t)
+            }
+        }
+
         fun dismissOverlay() {
-            if (isClosing) return
+            if (isClosing || isDismissed) return
             isClosing = true
             activeOverlayRef = null
 
@@ -840,38 +902,14 @@ object IosTileGroupFolder {
         }
 
         fun dismissImmediately() {
-            if (isClosing) {
-                (parent as? ViewGroup)?.removeView(this)
-                findMainPanel()?.alpha = 1f
-                return
-            }
+            if (isDismissed) return
+            isDismissed = true
             isClosing = true
             activeOverlayRef = null
             findMainPanel()?.alpha = 1f
-            (parent as? ViewGroup)?.removeView(this)
-            sourceContainer.classLoader?.let { cl ->
-                ControlCenterGrouping.rebindGroupContainer(
-                    sourceContainer.parent as? View ?: sourceContainer,
-                    sourceContainer.group,
-                    sourceContainer.qsListCtrl,
-                    cl,
-                    forceRebuild = false
-                )
-            }
-        }
-
-        override fun onWindowVisibilityChanged(visibility: Int) {
-            super.onWindowVisibilityChanged(visibility)
-            if (visibility != View.VISIBLE) {
-                dismissImmediately()
-            }
-        }
-
-        override fun onVisibilityAggregated(isVisible: Boolean) {
-            super.onVisibilityAggregated(isVisible)
-            if (!isVisible) {
-                dismissImmediately()
-            }
+            restoreOriginalHolders()
+            val p = parent as? ViewGroup
+            p?.removeView(this)
         }
 
         override fun onDetachedFromWindow() {
@@ -937,7 +975,13 @@ object IosTileGroupFolder {
         try {
             val rootWindow = getTargetRootView(clusterContainer) ?: return
             val existing = rootWindow.findViewById<View>(0x7f09999b)
-            if (existing != null) return
+            if (existing != null) {
+                if (existing is IosFolderExpandedOverlay) {
+                    existing.dismissImmediately()
+                } else {
+                    (existing.parent as? ViewGroup)?.removeView(existing)
+                }
+            }
 
             val overlay = IosFolderExpandedOverlay(clusterContainer.context, clusterContainer)
             activeOverlayRef = WeakReference(overlay)

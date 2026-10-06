@@ -1077,6 +1077,7 @@ object ControlCenterGrouping {
 
     fun applyNonAdvancedStyleToChildTile(childView: View?, curState: Any?, classLoader: ClassLoader) {
         if (childView == null) return
+        if (isAdvancedTexturesEnabled(childView.context, classLoader)) return
         try {
             val ctx = childView.context
             val density = ctx.resources.displayMetrics.density
@@ -1424,7 +1425,8 @@ object ControlCenterGrouping {
                                     for (vm in childView.javaClass.methods) {
                                         if (vm.name == "updateState" && vm.parameterTypes.size == 3) {
                                             vm.isAccessible = true
-                                            vm.invoke(childView, curState, true, false)
+                                            val isConnected = (childSpec == "wifi" || childSpec == "cell")
+                                            vm.invoke(childView, curState, isConnected, false)
                                             applyNonAdvancedStyleToChildTile(childView, curState, classLoader)
                                             break
                                         }

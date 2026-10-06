@@ -501,7 +501,7 @@ object ControlCenterHook {
                                             ControlCenterConfigHolder.wakeAndRefreshAllGroupedTiles()
                                         } else if ("CREATED" == stateStr || "STOPPED" == stateStr || "DESTROYED" == stateStr) {
                                             try {
-                                                IosTileGroupFolder.dismissActiveOverlay(animated = false)
+                                                IosTileGroupFolder.dismissActiveOverlay(chain.thisObject as? View, animated = false)
                                             } catch (t: Throwable) {}
                                             if (ControlCenterConfigHolder.sIsEditMode) {
                                                 val windowView = chain.thisObject as? View
@@ -526,29 +526,10 @@ object ControlCenterHook {
                                     else -> true
                                 }
                                 if (!isVisible) {
-                                    IosTileGroupFolder.dismissActiveOverlay(animated = false)
+                                    IosTileGroupFolder.dismissActiveOverlay(chain.thisObject as? View, animated = false)
                                 }
                             } catch (t: Throwable) {}
                             result
-                        }
-                    }
-                    if (m.name == "onInterceptTouchEvent") {
-                        m.isAccessible = true
-                        module.hook(m).intercept { chain ->
-                            if (IosTileGroupFolder.isExpandedOverlayActive()) {
-                                val ev = chain.args.getOrNull(0) as? MotionEvent
-                                val overlay = IosTileGroupFolder.getActiveOverlay()
-                                if (overlay != null && ev != null) {
-                                    val screenHeight = overlay.resources.displayMetrics.heightPixels
-                                    val navBarSlop = 48 * overlay.resources.displayMetrics.density
-                                    if (ev.rawY >= screenHeight - navBarSlop) {
-                                        return@intercept chain.proceed()
-                                    }
-                                    return@intercept false
-                                }
-                                return@intercept false
-                            }
-                            chain.proceed()
                         }
                     }
                 }
@@ -562,8 +543,11 @@ object ControlCenterHook {
                         m.isAccessible = true
                         module.hook(m).intercept { chain ->
                             try {
-                                IosTileGroupFolder.dismissActiveOverlay(animated = false)
-                            } catch (t: Throwable) {}
+                                val v = (chain.thisObject.javaClass.getMethod("getView").invoke(chain.thisObject) as? View)
+                                IosTileGroupFolder.dismissActiveOverlay(v, animated = false)
+                            } catch (t: Throwable) {
+                                try { IosTileGroupFolder.dismissActiveOverlay(animated = false) } catch (t2: Throwable) {}
+                            }
                             ControlCenterConfigHolder.wakeAndRefreshAllGroupedTiles()
                             chain.proceed()
                         }
@@ -572,12 +556,41 @@ object ControlCenterHook {
                         m.isAccessible = true
                         module.hook(m).intercept { chain ->
                             try {
-                                IosTileGroupFolder.dismissActiveOverlay(animated = false)
-                            } catch (t: Throwable) {}
+                                val v = (chain.thisObject.javaClass.getMethod("getView").invoke(chain.thisObject) as? View)
+                                IosTileGroupFolder.dismissActiveOverlay(v, animated = false)
+                            } catch (t: Throwable) {
+                                try { IosTileGroupFolder.dismissActiveOverlay(animated = false) } catch (t2: Throwable) {}
+                            }
                             if (System.currentTimeMillis() - ControlCenterConfigHolder.sLastTouchTime > 350) {
                                 ControlCenterConfigHolder.sIsUserFlicking = false
                                 ControlCenterConfigHolder.sCurrentVelocityY = 0.0f
                             }
+                            chain.proceed()
+                        }
+                    }
+                    if (m.name == "notifyExpansionChanged") {
+                        m.isAccessible = true
+                        module.hook(m).intercept { chain ->
+                            try {
+                                val exp = chain.args.getOrNull(0) as? Float
+                                if (exp != null && exp < 0.95f) {
+                                    val v = (chain.thisObject.javaClass.getMethod("getView").invoke(chain.thisObject) as? View)
+                                    IosTileGroupFolder.dismissActiveOverlay(v, animated = false)
+                                }
+                            } catch (t: Throwable) {}
+                            chain.proceed()
+                        }
+                    }
+                    if (m.name == "notifyAppearanceChanged") {
+                        m.isAccessible = true
+                        module.hook(m).intercept { chain ->
+                            try {
+                                val appeared = chain.args.getOrNull(0) as? Boolean
+                                if (appeared == false) {
+                                    val v = (chain.thisObject.javaClass.getMethod("getView").invoke(chain.thisObject) as? View)
+                                    IosTileGroupFolder.dismissActiveOverlay(v, animated = false)
+                                }
+                            } catch (t: Throwable) {}
                             chain.proceed()
                         }
                     }

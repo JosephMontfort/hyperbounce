@@ -847,7 +847,8 @@ object ControlCenterConfigHolder {
                                                 }
                                             }
                                         }
-                                        GroupedTileReflectionCache.updateStateMethod?.invoke(childView, curState, true, false)
+                                        val isConnected = (spec == "wifi" || spec == "cell")
+                                        GroupedTileReflectionCache.updateStateMethod?.invoke(childView, curState, isConnected, false)
                                     }
                                 }
                             }
