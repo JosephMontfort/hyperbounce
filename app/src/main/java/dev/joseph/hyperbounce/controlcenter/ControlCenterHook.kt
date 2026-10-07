@@ -2855,6 +2855,7 @@ object ControlCenterHook {
                                 chain.proceed()
                             }
                         }
+                    }
                     if (m.name == "updateClip") {
                         m.isAccessible = true
                         module.hook(m).intercept { chain ->
