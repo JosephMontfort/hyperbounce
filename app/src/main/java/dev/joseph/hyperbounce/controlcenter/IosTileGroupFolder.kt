@@ -134,12 +134,10 @@ object IosTileGroupFolder {
                 child.background = null
                 child.clipToOutline = false
                 child.addOnLayoutChangeListener { v, _, _, _, _, _, _, _, _ ->
-                    v.translationX = 0f
-                    v.translationY = 0f
-                    v.scaleX = 1.0f
-                    v.scaleY = 1.0f
-                    v.background = null
-                    v.clipToOutline = false
+                    if (v.translationX != 0f) v.translationX = 0f
+                    if (v.translationY != 0f) v.translationY = 0f
+                    if (v.scaleX != 1.0f) v.scaleX = 1.0f
+                    if (v.scaleY != 1.0f) v.scaleY = 1.0f
                 }
             }
         }
@@ -152,8 +150,6 @@ object IosTileGroupFolder {
                 if (child.translationY != 0f) child.translationY = 0f
                 if (child.scaleX != 1.0f) child.scaleX = 1.0f
                 if (child.scaleY != 1.0f) child.scaleY = 1.0f
-                if (child.background != null) child.background = null
-                if (child.clipToOutline) child.clipToOutline = false
             }
             super.dispatchDraw(canvas)
         }
@@ -296,55 +292,41 @@ object IosTileGroupFolder {
             }
         }
 
+        private var cachedScale = 0.42f
+        private var cachedHalfBase = 0f
+
         override fun onViewAdded(child: View) {
             super.onViewAdded(child)
             child.setTag(0x7f09999c, true)
             child.background = null
             child.clipToOutline = false
             child.addOnLayoutChangeListener { v, _, _, _, _, _, _, _, _ ->
-                v.background = null
-                v.clipToOutline = false
-                val baseSize = getBaseTileSize()
-                val pad = (4 * resources.displayMetrics.density).toInt()
-                val gap = (4 * resources.displayMetrics.density).toInt()
-                val availW = Math.max(0, width - 2 * pad - gap)
-                val subW = availW / 2f
-                val availH = Math.max(0, height - 2 * pad - gap)
-                val subH = availH / 2f
-                val targetSize = Math.min(subW, subH)
-                val scale = if (baseSize > 0 && targetSize > 10) (targetSize / baseSize.toFloat()).coerceIn(0.2f, 0.6f) else 0.42f
-                val halfBase = baseSize / 2f
-                v.pivotX = halfBase
-                v.pivotY = halfBase
-                v.scaleX = scale
-                v.scaleY = scale
-                v.translationX = 0f
-                v.translationY = 0f
+                val halfBase = cachedHalfBase
+                if (halfBase > 0f) {
+                    v.pivotX = halfBase
+                    v.pivotY = halfBase
+                }
+                v.scaleX = cachedScale
+                v.scaleY = cachedScale
+                if (v.translationX != 0f) v.translationX = 0f
+                if (v.translationY != 0f) v.translationY = 0f
             }
         }
 
         override fun dispatchDraw(canvas: android.graphics.Canvas) {
-            val pad = (4 * resources.displayMetrics.density).toInt()
-            val gap = (4 * resources.displayMetrics.density).toInt()
-            val availW = Math.max(0, width - 2 * pad - gap)
-            val subW = availW / 2f
-            val availH = Math.max(0, height - 2 * pad - gap)
-            val subH = availH / 2f
-            val baseSize = getBaseTileSize()
-            val targetSize = Math.min(subW, subH)
-            val expectedScale = if (baseSize > 0 && targetSize > 10) (targetSize / baseSize.toFloat()).coerceIn(0.2f, 0.6f) else 0.42f
-            val halfBase = baseSize / 2f
+            val expectedScale = cachedScale
+            val halfBase = cachedHalfBase
 
             for (i in 0 until childCount) {
                 val child = getChildAt(i) ?: continue
                 if (child.translationX != 0f) child.translationX = 0f
                 if (child.translationY != 0f) child.translationY = 0f
-                if (child.pivotX != halfBase) child.pivotX = halfBase
-                if (child.pivotY != halfBase) child.pivotY = halfBase
+                if (halfBase > 0f) {
+                    if (child.pivotX != halfBase) child.pivotX = halfBase
+                    if (child.pivotY != halfBase) child.pivotY = halfBase
+                }
                 if (child.scaleX != expectedScale) child.scaleX = expectedScale
                 if (child.scaleY != expectedScale) child.scaleY = expectedScale
-                if (child.background != null) child.background = null
-                if (child.clipToOutline) child.clipToOutline = false
             }
             super.dispatchDraw(canvas)
         }
@@ -437,6 +419,8 @@ object IosTileGroupFolder {
             val targetSize = Math.min(subW, subH)
             val scale = if (baseSize > 0 && targetSize > 10) (targetSize / baseSize.toFloat()).coerceIn(0.2f, 0.6f) else 0.42f
             val halfBase = baseSize / 2f
+            cachedScale = scale
+            cachedHalfBase = halfBase
 
             for (i in 0 until childCount) {
                 val child = getChildAt(i) ?: continue

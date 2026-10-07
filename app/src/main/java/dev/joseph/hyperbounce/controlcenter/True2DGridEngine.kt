@@ -437,7 +437,7 @@ object True2DGridEngine {
                 (spec != null && !ControlCenterConfigHolder.sExpandedTileSpecs.contains(spec) &&
                  !ControlCenterConfigHolder.sVerticalTileSpecs.contains(spec) &&
                  !ControlCenterConfigHolder.sLargeTileSpecs.contains(spec) &&
-                 spec != "wifi" && spec != "cell" && !spec.startsWith("group:"))
+                 (ControlCenterConfigHolder.sCircularCardSpecs.contains(spec) || (spec != "wifi" && spec != "cell")) && !spec.startsWith("group:"))
             )
             if (isCircular && isLabelEnabled && assignedRow in rowHeights.indices) {
                 rowHeights[assignedRow] = unitRowHeight + labelHeight
