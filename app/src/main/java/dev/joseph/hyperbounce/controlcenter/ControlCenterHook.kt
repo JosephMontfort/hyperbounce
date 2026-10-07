@@ -232,6 +232,22 @@ object ControlCenterHook {
     }
 
     const val UNIVERSAL_MARK_TAG = 0x7f09998f
+    @Volatile private var sRemoveResId: Int = 0
+    @Volatile private var sAddResId: Int = 0
+
+    fun getRemoveResId(ctx: Context): Int {
+        if (sRemoveResId == 0) {
+            sRemoveResId = ctx.resources.getIdentifier("ic_qs_tile_mark_remove", "drawable", ctx.packageName).takeIf { it != 0 } ?: 0x7f080634
+        }
+        return sRemoveResId
+    }
+
+    fun getAddResId(ctx: Context): Int {
+        if (sAddResId == 0) {
+            sAddResId = ctx.resources.getIdentifier("ic_qs_tile_mark_add", "drawable", ctx.packageName).takeIf { it != 0 } ?: 0x7f080633
+        }
+        return sAddResId
+    }
 
     fun hideAllCustomBadges(v: View?) {
         if (v == null) return
@@ -321,8 +337,8 @@ object ControlCenterHook {
             itemView.addView(this)
         }
 
-        val removeRes = targetMark.context.resources.getIdentifier("ic_qs_tile_mark_remove", "drawable", targetMark.context.packageName).takeIf { it != 0 } ?: 0x7f080634
-        val addRes = targetMark.context.resources.getIdentifier("ic_qs_tile_mark_add", "drawable", targetMark.context.packageName).takeIf { it != 0 } ?: 0x7f080633
+        val removeRes = getRemoveResId(targetMark.context)
+        val addRes = getAddResId(targetMark.context)
 
         targetMark.setImageResource(if (isAdded) removeRes else addRes)
         targetMark.contentDescription = if (isAdded) "Remove" else "Add"
@@ -631,10 +647,6 @@ object ControlCenterHook {
                                     }
                                     if (!ControlCenterConfigHolder.sIsEditMode) {
                                         try {
-                                            val modeCtrl = chain.thisObject
-                                            val getCtxMethod = modeCtrl.javaClass.getMethod("getContext")
-                                            val ctx = getCtxMethod.invoke(modeCtrl) as? Context
-                                            ControlCenterConfigHolder.savePriorities(ctx)
                                             sMediaPlayerViewHolder?.get()?.let { applyMediaPlayerLayout(it) }
                                         } catch (t: Throwable) {}
                                     }
@@ -2694,17 +2706,7 @@ object ControlCenterHook {
                                         val rawArgs = chain.args
                                         val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as? Array<*>
                                         val isEdit = args != null && args.isNotEmpty() && args[0] != null && "EDIT" == args[0].toString()
-                                        if (ControlCenterConfigHolder.sIsEditMode && !isEdit) {
-                                            ControlCenterConfigHolder.onExitEditMode(itemView, itemView.context)
-                                        } else if (isEdit) {
-                                            val wasEdit = ControlCenterConfigHolder.sIsEditMode
-                                            ControlCenterConfigHolder.sIsEditMode = true
-                                            if (!wasEdit) {
-                                                ControlCenterConfigHolder.onEnterEditMode(itemView, itemView.context)
-                                            }
-                                        } else {
-                                            ControlCenterConfigHolder.sIsEditMode = false
-                                        }
+                                        ControlCenterConfigHolder.sIsEditMode = isEdit
 
                                         val spec = ControlCenterConfigHolder.getOrResolveTileSpec(itemView)
                                         val density = itemView.context.resources.displayMetrics.density
@@ -2764,22 +2766,30 @@ object ControlCenterHook {
                                                     resizeHandle.visibility = View.VISIBLE
                                                     val bw = resizeHandle.measuredWidth.takeIf { it > 0 } ?: badgeSize
                                                     val bh = resizeHandle.measuredHeight.takeIf { it > 0 } ?: badgeSize
-                                                    val iconFrameId = itemView.resources.getIdentifier("icon_frame", "id", itemView.context.packageName)
+                                                    val iconFrameId = if (ControlCenterConfigHolder.sCachedIconFrameId != 0) {
+                                                        ControlCenterConfigHolder.sCachedIconFrameId
+                                                    } else {
+                                                        val id = itemView.resources.getIdentifier("icon_frame", "id", itemView.context.packageName)
+                                                        if (id != 0) ControlCenterConfigHolder.sCachedIconFrameId = id
+                                                        id
+                                                    }
                                                     val curIconFrame = if (iconFrameId != 0) itemView.findViewById<View>(iconFrameId) else null
 
                                                     fun applyHandleLayout() {
                                                         if (curIsCirc && curIconFrame != null && curIconFrame.width > 0 && curIconFrame.height > 0) {
-                                                            val iRight = curIconFrame.right
-                                                            val iBottom = curIconFrame.bottom
-                                                            resizeHandle.layout(iRight - bw, iBottom - bh, iRight, iBottom)
+                                                             val iRight = curIconFrame.right
+                                                             val iBottom = curIconFrame.bottom
+                                                             resizeHandle.layout(iRight - bw, iBottom - bh, iRight, iBottom)
                                                         } else if (itemView.width > 0 && itemView.height > 0) {
-                                                            resizeHandle.layout(itemView.width - bw, itemView.height - bh, itemView.width, itemView.height)
+                                                             resizeHandle.layout(itemView.width - bw, itemView.height - bh, itemView.width, itemView.height)
                                                         }
                                                         resizeHandle.bringToFront()
                                                     }
 
                                                     applyHandleLayout()
-                                                    itemView.post { applyHandleLayout() }
+                                                    if (itemView.width == 0 || (curIsCirc && (curIconFrame == null || curIconFrame.width == 0))) {
+                                                        itemView.post { applyHandleLayout() }
+                                                    }
 
                                                     resizeHandle.isClickable = true
                                                     if (spec != null) {

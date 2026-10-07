@@ -199,6 +199,9 @@ object ControlCenterConfigHolder {
     @Volatile var sIsGroupSelectMode: Boolean = false
     @Volatile var sIsDisassembleMode: Boolean = false
     @Volatile var sIsDraggingResizeHandle: Boolean = false
+    @Volatile var sHasStructuralEditChanges: Boolean = false
+    val sIoExecutor = java.util.concurrent.Executors.newSingleThreadExecutor()
+    @Volatile var sCachedIconFrameId: Int = 0
     val sSelectedTileSpecs = LinkedHashSet<String>()
     val sSelectedDisassembleGroups = HashSet<String>()
 
@@ -592,6 +595,7 @@ object ControlCenterConfigHolder {
     fun savePriorities(ctx: Context?) {
         val targetCtx = ctx ?: sLastKnownContext ?: return
         sHasLoadedPriorities = true
+        sHasStructuralEditChanges = true
         try {
             val json = JSONObject()
             val prioObj = JSONObject()
@@ -662,42 +666,62 @@ object ControlCenterConfigHolder {
             json.put("tile_groups_v2", groupsSb.toString())
 
             val jsonStr = json.toString()
+            val prioSnapshot = HashMap(sComponentPriorities)
+            val wifiFirstSnapshot = sIsWifiFirst
+            val expandedStr = sb.toString()
+            val vertStr = vertSb.toString()
+            val largeStr = largeSb.toString()
+            val circCardStr = circCardSb.toString()
+            val removedStr = removedSb.toString()
+            val mediaSizeSnapshot = sMediaPlayerSize
+            val bHoriz = sBrightnessSliderHorizontal
+            val vHoriz = sVolumeSliderHorizontal
+            val bWidth = sBrightnessSliderWidth
+            val vWidth = sVolumeSliderWidth
+            val landRows = landscapeRightMaxRows
+            val groupsStr = groupsSb.toString()
 
-            // 1. Settings.Secure
-            try {
-                android.provider.Settings.Secure.putString(targetCtx.contentResolver, "sysui_hyperbounce_cc_layout", jsonStr)
-                android.provider.Settings.Secure.putString(targetCtx.contentResolver, "hyperbounce_cc_layout", jsonStr)
-            } catch (t: Throwable) {}
+            sIoExecutor.execute {
+                try {
+                    // 1. Settings.Secure
+                    try {
+                        android.provider.Settings.Secure.putString(targetCtx.contentResolver, "sysui_hyperbounce_cc_layout", jsonStr)
+                        android.provider.Settings.Secure.putString(targetCtx.contentResolver, "hyperbounce_cc_layout", jsonStr)
+                    } catch (t: Throwable) {}
 
-            // 2. ContentProvider
-            try {
-                targetCtx.contentResolver.call(
-                    Uri.parse("content://dev.hyperios.app.provider"),
-                    "saveCCLayout", jsonStr, null
-                )
-            } catch (t: Throwable) {}
+                    // 2. ContentProvider
+                    try {
+                        targetCtx.contentResolver.call(
+                            Uri.parse("content://dev.hyperios.app.provider"),
+                            "saveCCLayout", jsonStr, null
+                        )
+                    } catch (t: Throwable) {}
 
-            // 3. SharedPreferences Cache
-            val prefs = targetCtx.getSharedPreferences("hyperbounce_cc_layout", Context.MODE_PRIVATE)
-            if (prefs != null) {
-                val editor = prefs.edit()
-                for ((k, v) in sComponentPriorities) {
-                    editor.putInt("priority_$k", v)
+                    // 3. SharedPreferences Cache
+                    val prefs = targetCtx.getSharedPreferences("hyperbounce_cc_layout", Context.MODE_PRIVATE)
+                    if (prefs != null) {
+                        val editor = prefs.edit()
+                        for ((k, v) in prioSnapshot) {
+                            editor.putInt("priority_$k", v)
+                        }
+                        editor.putBoolean("wifi_card_first", wifiFirstSnapshot)
+                        editor.putString("expanded_tile_specs", expandedStr)
+                        editor.putString("vertical_tile_specs", vertStr)
+                        editor.putString("large_tile_specs", largeStr)
+                        editor.putString("circular_card_specs", circCardStr)
+                        editor.putString("removed_component_specs", removedStr)
+                        editor.putString("media_player_size", mediaSizeSnapshot)
+                        editor.putBoolean("brightness_slider_horizontal", bHoriz)
+                        editor.putBoolean("volume_slider_horizontal", vHoriz)
+                        editor.putInt("brightness_slider_width", bWidth)
+                        editor.putInt("volume_slider_width", vWidth)
+                        editor.putInt("landscape_right_max_rows", landRows)
+                        editor.putString("tile_groups_v2", groupsStr)
+                        editor.apply()
+                    }
+                } catch (t: Throwable) {
+                    Log.e(TAG, "async savePriorities error", t)
                 }
-                editor.putBoolean("wifi_card_first", sIsWifiFirst)
-                editor.putString("expanded_tile_specs", sb.toString())
-                editor.putString("vertical_tile_specs", vertSb.toString())
-                editor.putString("large_tile_specs", largeSb.toString())
-                editor.putString("circular_card_specs", circCardSb.toString())
-                editor.putString("removed_component_specs", removedSb.toString())
-                editor.putString("media_player_size", sMediaPlayerSize)
-                editor.putBoolean("brightness_slider_horizontal", sBrightnessSliderHorizontal)
-                editor.putBoolean("volume_slider_horizontal", sVolumeSliderHorizontal)
-                editor.putInt("brightness_slider_width", sBrightnessSliderWidth)
-                editor.putInt("volume_slider_width", sVolumeSliderWidth)
-                editor.putInt("landscape_right_max_rows", landscapeRightMaxRows)
-                editor.putString("tile_groups_v2", groupsSb.toString())
-                editor.apply()
             }
         } catch (t: Throwable) {
             Log.e(TAG, "savePriorities error", t)
@@ -1223,7 +1247,13 @@ object ControlCenterConfigHolder {
                     val isCircular = isCircCard || (!isCard && !isSlider && !isMedia && !isExpanded && !isVertical && !isLarge && !itemView.javaClass.name.contains("Card") && (itemView.javaClass.name.contains("Tile") || itemView.javaClass.name.contains("QSTileItemView")))
                     val density = itemView.resources.displayMetrics.density
 
-                    val iconFrameId = itemView.resources.getIdentifier("icon_frame", "id", itemView.context.packageName)
+                    val iconFrameId = if (sCachedIconFrameId != 0) {
+                        sCachedIconFrameId
+                    } else {
+                        val id = itemView.resources.getIdentifier("icon_frame", "id", itemView.context.packageName)
+                        if (id != 0) sCachedIconFrameId = id
+                        id
+                    }
                     val curIconFrame = if (iconFrameId != 0) itemView.findViewById<View>(iconFrameId) else null
 
                     val resizeTag = 0x7f099999
@@ -1762,18 +1792,8 @@ object ControlCenterConfigHolder {
                 }
             }
         }
+        sHasStructuralEditChanges = false
         updateAllVisibleTileBadges()
-        if (rv != null) {
-            rv.post {
-                updateAllVisibleTileBadges()
-                refreshAdapter(rv, ctx, isStructuralChange = true)
-            }
-        } else if (rootView != null) {
-            rootView.post {
-                updateAllVisibleTileBadges()
-                refreshAdapter(rootView, ctx, isStructuralChange = true)
-            }
-        }
     }
 
     fun onExitEditMode(rootView: View? = null, context: Context? = null) {
@@ -1829,13 +1849,16 @@ object ControlCenterConfigHolder {
 
         if (now - sLastExitEditTime > 300L) {
             sLastExitEditTime = now
-            if (rv != null) {
-                rv.post {
-                    cleanupAllVisibleViews(rv)
-                    refreshAdapter(rv, ctx, isStructuralChange = true)
+            if (sHasStructuralEditChanges) {
+                sHasStructuralEditChanges = false
+                if (rv != null) {
+                    rv.post {
+                        cleanupAllVisibleViews(rv)
+                        refreshAdapter(rv, ctx, isStructuralChange = true)
+                    }
+                } else {
+                    refreshAdapter(rootView, ctx, isStructuralChange = true)
                 }
-            } else {
-                refreshAdapter(rootView, ctx, isStructuralChange = true)
             }
         }
     }

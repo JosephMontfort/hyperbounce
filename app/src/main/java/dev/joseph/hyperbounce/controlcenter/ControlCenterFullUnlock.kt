@@ -1941,6 +1941,7 @@ object ControlCenterFullUnlock {
             } catch (t: Throwable) {}
 
             // Rebuild contentMap immediately and invalidate 2D layout cache
+            ControlCenterConfigHolder.sHasStructuralEditChanges = true
             buildAndSetContentMap(adapter, classLoader)
             if (sDistributor != null) {
                 val otherAdapter = if (adapter === sRightAdapter) sLeftAdapter else if (adapter === sLeftAdapter) sRightAdapter else null
@@ -1993,36 +1994,38 @@ object ControlCenterFullUnlock {
         sAdapterQsFooters.clear()
         sAdapterWordless.clear()
         cleanStaleSlots()
-        val adapter = ControlCenterConfigHolder.sMainPanelAdapter
-        if (adapter != null) {
-            val cl = adapter.javaClass.classLoader
-            if (cl != null) {
-                try {
-                    buildAndSetContentMap(adapter, cl)
-                    val notifyDataSetChangedM = adapter.javaClass.getMethod("notifyDataSetChanged")
-                    notifyDataSetChangedM.invoke(adapter)
-                } catch (t: Throwable) {}
-            }
-        }
-        if (sDistributor != null) {
-            val left = sLeftAdapter
-            val right = sRightAdapter
-            if (left != null) {
-                val cl = left.javaClass.classLoader
+        if (ControlCenterConfigHolder.sHasStructuralEditChanges) {
+            val adapter = ControlCenterConfigHolder.sMainPanelAdapter
+            if (adapter != null) {
+                val cl = adapter.javaClass.classLoader
                 if (cl != null) {
                     try {
-                        buildAndSetContentMap(left, cl)
-                        left.javaClass.getMethod("notifyDataSetChanged").invoke(left)
+                        buildAndSetContentMap(adapter, cl)
+                        val notifyDataSetChangedM = adapter.javaClass.getMethod("notifyDataSetChanged")
+                        notifyDataSetChangedM.invoke(adapter)
                     } catch (t: Throwable) {}
                 }
             }
-            if (right != null) {
-                val cl = right.javaClass.classLoader
-                if (cl != null) {
-                    try {
-                        buildAndSetContentMap(right, cl)
-                        right.javaClass.getMethod("notifyDataSetChanged").invoke(right)
-                    } catch (t: Throwable) {}
+            if (sDistributor != null) {
+                val left = sLeftAdapter
+                val right = sRightAdapter
+                if (left != null) {
+                    val cl = left.javaClass.classLoader
+                    if (cl != null) {
+                        try {
+                            buildAndSetContentMap(left, cl)
+                            left.javaClass.getMethod("notifyDataSetChanged").invoke(left)
+                        } catch (t: Throwable) {}
+                    }
+                }
+                if (right != null) {
+                    val cl = right.javaClass.classLoader
+                    if (cl != null) {
+                        try {
+                            buildAndSetContentMap(right, cl)
+                            right.javaClass.getMethod("notifyDataSetChanged").invoke(right)
+                        } catch (t: Throwable) {}
+                    }
                 }
             }
         }
