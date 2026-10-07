@@ -274,7 +274,12 @@ object ControlCenterHook {
             itemView.findViewById<View>(0x7f099995) != null ||
             ControlCenterConfigHolder.isGroupAnchor(spec) != null ||
             ControlCenterConfigHolder.isGroupMember(spec)) {
-            itemView.findViewById<View>(UNIVERSAL_MARK_TAG)?.visibility = View.GONE
+            val mark = itemView.findViewById<View>(UNIVERSAL_MARK_TAG)
+            if (mark != null) {
+                mark.visibility = View.GONE
+                mark.setOnClickListener(null)
+                mark.isClickable = false
+            }
             return
         }
 
@@ -356,12 +361,9 @@ object ControlCenterHook {
             ControlCenterConfigHolder.sRemovedComponentSpecs.add(spec)
             ControlCenterConfigHolder.savePriorities(context)
             if (spec == "wifi" || spec == "cell" || spec == "media" || spec == "brightness" || spec == "volume") {
-                if (record != null && ControlCenterConfigHolder.sQSListController != null) {
-                    try {
-                        val m = ControlCenterConfigHolder.sQSListController!!.javaClass.getMethod("removeTile", record.javaClass)
-                        m.invoke(ControlCenterConfigHolder.sQSListController, record)
-                    } catch (t: Throwable) {}
-                }
+                // Specially managed components: state is handled strictly by sRemovedComponentSpecs
+                // and reorganized into footer system items by reorganizeContentMap.
+                // Do NOT invoke QSListController.removeTile as it pollutes QSListController with card records or non-tiles.
             } else {
                 val targetRecord = record ?: ControlCenterConfigHolder.findRecordForSpec(spec)
                 if (targetRecord != null && ControlCenterConfigHolder.sQSListController != null) {
@@ -391,12 +393,9 @@ object ControlCenterHook {
             ControlCenterFullUnlock.restoreComponentSlotOrder(spec)
             ControlCenterConfigHolder.savePriorities(context)
             if (spec == "wifi" || spec == "cell" || spec == "media" || spec == "brightness" || spec == "volume") {
-                if (record != null && ControlCenterConfigHolder.sQSListController != null) {
-                    try {
-                        val m = ControlCenterConfigHolder.sQSListController!!.javaClass.getMethod("addTile", record.javaClass)
-                        m.invoke(ControlCenterConfigHolder.sQSListController, record)
-                    } catch (t: Throwable) {}
-                }
+                // Specially managed components: slot order is restored into sUnifiedSlotOrder
+                // and rendered by QSCardsController / respective controllers.
+                // Do NOT invoke QSListController.addTile as it creates duplicate tile records.
             } else {
                 val targetRecord = record ?: ControlCenterConfigHolder.findRecordForSpec(spec)
                 if (targetRecord != null && ControlCenterConfigHolder.sQSListController != null) {
@@ -2518,8 +2517,13 @@ object ControlCenterHook {
                                         val isAdded = if (isCard) !ControlCenterConfigHolder.sRemovedComponentSpecs.contains(spec) else ControlCenterConfigHolder.isTileAdded(spec)
                                         if (isEdit && spec != null && (!isCircular || isCard)) {
                                             applyUniversalMarkButton(itemView, spec, isAdded, record)
-                                        } else if (!isEdit) {
-                                            itemView.findViewById<View>(UNIVERSAL_MARK_TAG)?.visibility = View.GONE
+                                        } else {
+                                            val mark = itemView.findViewById<View>(UNIVERSAL_MARK_TAG)
+                                            if (mark != null) {
+                                                mark.visibility = View.GONE
+                                                mark.setOnClickListener(null)
+                                                mark.isClickable = false
+                                            }
                                         }
 
                                         if (resizeHandle != null) {
@@ -2707,6 +2711,13 @@ object ControlCenterHook {
                                                 val isCurAdded = if (isCurCard) !ControlCenterConfigHolder.sRemovedComponentSpecs.contains(curSpec) else ControlCenterConfigHolder.isTileAdded(curSpec)
                                                 if (curSpec != null && (!curIsCirc || isCurCard)) {
                                                     applyUniversalMarkButton(itemView, curSpec, isCurAdded, null)
+                                                } else {
+                                                    val mark = itemView.findViewById<View>(UNIVERSAL_MARK_TAG)
+                                                    if (mark != null) {
+                                                        mark.visibility = View.GONE
+                                                        mark.setOnClickListener(null)
+                                                        mark.isClickable = false
+                                                    }
                                                 }
 
                                                 val shouldShow = isCurAdded && !ControlCenterConfigHolder.sIsGroupSelectMode && !ControlCenterConfigHolder.sIsDisassembleMode
@@ -2840,6 +2851,18 @@ object ControlCenterHook {
                                 } else {
                                     chain.proceed()
                                 }
+                            } else {
+                                chain.proceed()
+                            }
+                        }
+                    if (m.name == "updateClip") {
+                        m.isAccessible = true
+                        module.hook(m).intercept { chain ->
+                            val itemView = chain.thisObject as? ViewGroup
+                            if (itemView != null && itemView.findViewById<View>(0x7f099995) != null) {
+                                itemView.clipChildren = false
+                                itemView.clipToOutline = false
+                                null
                             } else {
                                 chain.proceed()
                             }
@@ -3823,7 +3846,12 @@ object ControlCenterHook {
             if (ControlCenterConfigHolder.sIsEditMode) {
                 applyUniversalMarkButton(itemView, spec, isAdded, holder)
             } else {
-                itemView.findViewById<View>(UNIVERSAL_MARK_TAG)?.visibility = View.GONE
+                val mark = itemView.findViewById<View>(UNIVERSAL_MARK_TAG)
+                if (mark != null) {
+                    mark.visibility = View.GONE
+                    mark.setOnClickListener(null)
+                    mark.isClickable = false
+                }
             }
 
             val rotateTag = 0x7f099992
@@ -3831,7 +3859,7 @@ object ControlCenterHook {
             if (ControlCenterConfigHolder.sIsEditMode) {
                 val shouldShow = isAdded && !ControlCenterConfigHolder.sIsGroupSelectMode && !ControlCenterConfigHolder.sIsDisassembleMode
                 if (rotateBtn == null && itemView is ViewGroup) {
-                    val rSize = (32 * density).toInt()
+                    val rSize = (26 * density).toInt()
                     rotateBtn = ImageView(ctx).apply {
                         id = rotateTag
                         val lp = FrameLayout.LayoutParams(rSize, rSize).apply {
@@ -3840,7 +3868,7 @@ object ControlCenterHook {
                             setMargins(m, m, 0, 0)
                         }
                         layoutParams = lp
-                        setImageDrawable(RotateIconDrawable())
+                        setImageDrawable(RotateIconDrawable(density))
                         setOnClickListener {
                             ControlCenterConfigHolder.toggleSliderOrientation(ctx, isBrightness, itemView)
                         }
@@ -6274,7 +6302,12 @@ object ControlCenterHook {
             if (ControlCenterConfigHolder.sIsEditMode) {
                 applyUniversalMarkButton(itemView, "media", isAdded, holder)
             } else {
-                itemView.findViewById<View>(UNIVERSAL_MARK_TAG)?.visibility = View.GONE
+                val mark = itemView.findViewById<View>(UNIVERSAL_MARK_TAG)
+                if (mark != null) {
+                    mark.visibility = View.GONE
+                    mark.setOnClickListener(null)
+                    mark.isClickable = false
+                }
             }
 
             val resizeTag = 0x7f099999

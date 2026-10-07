@@ -730,14 +730,14 @@ object ControlCenterGrouping {
 
         val rotateBtn = ImageView(ctx).apply {
             id = 0x7f099992
-            val rSize = (32 * density).toInt()
+            val rSize = (26 * density).toInt()
             val rlp = FrameLayout.LayoutParams(rSize, rSize).apply {
                 gravity = Gravity.TOP or Gravity.END
                 val rMargin = (6 * density).toInt()
                 setMargins(0, rMargin, rMargin, 0)
             }
             layoutParams = rlp
-            setImageDrawable(RotateIconDrawable())
+            setImageDrawable(RotateIconDrawable(density))
             visibility = View.GONE
         }
         wrapper.addView(rotateBtn)
@@ -1980,8 +1980,8 @@ object ControlCenterGrouping {
             // Rotate Button for 2-tile containers in Edit Mode
             val rotateBtn = ImageView(ctx).apply {
                 id = 0x7f099992
-                setImageDrawable(RotateIconDrawable())
-                val rSize = (22 * density).toInt()
+                setImageDrawable(RotateIconDrawable(density))
+                val rSize = (26 * density).toInt()
                 val rlpBtn = FrameLayout.LayoutParams(rSize, rSize).apply {
                     gravity = Gravity.BOTTOM or Gravity.END
                     val rMargin = (3 * density).toInt()

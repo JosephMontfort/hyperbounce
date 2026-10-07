@@ -863,10 +863,28 @@ object ControlCenterConfigHolder {
 
         try {
             val rv = sRecyclerView?.get() as? ViewGroup
+            if (rv != null) {
+                for (i in 0 until rv.childCount) {
+                    val container = rv.getChildAt(i)?.findViewById<ViewGroup>(0x7f099995)
+                    if (container != null) {
+                        container.visibility = View.VISIBLE
+                        for (cIdx in 0 until container.childCount) {
+                            val cv = container.getChildAt(cIdx)
+                            if (cv != null) {
+                                cv.visibility = View.VISIBLE
+                                if (!sIsEditMode) {
+                                    cv.alpha = 1.0f
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
             for (r in sAllQSRecords) {
                 if (r != null) {
                     val spec = getRecordSpec(r)
-                    if (isGroupChild(spec)) {
+                    if (isGroupMember(spec)) {
                         try {
                             if (GroupedTileReflectionCache.startListeningMethod == null) {
                                 GroupedTileReflectionCache.startListeningMethod = r.javaClass.getMethod("startListening")
@@ -1237,7 +1255,7 @@ object ControlCenterConfigHolder {
                         if (selectBadge != null) selectBadge.visibility = View.GONE
 
                         if (rotateBtn == null && itemView is ViewGroup) {
-                            val rSize = (32 * density).toInt()
+                            val rSize = (26 * density).toInt()
                             rotateBtn = ImageView(itemView.context).apply {
                                 id = rotateTag
                                 val lp = android.widget.FrameLayout.LayoutParams(rSize, rSize).apply {
@@ -1246,7 +1264,7 @@ object ControlCenterConfigHolder {
                                     setMargins(m, m, 0, 0)
                                 }
                                 layoutParams = lp
-                                setImageDrawable(RotateIconDrawable())
+                                setImageDrawable(RotateIconDrawable(density))
                             }
                             itemView.addView(rotateBtn)
                         } else if (rotateBtn != null) {
@@ -1382,7 +1400,7 @@ object ControlCenterConfigHolder {
                             wrapper?.isClickable = true
                         }
                         if (rotateBtn == null && itemView is ViewGroup) {
-                            val rSize = (32 * density).toInt()
+                            val rSize = (26 * density).toInt()
                             rotateBtn = ImageView(itemView.context).apply {
                                 id = rotateTag
                                 val lp = android.widget.FrameLayout.LayoutParams(rSize, rSize).apply {
@@ -1391,7 +1409,7 @@ object ControlCenterConfigHolder {
                                     setMargins(0, m, m, 0)
                                 }
                                 layoutParams = lp
-                                setImageDrawable(RotateIconDrawable())
+                                setImageDrawable(RotateIconDrawable(density))
                             }
                             itemView.addView(rotateBtn)
                         }

@@ -14,39 +14,91 @@ import android.graphics.drawable.Drawable
 import android.view.animation.DecelerateInterpolator
 
 /**
- * Custom Anti-Aliased Rotate Icon Badge Drawable for 2-Tile Groups.
+ * Custom Anti-Aliased Rotate Icon Badge Drawable for Sliders and 2-Tile/Asymmetric Groups.
+ * Designed with a sleek dark pill background and dual circular circulating vector arrows
+ * matching the HyperOS / iOS control center edit badge aesthetic.
  */
-class RotateIconDrawable : Drawable() {
-    private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.WHITE
-        style = Paint.Style.STROKE
-        strokeWidth = 3.0f
-        strokeCap = Paint.Cap.ROUND
-    }
+class RotateIconDrawable(private val density: Float = 2.75f) : Drawable() {
     private val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.parseColor("#99000000")
+        color = Color.parseColor("#E6202022") // Rich frosted dark disc
         style = Paint.Style.FILL
     }
+    private val borderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.parseColor("#26FFFFFF") // 15% white subtle border
+        style = Paint.Style.STROKE
+        strokeWidth = 1.0f * density
+    }
+    private val glyphPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.WHITE
+        style = Paint.Style.STROKE
+        strokeWidth = 2.0f * density
+        strokeCap = Paint.Cap.ROUND
+        strokeJoin = Paint.Join.ROUND
+    }
+
+    private val arcRect = RectF()
 
     override fun draw(canvas: Canvas) {
         val bounds = bounds
+        val w = bounds.width().toFloat()
+        val h = bounds.height().toFloat()
+        if (w <= 0f || h <= 0f) return
+
         val cx = bounds.exactCenterX()
         val cy = bounds.exactCenterY()
-        val r = Math.min(bounds.width(), bounds.height()) / 2f
+        val r = Math.min(w, h) / 2f - (0.5f * density)
+        if (r <= 0f) return
+
+        // 1. Draw circular pill background disc and subtle border
         canvas.drawCircle(cx, cy, r, bgPaint)
+        canvas.drawCircle(cx, cy, r - 0.5f * density, borderPaint)
 
-        val arcR = r * 0.55f
-        val arcRect = RectF(cx - arcR, cy - arcR, cx + arcR, cy + arcR)
-        canvas.drawArc(arcRect, 30f, 260f, false, paint)
+        // 2. Dual circular circulating arcs
+        val orbitR = r * 0.52f
+        arcRect.set(cx - orbitR, cy - orbitR, cx + orbitR, cy + orbitR)
 
-        val arrowX = cx + arcR * Math.cos(Math.toRadians(290.0)).toFloat()
-        val arrowY = cy + arcR * Math.sin(Math.toRadians(290.0)).toFloat()
-        canvas.drawLine(arrowX, arrowY, arrowX - 5f, arrowY - 5f, paint)
-        canvas.drawLine(arrowX, arrowY, arrowX + 5f, arrowY - 5f, paint)
+        // Top-right to bottom-left arc (sweeps from 25° clockwise by 125° to 150°)
+        canvas.drawArc(arcRect, 25f, 125f, false, glyphPaint)
+        // Bottom-left to top-right arc (sweeps from 205° clockwise by 125° to 330°)
+        canvas.drawArc(arcRect, 205f, 125f, false, glyphPaint)
+
+        // 3. Arrowheads at ends of arcs
+        val headSize = 3.6f * density
+        drawArrowHead(canvas, cx, cy, orbitR, 150.0, headSize)
+        drawArrowHead(canvas, cx, cy, orbitR, 330.0, headSize)
     }
 
-    override fun setAlpha(alpha: Int) { paint.alpha = alpha }
-    override fun setColorFilter(colorFilter: ColorFilter?) { paint.colorFilter = colorFilter }
+    private fun drawArrowHead(canvas: Canvas, cx: Float, cy: Float, orbitR: Float, angleDeg: Double, headSize: Float) {
+        val rad = Math.toRadians(angleDeg)
+        val endX = (cx + orbitR * Math.cos(rad)).toFloat()
+        val endY = (cy + orbitR * Math.sin(rad)).toFloat()
+
+        // Tangent direction pointing along clockwise motion: angleDeg + 90
+        val tangentRad = Math.toRadians(angleDeg + 90.0)
+
+        // Arrow wings point backwards from tangent
+        val wingAngle1 = tangentRad + Math.toRadians(145.0)
+        val wingAngle2 = tangentRad - Math.toRadians(145.0)
+
+        val p1X = (endX + headSize * Math.cos(wingAngle1)).toFloat()
+        val p1Y = (endY + headSize * Math.sin(wingAngle1)).toFloat()
+        val p2X = (endX + headSize * Math.cos(wingAngle2)).toFloat()
+        val p2Y = (endY + headSize * Math.sin(wingAngle2)).toFloat()
+
+        canvas.drawLine(endX, endY, p1X, p1Y, glyphPaint)
+        canvas.drawLine(endX, endY, p2X, p2Y, glyphPaint)
+    }
+
+    override fun setAlpha(alpha: Int) {
+        bgPaint.alpha = (alpha * 0.9f).toInt()
+        borderPaint.alpha = (alpha * 0.15f).toInt()
+        glyphPaint.alpha = alpha
+    }
+
+    override fun setColorFilter(colorFilter: ColorFilter?) {
+        glyphPaint.colorFilter = colorFilter
+    }
+
     override fun getOpacity(): Int = PixelFormat.TRANSLUCENT
 }
 

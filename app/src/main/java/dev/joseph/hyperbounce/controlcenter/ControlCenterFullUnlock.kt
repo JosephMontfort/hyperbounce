@@ -723,6 +723,16 @@ object ControlCenterFullUnlock {
                 }
             }
 
+            // 2c. Always purge tile:wifi and tile:cell since Wi-Fi and Cell are strictly managed as cards
+            sKnownSlots.remove("tile:wifi")
+            sUnifiedSlotOrder.remove("tile:wifi")
+            sProxyCache.remove("tile:wifi")
+            sProxyHandlers.remove("tile:wifi")
+            sKnownSlots.remove("tile:cell")
+            sUnifiedSlotOrder.remove("tile:cell")
+            sProxyCache.remove("tile:cell")
+            sProxyHandlers.remove("tile:cell")
+
             // 3. Deduplicate sUnifiedSlotOrder while preserving order
             val seen = HashSet<String>()
             val deduped = ArrayList<String>()
@@ -1338,6 +1348,11 @@ object ControlCenterFullUnlock {
 
                         for (item in items) {
                             val spec = ControlCenterConfigHolder.getRecordSpec(item)
+                            if (spec == "wifi" || spec == "cell") {
+                                // Wi-Fi and Mobile Data are strictly cards managed by QSCardsController,
+                                // never allow QSListController to handle them as tiles or available footer items.
+                                continue
+                            }
 
                             var vt = 2272
                             try {
