@@ -45,48 +45,53 @@ object SystemPropertiesHelper {
 
 /**
  * Maps packages to crash aliases and manages the system property `persist.hyperbounce.safemode`.
- * Follows the Hyperceiler safe mode design.
+ * Follows the HyperCeiler safe mode design.
  */
 object CrashScope {
     private const val TAG = "HyperBounce_CrashScope"
     const val PROP_SAFE_MODE = "persist.hyperbounce.safemode"
+    const val CRASH_RECORD_KEY = "hyperbounce_crash_record_data"
 
+    // Primary system scope apps
     private val packageToAliasMap = mapOf(
         "com.android.systemui" to "systemui",
         "miui.systemui.plugin" to "systemui",
         "com.miui.home" to "home",
+        "com.mi.android.globallauncher" to "home",
         "com.android.settings" to "settings",
-        "com.instagram.android" to "instagram",
-        "com.whatsapp" to "whatsapp",
-        "com.google.android.youtube" to "youtube",
-        "com.android.incallui" to "incallui",
-        "android" to "framework"
+        "com.xiaomi.misettings" to "settings"
     )
 
-    private val aliasToPackageMap = mapOf(
+    private val aliasToPrimaryPackageMap = mapOf(
         "systemui" to "com.android.systemui",
         "home" to "com.miui.home",
-        "settings" to "com.android.settings",
-        "instagram" to "com.instagram.android",
-        "whatsapp" to "com.whatsapp",
-        "youtube" to "com.google.android.youtube",
-        "incallui" to "com.android.incallui",
-        "framework" to "android"
+        "settings" to "com.android.settings"
     )
 
-    fun getAlias(packageName: String): String? {
-        if (packageToAliasMap.containsKey(packageName)) {
-            return packageToAliasMap[packageName]
-        }
-        for ((key, value) in packageToAliasMap) {
-            if (packageName.contains(value)) {
-                return value
-            }
-        }
-        return null
+    private val safeModeConfigMap = mapOf(
+        "com.android.systemui" to "prefs_key_systemui_safe_mode_enable",
+        "miui.systemui.plugin" to "prefs_key_systemui_safe_mode_enable",
+        "com.miui.home" to "prefs_key_home_safe_mode_enable",
+        "com.mi.android.globallauncher" to "prefs_key_home_safe_mode_enable",
+        "com.android.settings" to "prefs_key_system_settings_safe_mode_enable",
+        "com.xiaomi.misettings" to "prefs_key_system_settings_safe_mode_enable"
+    )
+
+    fun isScopeApp(packageName: String): Boolean {
+        return packageToAliasMap.containsKey(packageName)
     }
 
-    fun getPackageName(alias: String): String? = aliasToPackageMap[alias]
+    fun getAlias(packageName: String): String? {
+        return packageToAliasMap[packageName]
+    }
+
+    fun getPackageName(alias: String): String? {
+        return aliasToPrimaryPackageMap[alias]
+    }
+
+    fun getSafeModeConfigKey(packageName: String): String? {
+        return safeModeConfigMap[packageName]
+    }
 
     /**
      * Returns the set of active crashing aliases from the system property `persist.hyperbounce.safemode`.
@@ -98,7 +103,7 @@ object CrashScope {
             Log.w(TAG, "Failed to read system property $PROP_SAFE_MODE", t)
             ""
         }
-        if (raw.isNullOrBlank()) return emptySet()
+        if (raw.isBlank()) return emptySet()
         return raw.split(",")
             .map { it.trim().lowercase() }
             .filter { it.isNotEmpty() }

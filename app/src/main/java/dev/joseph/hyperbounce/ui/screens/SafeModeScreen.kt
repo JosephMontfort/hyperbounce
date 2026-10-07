@@ -65,9 +65,9 @@ fun SafeModeScreen(
     val safe = repository.safeMode
     val activeAliases = safe.getCrashingAliases()
 
-    val sysUiIcon = remember { loadAppIcon(context, "com.android.systemui") }
-    val launcherIcon = remember { loadAppIcon(context, "com.miui.home") }
-    val settingsIcon = remember { loadAppIcon(context, "com.android.settings") }
+    val sysUiIcon = remember { loadAppIcon(context, "com.android.systemui") ?: loadAppIcon(context, "miui.systemui.plugin") }
+    val launcherIcon = remember { loadAppIcon(context, "com.miui.home") ?: loadAppIcon(context, "com.mi.android.globallauncher") }
+    val settingsIcon = remember { loadAppIcon(context, "com.android.settings") ?: loadAppIcon(context, "com.xiaomi.misettings") }
 
     val isDark = LocalIsDarkTheme.current
     val cardColor = if (isDark) Color(0xFF1C1C1E) else Color(0xFFFFFFFF)
@@ -85,7 +85,7 @@ fun SafeModeScreen(
                 // 1. System UI
                 SafeModeAppRow(
                     title = "System UI",
-                    subtitle = "com.android.systemui",
+                    subtitle = "com.android.systemui • miui.systemui.plugin",
                     iconBitmap = sysUiIcon,
                     fallbackRes = R.drawable.ic_feature_notification,
                     checked = safe.systemUiSafeMode || activeAliases.contains("systemui"),
@@ -99,7 +99,7 @@ fun SafeModeScreen(
                 // 2. HyperOS Launcher
                 SafeModeAppRow(
                     title = "HyperOS Launcher",
-                    subtitle = "com.miui.home",
+                    subtitle = "com.miui.home • com.mi.android.globallauncher",
                     iconBitmap = launcherIcon,
                     fallbackRes = R.drawable.ic_feature_launcher,
                     checked = safe.launcherSafeMode || activeAliases.contains("home"),
@@ -113,7 +113,7 @@ fun SafeModeScreen(
                 // 3. System Settings
                 SafeModeAppRow(
                     title = "System Settings",
-                    subtitle = "com.android.settings",
+                    subtitle = "com.android.settings • com.xiaomi.misettings",
                     iconBitmap = settingsIcon,
                     fallbackRes = R.drawable.ic_nav_settings,
                     checked = safe.settingsSafeMode || activeAliases.contains("settings"),

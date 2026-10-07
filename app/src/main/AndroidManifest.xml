@@ -76,5 +76,18 @@
                 android:resource="@xml/file_paths" />
         </provider>
 
+        <activity
+            android:name=".safemode.CrashActivity"
+            android:exported="true"
+            android:theme="@android:style/Theme.DeviceDefault.Dialog"
+            android:excludeFromRecents="true"
+            android:launchMode="singleInstance" />
+
+        <activity
+            android:name=".safemode.ExceptionCrashActivity"
+            android:exported="false"
+            android:theme="@android:style/Theme.DeviceDefault.NoActionBar"
+            android:excludeFromRecents="true" />
+
     </application>
 </manifest>

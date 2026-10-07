@@ -20,20 +20,11 @@ class PhysicsHook : XposedModule() {
                 null
             }
 
-            // 1. Safe Mode Check (Hyperceiler Architecture)
+            // Safe Mode Check (HyperCeiler Architecture)
             if (SafeModeHandler.isSafeMode(param.packageName, prefs)) {
                 Log.w("HyperBounce", "[SAFE MODE ACTIVE] Skipping all hooks for ${param.packageName}")
                 return
             }
-
-            // 2. Rapid PID restart check (Engages Safe Mode if PID changes 3 times within 60s)
-            if (SafeModeHandler.checkAndTrackPidRestart(param.packageName)) {
-                Log.e("HyperBounce", "[SAFE MODE TRIGGERED] Rapid restart detected for ${param.packageName}! Skipping hooks.")
-                return
-            }
-
-            // 3. Install Crash Watchdog (Auto-triggers Safe Mode on uncaught exceptions)
-            SafeModeHandler.installCrashWatchdog(param.packageName)
 
             when {
                 param.packageName.contains("instagram") ->
@@ -127,8 +118,9 @@ class PhysicsHook : XposedModule() {
                 }
 
                 param.packageName == "com.android.settings" ||
+                param.packageName == "com.xiaomi.misettings" ||
                 param.packageName == "com.android.thememanager" -> {
-                    if (param.packageName == "com.android.settings") {
+                    if (param.packageName == "com.android.settings" || param.packageName == "com.xiaomi.misettings") {
                         dev.joseph.hyperbounce.settings.SettingsEntryHook.init(this, param.classLoader, prefs)
                     }
                     dev.joseph.hyperbounce.haptics.ringtone.XiaomiRingtoneHapticHook.init(this, param.classLoader)
@@ -166,7 +158,8 @@ class PhysicsHook : XposedModule() {
     override fun onSystemServerStarting(param: XposedModuleInterface.SystemServerStartingParam) {
         super.onSystemServerStarting(param)
         try {
-            Log.d("HyperBounce", "onSystemServerStarting: initializing Telecom and Xiaomi ringtone hooks")
+            Log.d("HyperBounce", "onSystemServerStarting: initializing CrashMonitor, Telecom, and Xiaomi ringtone hooks")
+            dev.joseph.hyperbounce.safemode.CrashMonitor.init(this, param.classLoader)
             dev.joseph.hyperbounce.haptics.ringtone.TelecomRingtoneHapticHook.init(this, param.classLoader)
             dev.joseph.hyperbounce.haptics.ringtone.XiaomiRingtoneHapticHook.init(this, param.classLoader)
         } catch (t: Throwable) {
