@@ -209,9 +209,11 @@ object ControlCenterHook {
     }
 
     fun isChildOfContainer(view: View?): Boolean {
-        var cur = view?.parent
+        if (view == null) return false
+        if (view.getTag(0x7f099996) == java.lang.Boolean.TRUE || view.getTag(0x7f099993) != null) return true
+        var cur = view.parent
         while (cur != null) {
-            if (cur is View && (cur.id == 0x7f099995 || cur.getTag(0x7f099995) != null || cur.getTag(0x7f099993) != null || cur is IosTileGroupFolder.IosClusterContainer || cur is IosTileGroupFolder.MiniClusterView || cur is IosTileGroupFolder.IosFolderExpandedOverlay)) {
+            if (cur is View && (cur.id == 0x7f099995 || cur.getTag(0x7f099995) != null || cur.getTag(0x7f099993) != null || cur.getTag(0x7f099996) == java.lang.Boolean.TRUE || cur is IosTileGroupFolder.IosClusterContainer || cur is IosTileGroupFolder.MiniClusterView || cur is IosTileGroupFolder.IosFolderExpandedOverlay)) {
                 return true
             }
             if (cur is View && cur.javaClass.name.contains("RecyclerView")) return false
@@ -352,7 +354,7 @@ object ControlCenterHook {
                 Log.e(TAG, "Failed to initialize FlashlightBrightnessHook", t)
             }
 
-            // 0b. Hook QSTileItemView.getShowLabel to return false in EDIT mode or for circular grouped child tiles
+            // 0b. Hook QSTileItemView.getShowLabel and getShowMark for child tiles inside groups
             try {
                 val qstileItemViewClass = Class.forName("miui.systemui.controlcenter.qs.tileview.QSTileItemView", false, classLoader)
                 for (m in qstileItemViewClass.declaredMethods) {
@@ -372,7 +374,14 @@ object ControlCenterHook {
                                 if (!isCard) {
                                     return@intercept false
                                 }
-                            } else if (ControlCenterConfigHolder.sIsEditMode) {
+                            }
+                            chain.proceed()
+                        }
+                    } else if (m.name == "getShowMark" || m.name == "isShowMark") {
+                        m.isAccessible = true
+                        module.hook(m).intercept { chain ->
+                            val v = chain.thisObject as? View
+                            if (isChildOfContainer(v)) {
                                 return@intercept false
                             }
                             chain.proceed()
@@ -1366,6 +1375,9 @@ object ControlCenterHook {
                                 }
                             }
                             if (originalList == null || ControlCenterConfigHolder.sTileGroups.isEmpty()) return@intercept originalList
+                            if (ControlCenterConfigHolder.sIsEditMode) {
+                                return@intercept originalList
+                            }
                             try {
                                 val filtered = ArrayList<Any>()
                                 for (item in originalList) {
@@ -1840,13 +1852,53 @@ object ControlCenterHook {
                                         return@intercept null
                                     }
 
+                                    if (ControlCenterConfigHolder.sIsGroupSelectMode) {
+                                        if (spec != null) {
+                                            var tileView: View? = null
+                                            try {
+                                                val getTileViewMethod = record.javaClass.getMethod("getTileView")
+                                                val tileViewObj = getTileViewMethod.invoke(record)
+                                                if (tileViewObj is View) tileView = tileViewObj
+                                            } catch (t2: Throwable) {}
+
+                                            if (ControlCenterConfigHolder.sSelectedTileSpecs.contains(spec)) {
+                                                ControlCenterConfigHolder.sSelectedTileSpecs.remove(spec)
+                                            } else {
+                                                val currentArea = ControlCenterConfigHolder.sSelectedTileSpecs.sumOf { ControlCenterConfigHolder.getTileArea(it) }
+                                                val tileArea = ControlCenterConfigHolder.getTileArea(spec)
+                                                if (currentArea + tileArea <= 12) {
+                                                    ControlCenterConfigHolder.sSelectedTileSpecs.add(spec)
+                                                } else {
+                                                    tileView?.performHapticFeedback(android.view.HapticFeedbackConstants.REJECT)
+                                                    return@intercept null
+                                                }
+                                            }
+                                            tileView?.performHapticFeedback(android.view.HapticFeedbackConstants.CLOCK_TICK)
+                                            ControlCenterConfigHolder.updateAllVisibleTileBadges()
+                                        }
+                                        return@intercept null
+                                    }
+
+                                    if (ControlCenterConfigHolder.sIsDisassembleMode) {
+                                        val g = ControlCenterConfigHolder.findGroupForSpec(spec)
+                                        if (g != null) {
+                                            if (ControlCenterConfigHolder.sSelectedDisassembleGroups.contains(g.id)) {
+                                                ControlCenterConfigHolder.sSelectedDisassembleGroups.remove(g.id)
+                                            } else {
+                                                ControlCenterConfigHolder.sSelectedDisassembleGroups.add(g.id)
+                                            }
+                                            ControlCenterConfigHolder.updateAllVisibleTileBadges()
+                                        }
+                                        return@intercept null
+                                    }
+
                                     val t = Throwable()
                                     for (elem in t.stackTrace) {
                                         if (elem.className.contains("clickAction") && !elem.className.contains("markClickAction")) {
                                             try {
                                                 val ctxField = record.javaClass.getDeclaredField("context")
                                                 ctxField.isAccessible = true
-                                                val ctx = ctxField.get(record) as? Context
+                                                val ctx = ctxField.get(record) as? Context ?: ControlCenterConfigHolder.sLastKnownContext
 
                                                 var tileView: View? = null
                                                 try {
@@ -1856,35 +1908,6 @@ object ControlCenterHook {
                                                 } catch (t2: Throwable) {}
 
                                                 if (spec != null && ctx != null) {
-                                                    if (ControlCenterConfigHolder.sIsGroupSelectMode) {
-                                                        if (ControlCenterConfigHolder.sSelectedTileSpecs.contains(spec)) {
-                                                            ControlCenterConfigHolder.sSelectedTileSpecs.remove(spec)
-                                                        } else {
-                                                            val currentArea = ControlCenterConfigHolder.sSelectedTileSpecs.sumOf { ControlCenterConfigHolder.getTileArea(it) }
-                                                            val tileArea = ControlCenterConfigHolder.getTileArea(spec)
-                                                            if (currentArea + tileArea <= 12) {
-                                                                ControlCenterConfigHolder.sSelectedTileSpecs.add(spec)
-                                                            } else {
-                                                                tileView?.performHapticFeedback(android.view.HapticFeedbackConstants.REJECT)
-                                                                return@intercept null
-                                                            }
-                                                        }
-                                                        tileView?.performHapticFeedback(android.view.HapticFeedbackConstants.CLOCK_TICK)
-                                                        ControlCenterConfigHolder.updateAllVisibleTileBadges()
-                                                        return@intercept null
-                                                    }
-                                                    if (ControlCenterConfigHolder.sIsDisassembleMode) {
-                                                        val g = ControlCenterConfigHolder.isGroupAnchor(spec)
-                                                        if (g != null) {
-                                                            if (ControlCenterConfigHolder.sSelectedDisassembleGroups.contains(g.id)) {
-                                                                ControlCenterConfigHolder.sSelectedDisassembleGroups.remove(g.id)
-                                                            } else {
-                                                                ControlCenterConfigHolder.sSelectedDisassembleGroups.add(g.id)
-                                                            }
-                                                            ControlCenterConfigHolder.updateAllVisibleTileBadges()
-                                                        }
-                                                        return@intercept null
-                                                    }
                                                     ControlCenterConfigHolder.toggleTileSize(ctx, spec, tileView)
                                                 }
                                             } catch (t3: Throwable) {

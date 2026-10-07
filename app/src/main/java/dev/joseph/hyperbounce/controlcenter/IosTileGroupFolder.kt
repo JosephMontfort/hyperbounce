@@ -435,6 +435,21 @@ object IosTileGroupFolder {
                 child.isLongClickable = false
                 child.isFocusable = false
 
+                if (child.getTag(0x7f099992) == null) {
+                    child.setTag(0x7f099992, true)
+                    child.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
+                        child.pivotX = halfBase
+                        child.pivotY = halfBase
+                        child.scaleX = scale
+                        child.scaleY = scale
+                        child.translationX = 0f
+                        child.translationY = 0f
+                        child.background = null
+                        child.outlineProvider = null
+                        child.clipToOutline = false
+                    }
+                }
+
                 try {
                     val tileLabelId = context.resources.getIdentifier("tile_label", "id", context.packageName)
                     if (tileLabelId != 0) {

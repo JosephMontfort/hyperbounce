@@ -1370,9 +1370,9 @@ object ControlCenterFullUnlock {
 
                 if (headerEntry != null) sAdapterHeaders[adapter] = headerEntry else sAdapterHeaders.remove(adapter)
                 if (wordlessEntry != null) sAdapterWordless[adapter] = wordlessEntry else sAdapterWordless.remove(adapter)
-                if (qsFooterEntry != null && ControlCenterConfigHolder.sIsEditMode) {
+                if (qsFooterEntry != null) {
                     sAdapterQsFooters[adapter] = qsFooterEntry
-                } else {
+                } else if (!ControlCenterConfigHolder.sIsEditMode) {
                     sAdapterQsFooters.remove(adapter)
                 }
                 sAdapterFooters[adapter] = footers
@@ -1542,7 +1542,7 @@ object ControlCenterFullUnlock {
 
                 // 4. Edit Divider & Inactive Available tiles pool - ONLY in Edit Mode!
                 if (ControlCenterConfigHolder.sIsEditMode) {
-                    val qsFooter = sAdapterQsFooters[adapter]
+                    val qsFooter = sAdapterQsFooters[adapter] ?: sAdapterQsFooters.values.firstOrNull()
                     if (qsFooter != null) {
                         newContentMap[qsFooter.first] = qsFooter.second
                     }
@@ -1596,7 +1596,7 @@ object ControlCenterFullUnlock {
 
                     // In edit mode: QS Divider and available tiles pool
                     if (ControlCenterConfigHolder.sIsEditMode) {
-                        val qsFooter = sAdapterQsFooters[adapter]
+                        val qsFooter = sAdapterQsFooters[adapter] ?: sAdapterQsFooters.values.firstOrNull()
                         if (qsFooter != null) {
                             newContentMap[qsFooter.first] = qsFooter.second
                         }
