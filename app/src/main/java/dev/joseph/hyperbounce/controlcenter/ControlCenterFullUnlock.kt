@@ -1045,10 +1045,10 @@ object ControlCenterFullUnlock {
             if (g != null) {
                 return g.getSpan()
             }
+            if (ControlCenterConfigHolder.sCircularCardSpecs.contains(spec)) return Pair(1, 1)
             if (ControlCenterConfigHolder.sLargeTileSpecs.contains(spec)) return Pair(2, 2)
             if (ControlCenterConfigHolder.sVerticalTileSpecs.contains(spec)) return Pair(1, 2)
             if (ControlCenterConfigHolder.sExpandedTileSpecs.contains(spec)) return Pair(2, 1)
-            if (ControlCenterConfigHolder.sCircularCardSpecs.contains(spec)) return Pair(1, 1)
             if (spec == "wifi" || spec == "cell") {
                 return Pair(2, 1)
             }

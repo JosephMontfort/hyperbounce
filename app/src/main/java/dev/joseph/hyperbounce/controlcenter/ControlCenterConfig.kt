@@ -394,40 +394,34 @@ object ControlCenterConfigHolder {
                     }
                     sIsWifiFirst = json.optBoolean("wifi_card_first", sIsWifiFirst)
 
-                    val expandedStr = json.optString("expanded_tile_specs", "")
-                    if (!TextUtils.isEmpty(expandedStr)) {
+                    if (json.has("expanded_tile_specs")) {
+                        val expandedStr = json.optString("expanded_tile_specs", "")
                         val newExp = LinkedHashSet<String>()
                         for (spec in expandedStr.split(",")) {
                             if (spec.trim().isNotEmpty()) newExp.add(spec.trim())
                         }
-                        if (newExp.isNotEmpty()) {
-                            sExpandedTileSpecs.clear()
-                            sExpandedTileSpecs.addAll(newExp)
-                        }
+                        sExpandedTileSpecs.clear()
+                        sExpandedTileSpecs.addAll(newExp)
                     }
 
-                    val verticalStr = json.optString("vertical_tile_specs", "")
-                    if (!TextUtils.isEmpty(verticalStr)) {
+                    if (json.has("vertical_tile_specs")) {
+                        val verticalStr = json.optString("vertical_tile_specs", "")
                         val newVert = LinkedHashSet<String>()
                         for (spec in verticalStr.split(",")) {
                             if (spec.trim().isNotEmpty()) newVert.add(spec.trim())
                         }
-                        if (newVert.isNotEmpty()) {
-                            sVerticalTileSpecs.clear()
-                            sVerticalTileSpecs.addAll(newVert)
-                        }
+                        sVerticalTileSpecs.clear()
+                        sVerticalTileSpecs.addAll(newVert)
                     }
 
-                    val largeStr = json.optString("large_tile_specs", "")
-                    if (!TextUtils.isEmpty(largeStr)) {
+                    if (json.has("large_tile_specs")) {
+                        val largeStr = json.optString("large_tile_specs", "")
                         val newLarge = LinkedHashSet<String>()
                         for (spec in largeStr.split(",")) {
                             if (spec.trim().isNotEmpty()) newLarge.add(spec.trim())
                         }
-                        if (newLarge.isNotEmpty()) {
-                            sLargeTileSpecs.clear()
-                            sLargeTileSpecs.addAll(newLarge)
-                        }
+                        sLargeTileSpecs.clear()
+                        sLargeTileSpecs.addAll(newLarge)
                     }
 
                     val circularCardsStr = json.optString("circular_card_specs", "")
@@ -436,6 +430,11 @@ object ControlCenterConfigHolder {
                         for (spec in circularCardsStr.split(",")) {
                             if (spec.trim().isNotEmpty()) sCircularCardSpecs.add(spec.trim())
                         }
+                    }
+                    for (cSpec in sCircularCardSpecs) {
+                        sExpandedTileSpecs.remove(cSpec)
+                        sVerticalTileSpecs.remove(cSpec)
+                        sLargeTileSpecs.remove(cSpec)
                     }
                     sMediaPlayerSize = json.optString("media_player_size", sMediaPlayerSize)
                     sBrightnessSliderHorizontal = json.optBoolean("brightness_slider_horizontal", sBrightnessSliderHorizontal)
@@ -497,40 +496,34 @@ object ControlCenterConfigHolder {
                 }
                 sIsWifiFirst = prefs.getBoolean("wifi_card_first", sIsWifiFirst)
 
-                val expandedStr = prefs.getString("expanded_tile_specs", "")
-                if (!TextUtils.isEmpty(expandedStr)) {
+                if (prefs.contains("expanded_tile_specs")) {
+                    val expandedStr = prefs.getString("expanded_tile_specs", "") ?: ""
                     val newExp = LinkedHashSet<String>()
-                    for (spec in expandedStr!!.split(",")) {
+                    for (spec in expandedStr.split(",")) {
                         if (spec.trim().isNotEmpty()) newExp.add(spec.trim())
                     }
-                    if (newExp.isNotEmpty()) {
-                        sExpandedTileSpecs.clear()
-                        sExpandedTileSpecs.addAll(newExp)
-                    }
+                    sExpandedTileSpecs.clear()
+                    sExpandedTileSpecs.addAll(newExp)
                 }
 
-                val verticalStr = prefs.getString("vertical_tile_specs", "")
-                if (!TextUtils.isEmpty(verticalStr)) {
+                if (prefs.contains("vertical_tile_specs")) {
+                    val verticalStr = prefs.getString("vertical_tile_specs", "") ?: ""
                     val newVert = LinkedHashSet<String>()
-                    for (spec in verticalStr!!.split(",")) {
+                    for (spec in verticalStr.split(",")) {
                         if (spec.trim().isNotEmpty()) newVert.add(spec.trim())
                     }
-                    if (newVert.isNotEmpty()) {
-                        sVerticalTileSpecs.clear()
-                        sVerticalTileSpecs.addAll(newVert)
-                    }
+                    sVerticalTileSpecs.clear()
+                    sVerticalTileSpecs.addAll(newVert)
                 }
 
-                val largeStr = prefs.getString("large_tile_specs", "")
-                if (!TextUtils.isEmpty(largeStr)) {
+                if (prefs.contains("large_tile_specs")) {
+                    val largeStr = prefs.getString("large_tile_specs", "") ?: ""
                     val newLarge = LinkedHashSet<String>()
-                    for (spec in largeStr!!.split(",")) {
+                    for (spec in largeStr.split(",")) {
                         if (spec.trim().isNotEmpty()) newLarge.add(spec.trim())
                     }
-                    if (newLarge.isNotEmpty()) {
-                        sLargeTileSpecs.clear()
-                        sLargeTileSpecs.addAll(newLarge)
-                    }
+                    sLargeTileSpecs.clear()
+                    sLargeTileSpecs.addAll(newLarge)
                 }
 
                 val circularCardsStr = prefs.getString("circular_card_specs", "")
@@ -539,6 +532,11 @@ object ControlCenterConfigHolder {
                     for (spec in circularCardsStr!!.split(",")) {
                         if (spec.trim().isNotEmpty()) sCircularCardSpecs.add(spec.trim())
                     }
+                }
+                for (cSpec in sCircularCardSpecs) {
+                    sExpandedTileSpecs.remove(cSpec)
+                    sVerticalTileSpecs.remove(cSpec)
+                    sLargeTileSpecs.remove(cSpec)
                 }
                 sMediaPlayerSize = prefs.getString("media_player_size", sMediaPlayerSize) ?: "2x2"
                 sBrightnessSliderHorizontal = prefs.getBoolean("brightness_slider_horizontal", sBrightnessSliderHorizontal)

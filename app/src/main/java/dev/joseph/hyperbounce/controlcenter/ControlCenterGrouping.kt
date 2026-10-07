@@ -2929,8 +2929,21 @@ object ControlCenterGrouping {
                                     for (i in rg.specs.indices) {
                                         val s = rg.specs[i]
                                         when (sizes[i]) {
-                                            "E" -> ControlCenterConfigHolder.sExpandedTileSpecs.add(s)
-                                            "V" -> ControlCenterConfigHolder.sVerticalTileSpecs.add(s)
+                                            "E" -> {
+                                                ControlCenterConfigHolder.sExpandedTileSpecs.add(s)
+                                                ControlCenterConfigHolder.sCircularCardSpecs.remove(s)
+                                            }
+                                            "V" -> {
+                                                ControlCenterConfigHolder.sVerticalTileSpecs.add(s)
+                                                ControlCenterConfigHolder.sCircularCardSpecs.remove(s)
+                                            }
+                                            "C" -> {
+                                                if ("wifi".equals(s, ignoreCase = true) || "cell".equals(s, ignoreCase = true)) {
+                                                    ControlCenterConfigHolder.sCircularCardSpecs.add(s)
+                                                }
+                                                ControlCenterConfigHolder.sExpandedTileSpecs.remove(s)
+                                                ControlCenterConfigHolder.sVerticalTileSpecs.remove(s)
+                                            }
                                         }
                                     }
                                 } else {
@@ -2939,27 +2952,51 @@ object ControlCenterGrouping {
                                         "2_EXPANDED" -> {
                                             for (s in rg.specs) {
                                                 ControlCenterConfigHolder.sExpandedTileSpecs.add(s)
+                                                ControlCenterConfigHolder.sCircularCardSpecs.remove(s)
                                             }
                                         }
                                         "2_VERTICAL" -> {
                                             for (s in rg.specs) {
                                                 ControlCenterConfigHolder.sVerticalTileSpecs.add(s)
+                                                ControlCenterConfigHolder.sCircularCardSpecs.remove(s)
                                             }
                                         }
                                         "1_EXP_2_CIRC" -> {
                                             val card = if (rg.cardSpec.isNotEmpty()) rg.cardSpec else rg.specs.firstOrNull()
-                                            if (card != null) {
-                                                ControlCenterConfigHolder.sExpandedTileSpecs.add(card)
+                                            for (s in rg.specs) {
+                                                if (s == card) {
+                                                    ControlCenterConfigHolder.sExpandedTileSpecs.add(s)
+                                                    ControlCenterConfigHolder.sCircularCardSpecs.remove(s)
+                                                } else {
+                                                    if ("wifi".equals(s, ignoreCase = true) || "cell".equals(s, ignoreCase = true)) {
+                                                        ControlCenterConfigHolder.sCircularCardSpecs.add(s)
+                                                    }
+                                                    ControlCenterConfigHolder.sExpandedTileSpecs.remove(s)
+                                                }
                                             }
                                         }
                                         "1_VERT_2_CIRC" -> {
                                             val card = if (rg.cardSpec.isNotEmpty()) rg.cardSpec else rg.specs.firstOrNull()
-                                            if (card != null) {
-                                                ControlCenterConfigHolder.sVerticalTileSpecs.add(card)
+                                            for (s in rg.specs) {
+                                                if (s == card) {
+                                                    ControlCenterConfigHolder.sVerticalTileSpecs.add(s)
+                                                    ControlCenterConfigHolder.sCircularCardSpecs.remove(s)
+                                                } else {
+                                                    if ("wifi".equals(s, ignoreCase = true) || "cell".equals(s, ignoreCase = true)) {
+                                                        ControlCenterConfigHolder.sCircularCardSpecs.add(s)
+                                                    }
+                                                    ControlCenterConfigHolder.sVerticalTileSpecs.remove(s)
+                                                }
                                             }
                                         }
                                         else -> {
-                                            // Circular tiles remain circular
+                                            for (s in rg.specs) {
+                                                if ("wifi".equals(s, ignoreCase = true) || "cell".equals(s, ignoreCase = true)) {
+                                                    ControlCenterConfigHolder.sCircularCardSpecs.add(s)
+                                                }
+                                                ControlCenterConfigHolder.sExpandedTileSpecs.remove(s)
+                                                ControlCenterConfigHolder.sVerticalTileSpecs.remove(s)
+                                            }
                                         }
                                     }
                                 }

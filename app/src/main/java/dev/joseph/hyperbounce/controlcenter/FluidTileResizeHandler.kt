@@ -1919,10 +1919,11 @@ object FluidTileResizeHandler {
                             }
                         } else {
                             initialState = when {
+                                ControlCenterConfigHolder.sCircularCardSpecs.contains(spec) -> STATE_NORMAL
                                 ControlCenterConfigHolder.sLargeTileSpecs.contains(spec) -> STATE_LARGE
                                 ControlCenterConfigHolder.sExpandedTileSpecs.contains(spec) -> STATE_EXPANDED
                                 ControlCenterConfigHolder.sVerticalTileSpecs.contains(spec) -> STATE_VERTICAL
-                                ("wifi".equals(spec, ignoreCase = true) || "cell".equals(spec, ignoreCase = true)) && !ControlCenterConfigHolder.sCircularCardSpecs.contains(spec) -> STATE_EXPANDED
+                                ("wifi".equals(spec, ignoreCase = true) || "cell".equals(spec, ignoreCase = true)) -> STATE_EXPANDED
                                 else -> STATE_NORMAL
                             }
                             candidateTargetState = initialState

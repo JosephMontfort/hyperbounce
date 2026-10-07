@@ -2556,7 +2556,8 @@ object ControlCenterHook {
                                                     curLp.height = tallH
                                                     itemView.layoutParams = curLp
                                                 }
-                                            } else if (ControlCenterConfigHolder.sExpandedTileSpecs.contains(spec) || spec == "wifi" || spec == "cell") {
+                                            } else if (ControlCenterConfigHolder.sExpandedTileSpecs.contains(spec) ||
+                                                       ((spec == "wifi" || spec == "cell") && !ControlCenterConfigHolder.sCircularCardSpecs.contains(spec))) {
                                                 if (curLp != null && curLp.height != cardH) {
                                                     curLp.height = cardH
                                                     itemView.layoutParams = curLp
@@ -6730,10 +6731,11 @@ class TileResizeDragTouchListener(
                         w.coerceIn(2, 4)
                     }
                     isMediaSpec -> FluidTileResizeHandler.mediaSizeStringToState(ControlCenterConfigHolder.sMediaPlayerSize)
+                    ControlCenterConfigHolder.sCircularCardSpecs.contains(spec) -> STATE_NORMAL
                     ControlCenterConfigHolder.sLargeTileSpecs.contains(spec) -> STATE_LARGE
                     ControlCenterConfigHolder.sExpandedTileSpecs.contains(spec) -> STATE_EXPANDED
                     ControlCenterConfigHolder.sVerticalTileSpecs.contains(spec) -> STATE_VERTICAL
-                    ("wifi".equals(spec, ignoreCase = true) || "cell".equals(spec, ignoreCase = true)) && !ControlCenterConfigHolder.sCircularCardSpecs.contains(spec) -> STATE_EXPANDED
+                    ("wifi".equals(spec, ignoreCase = true) || "cell".equals(spec, ignoreCase = true)) -> STATE_EXPANDED
                     else -> STATE_NORMAL
                 }
 

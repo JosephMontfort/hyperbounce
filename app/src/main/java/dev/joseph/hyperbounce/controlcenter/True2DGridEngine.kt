@@ -434,6 +434,7 @@ object True2DGridEngine {
             val isCircular = !isSystem && spanW == 1 && spanH == 1 && (
                 vt == 8453 ||
                 (item != null && item.javaClass.name.contains("QSTileItemView")) ||
+                (ControlCenterConfigHolder.sCircularCardSpecs.contains(spec)) ||
                 (spec != null && !ControlCenterConfigHolder.sExpandedTileSpecs.contains(spec) &&
                  !ControlCenterConfigHolder.sVerticalTileSpecs.contains(spec) &&
                  !ControlCenterConfigHolder.sLargeTileSpecs.contains(spec) &&
