@@ -947,11 +947,15 @@ object ControlCenterHook {
                     if (m.name == "prepareLocation") {
                         m.isAccessible = true
                         module.hook(m).intercept { chain ->
+                            val holder = chain.thisObject
+                            val itemView = ControlCenterGrouping.getViewHolderItemView(holder)
+                            if (itemView != null && ControlCenterGrouping.isChildOfIosCluster(itemView)) {
+                                return@intercept null
+                            }
                             val result = try { chain.proceed() } catch (t: Throwable) { null }
                             if (ControlCenterConfigHolder.config.isLowEndAnim() || !ControlCenterConfigHolder.config.isAnimActive) return@intercept result
 
                             try {
-                                val holder = chain.thisObject
                                 var ctx: Context? = null
                                 try {
                                     val getCtxMethod = holder.javaClass.getMethod("getContext")
@@ -989,6 +993,11 @@ object ControlCenterHook {
                     if (m.name == "updateEases") {
                         m.isAccessible = true
                         module.hook(m).intercept { chain ->
+                            val holder = chain.thisObject
+                            val itemView = ControlCenterGrouping.getViewHolderItemView(holder)
+                            if (itemView != null && ControlCenterGrouping.isChildOfIosCluster(itemView)) {
+                                return@intercept null
+                            }
                             val result = try { chain.proceed() } catch (t: Throwable) { null }
                             if (ControlCenterConfigHolder.config.isLowEndAnim() || !ControlCenterConfigHolder.config.isAnimActive) return@intercept result
                             try {
@@ -1066,10 +1075,14 @@ object ControlCenterHook {
                     if (m.name == "onFrameCallback") {
                         m.isAccessible = true
                         module.hook(m).intercept { chain ->
+                            val holder = chain.thisObject
+                            val itemView = ControlCenterGrouping.getViewHolderItemView(holder)
+                            if (itemView != null && ControlCenterGrouping.isChildOfIosCluster(itemView)) {
+                                return@intercept null
+                            }
                             val result = chain.proceed()
                             if (ControlCenterConfigHolder.config.isJellyActive) {
                                 try {
-                                    val holder = chain.thisObject
                                     val ivField = holderClass.getField("itemView")
                                     val itemView = ivField.get(holder) as? View ?: return@intercept result
 
@@ -2941,6 +2954,10 @@ object ControlCenterHook {
                             if (itemView != null && ControlCenterGrouping.isChildOfIosCluster(itemView)) {
                                 itemView.background = null
                                 itemView.clipToOutline = false
+                                val p = itemView.parent
+                                if (p is IosTileGroupFolder.MiniClusterView) {
+                                    p.post { p.requestLayout() }
+                                }
                             }
                             result
                         }

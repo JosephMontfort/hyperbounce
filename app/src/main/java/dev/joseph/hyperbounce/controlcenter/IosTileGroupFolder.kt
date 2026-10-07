@@ -127,6 +127,37 @@ object IosTileGroupFolder {
             id = 0x7f09999a
         }
 
+        override fun onViewAdded(child: View) {
+            super.onViewAdded(child)
+            child.setTag(0x7f09999c, true)
+            if (child !== miniClusterView) {
+                child.background = null
+                child.clipToOutline = false
+                child.addOnLayoutChangeListener { v, _, _, _, _, _, _, _, _ ->
+                    v.translationX = 0f
+                    v.translationY = 0f
+                    v.scaleX = 1.0f
+                    v.scaleY = 1.0f
+                    v.background = null
+                    v.clipToOutline = false
+                }
+            }
+        }
+
+        override fun dispatchDraw(canvas: android.graphics.Canvas) {
+            for (i in 0 until childCount) {
+                val child = getChildAt(i) ?: continue
+                if (child === miniClusterView) continue
+                if (child.translationX != 0f) child.translationX = 0f
+                if (child.translationY != 0f) child.translationY = 0f
+                if (child.scaleX != 1.0f) child.scaleX = 1.0f
+                if (child.scaleY != 1.0f) child.scaleY = 1.0f
+                if (child.background != null) child.background = null
+                if (child.clipToOutline) child.clipToOutline = false
+            }
+            super.dispatchDraw(canvas)
+        }
+
         override fun generateDefaultLayoutParams(): LayoutParams {
             return LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT)
         }
@@ -267,6 +298,7 @@ object IosTileGroupFolder {
 
         override fun onViewAdded(child: View) {
             super.onViewAdded(child)
+            child.setTag(0x7f09999c, true)
             child.background = null
             child.clipToOutline = false
             child.addOnLayoutChangeListener { v, _, _, _, _, _, _, _, _ ->
@@ -289,6 +321,32 @@ object IosTileGroupFolder {
                 v.translationX = 0f
                 v.translationY = 0f
             }
+        }
+
+        override fun dispatchDraw(canvas: android.graphics.Canvas) {
+            val pad = (4 * resources.displayMetrics.density).toInt()
+            val gap = (4 * resources.displayMetrics.density).toInt()
+            val availW = Math.max(0, width - 2 * pad - gap)
+            val subW = availW / 2f
+            val availH = Math.max(0, height - 2 * pad - gap)
+            val subH = availH / 2f
+            val baseSize = getBaseTileSize()
+            val targetSize = Math.min(subW, subH)
+            val expectedScale = if (baseSize > 0 && targetSize > 10) (targetSize / baseSize.toFloat()).coerceIn(0.2f, 0.6f) else 0.42f
+            val halfBase = baseSize / 2f
+
+            for (i in 0 until childCount) {
+                val child = getChildAt(i) ?: continue
+                if (child.translationX != 0f) child.translationX = 0f
+                if (child.translationY != 0f) child.translationY = 0f
+                if (child.pivotX != halfBase) child.pivotX = halfBase
+                if (child.pivotY != halfBase) child.pivotY = halfBase
+                if (child.scaleX != expectedScale) child.scaleX = expectedScale
+                if (child.scaleY != expectedScale) child.scaleY = expectedScale
+                if (child.background != null) child.background = null
+                if (child.clipToOutline) child.clipToOutline = false
+            }
+            super.dispatchDraw(canvas)
         }
 
         override fun onInterceptTouchEvent(ev: MotionEvent?): Boolean = true

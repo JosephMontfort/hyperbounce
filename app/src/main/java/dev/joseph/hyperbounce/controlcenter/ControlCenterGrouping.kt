@@ -298,6 +298,7 @@ object ControlCenterGrouping {
         try {
             val oldCols = group.getEffectiveColCount()
             val oldRows = group.getEffectiveRowCount()
+            if (oldRows > 4) return false
             val layoutRes = computeGroupLayoutForGroup(group) ?: return false
 
             val transposedPlaced = mutableListOf<PlacedTile>()
@@ -376,7 +377,15 @@ object ControlCenterGrouping {
             val oldRows = group.getEffectiveRowCount()
             val type = group.getEffectiveLayoutType()
 
-            if (type == "2_CIRCULAR_VERT" || type == "2_CIRCULAR_HORIZ" || (group.specs.size == 2 && (oldRows == 1 || oldCols == 1))) {
+            val isSymmetricalSquare = (oldCols == oldRows && group.specs.all { s ->
+                !ControlCenterConfigHolder.sExpandedTileSpecs.contains(s) &&
+                !ControlCenterConfigHolder.sVerticalTileSpecs.contains(s) &&
+                (s != "wifi" && s != "cell")
+            })
+
+            if (isSymmetricalSquare) {
+                java.util.Collections.rotate(group.specs, 1)
+            } else if (type == "2_CIRCULAR_VERT" || type == "2_CIRCULAR_HORIZ" || (group.specs.size == 2 && (oldRows == 1 || oldCols == 1))) {
                 group.isVertical = !group.isVertical
                 if (group.isVertical) {
                     group.layoutType = "2_CIRCULAR_VERT"
@@ -388,7 +397,10 @@ object ControlCenterGrouping {
                     group.rowCount = 1
                 }
             } else {
-                matrixTransposeGroup(group)
+                val success = matrixTransposeGroup(group)
+                if (!success) {
+                    java.util.Collections.rotate(group.specs, 1)
+                }
             }
 
             ControlCenterConfigHolder.savePriorities(ctx)
@@ -646,6 +658,8 @@ object ControlCenterGrouping {
 
     fun attachSubHolder(holder: Any?) {
         if (holder == null) return
+        val childView = getViewHolderItemView(holder)
+        val isIosChild = childView != null && isChildOfIosCluster(childView)
         var sc: Class<*>? = holder.javaClass
         while (sc != null) {
             try {
@@ -660,13 +674,15 @@ object ControlCenterGrouping {
                     mpaField.set(holder, ControlCenterConfigHolder.sMainPanelAdapter)
                 }
             } catch (t: Throwable) {}
-            try {
-                val fcField = sc.getDeclaredField("frameCallback")
-                fcField.isAccessible = true
-                if (ControlCenterConfigHolder.sFrameCallback != null) {
-                    fcField.set(holder, ControlCenterConfigHolder.sFrameCallback)
-                }
-            } catch (t: Throwable) {}
+            if (!isIosChild) {
+                try {
+                    val fcField = sc.getDeclaredField("frameCallback")
+                    fcField.isAccessible = true
+                    if (ControlCenterConfigHolder.sFrameCallback != null) {
+                        fcField.set(holder, ControlCenterConfigHolder.sFrameCallback)
+                    }
+                } catch (t: Throwable) {}
+            }
             sc = sc.superclass
         }
     }
@@ -1364,9 +1380,11 @@ object ControlCenterGrouping {
     }
 
     fun isChildOfIosCluster(view: View): Boolean {
+        if (view.getTag(0x7f09999c) == true) return true
         var p = view.parent
         while (p != null) {
             if (p is IosTileGroupFolder.IosClusterContainer || p is IosTileGroupFolder.MiniClusterView) return true
+            if (p is View && p.getTag(0x7f09999c) == true) return true
             p = p.parent
         }
         return false
@@ -1473,6 +1491,7 @@ object ControlCenterGrouping {
                             // First 3 normal tiles
                             for (i in 0 until 3) {
                                 val child = inflateTileForType("C", iosCluster, activeCtrl, classLoader)
+                                child.setTag(0x7f09999c, true)
                                 iosCluster.addView(child)
                                 val h = createSubHolderForView(child, mainPanelController, classLoader)
                                 attachSubHolder(h)
@@ -1482,6 +1501,7 @@ object ControlCenterGrouping {
                             // 4 mini tiles inside miniClusterView
                             for (i in 3 until 7) {
                                 val child = inflateTileForType("C", iosCluster.miniClusterView, activeCtrl, classLoader)
+                                child.setTag(0x7f09999c, true)
                                 iosCluster.miniClusterView.addView(child)
                                 val h = createSubHolderForView(child, mainPanelController, classLoader)
                                 attachSubHolder(h)

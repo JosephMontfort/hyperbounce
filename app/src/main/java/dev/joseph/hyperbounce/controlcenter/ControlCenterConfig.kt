@@ -1430,40 +1430,14 @@ object ControlCenterConfigHolder {
                             itemView.addView(rotateBtn)
                         }
                         if (rotateBtn != null) {
-                            val shouldShowRotate = !sIsGroupSelectMode && !sIsDisassembleMode
+                            val isIosCluster = group.isIosFolderCluster()
+                            val shouldShowRotate = !sIsGroupSelectMode && !sIsDisassembleMode && !isIosCluster
                             rotateBtn.visibility = if (shouldShowRotate) View.VISIBLE else View.GONE
                             if (shouldShowRotate) {
                                 rotateBtn.bringToFront()
                                 rotateBtn.isClickable = true
                                 rotateBtn.setOnClickListener {
-                                    try {
-                                        when (group.getEffectiveLayoutType()) {
-                                            "2_CIRCULAR_VERT", "2_CIRCULAR_HORIZ" -> {
-                                                group.isVertical = !group.isVertical
-                                                group.layoutType = if (group.isVertical) "2_CIRCULAR_VERT" else "2_CIRCULAR_HORIZ"
-                                            }
-                                            "2_EXPANDED", "2_VERTICAL" -> {
-                                                java.util.Collections.swap(group.specs, 0, 1)
-                                            }
-                                            "1_EXP_2_CIRC", "1_VERT_2_CIRC", "4_CIRCULAR" -> {
-                                                java.util.Collections.rotate(group.specs, 1)
-                                            }
-                                            else -> {
-                                                if (group.specs.size == 2) {
-                                                    group.isVertical = !group.isVertical
-                                                } else {
-                                                    java.util.Collections.rotate(group.specs, 1)
-                                                }
-                                            }
-                                        }
-                                        savePriorities(itemView.context)
-                                        ControlCenterFullUnlock.ensureTileFitsLandscapeAfterResize("group:${group.id}", itemView.context)
-                                        refreshRecyclerView(itemView)
-                                        updateAllVisibleTileBadges()
-                                        refreshAdapter(itemView.rootView, itemView.context, true)
-                                    } catch (t: Throwable) {
-                                        Log.e(TAG, "Rotate group error", t)
-                                    }
+                                    ControlCenterGrouping.rotateTileGroup(group, itemView.context, itemView)
                                 }
                             } else {
                                 rotateBtn.isClickable = false
