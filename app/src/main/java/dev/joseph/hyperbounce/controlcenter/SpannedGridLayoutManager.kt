@@ -147,6 +147,29 @@ class SpannedGridLayoutManager : GridLayoutManager {
                 -1
             }
 
+            try {
+                val contentMapField = adapter.javaClass.getDeclaredField("contentMap")
+                contentMapField.isAccessible = true
+                val map = contentMapField.get(adapter) as? Map<*, *>
+                if (map != null) {
+                    var idx = 0
+                    for (entry in map.values) {
+                        if (entry is List<*>) {
+                            for (item in entry) {
+                                if (idx == position && item != null) {
+                                    val spec = ControlCenterConfigHolder.getRecordSpec(item)
+                                    val g = ControlCenterConfigHolder.findGroupForSpec(spec)
+                                    if (g != null) {
+                                        return intArrayOf(g.getEffectiveColCount(), g.getEffectiveRowCount())
+                                    }
+                                }
+                                idx++
+                            }
+                        }
+                    }
+                }
+            } catch (t: Throwable) {}
+
             // 3484336 / 63342: MediaPlayer -> dynamic size
             if (viewType == 3484336 || viewType == 63342) {
                 val parts = ControlCenterConfigHolder.sMediaPlayerSize.split("x")

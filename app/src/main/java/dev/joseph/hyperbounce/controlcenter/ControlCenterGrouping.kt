@@ -30,11 +30,13 @@ data class PlacedTile(
 data class GroupLayoutResult(
     val rowCount: Int,
     val placedTiles: List<PlacedTile>,
-    val layoutType: String
+    val layoutType: String,
+    val colCount: Int = 2
 )
 
 class DynamicGroupContainer(context: Context) : ViewGroup(context) {
     var rowCount: Int = 2
+    var colCount: Int = 2
     var placedTiles: List<PlacedTile> = emptyList()
 
     override fun generateDefaultLayoutParams(): ViewGroup.LayoutParams {
@@ -50,10 +52,13 @@ class DynamicGroupContainer(context: Context) : ViewGroup(context) {
         val pad = (6 * density).toInt()
         val availW = Math.max(0, w - 2 * pad)
         val gap = (6 * density).toInt()
-        val colW = Math.max(0, (availW - gap) / 2)
-        val totalGapsY = Math.max(0, rowCount - 1) * gap
+        val cols = if (colCount in 1..4) colCount else 2
+        val totalGapsX = Math.max(0, cols - 1) * gap
+        val colW = if (cols > 0) Math.max(0, (availW - totalGapsX) / cols) else 0
+        val rows = if (rowCount in 1..6) rowCount else 2
+        val totalGapsY = Math.max(0, rows - 1) * gap
         val availH = Math.max(0, h - 2 * pad - totalGapsY)
-        val rowH = if (rowCount > 0) Math.max(0, availH / rowCount) else 0
+        val rowH = if (rows > 0) Math.max(0, availH / rows) else 0
 
         for (i in 0 until childCount) {
             val child = getChildAt(i) ?: continue
@@ -68,7 +73,7 @@ class DynamicGroupContainer(context: Context) : ViewGroup(context) {
             val colSpan = pt?.colSpan ?: 1
             val rowSpan = pt?.rowSpan ?: 1
 
-            val childW = if (colSpan >= 2) availW else colW
+            val childW = if (colSpan > 1) (colSpan * colW + (colSpan - 1) * gap) else colW
             val childH = if (rowSpan > 1) (rowSpan * rowH + (rowSpan - 1) * gap) else rowH
 
             child.measure(
@@ -83,10 +88,13 @@ class DynamicGroupContainer(context: Context) : ViewGroup(context) {
         val pad = (6 * density).toInt()
         val availW = Math.max(0, (r - l) - 2 * pad)
         val gap = (6 * density).toInt()
-        val colW = Math.max(0, (availW - gap) / 2)
-        val totalGapsY = Math.max(0, rowCount - 1) * gap
+        val cols = if (colCount in 1..4) colCount else 2
+        val totalGapsX = Math.max(0, cols - 1) * gap
+        val colW = if (cols > 0) Math.max(0, (availW - totalGapsX) / cols) else 0
+        val rows = if (rowCount in 1..6) rowCount else 2
+        val totalGapsY = Math.max(0, rows - 1) * gap
         val availH = Math.max(0, (b - t) - 2 * pad - totalGapsY)
-        val rowH = if (rowCount > 0) Math.max(0, availH / rowCount) else 0
+        val rowH = if (rows > 0) Math.max(0, availH / rows) else 0
 
         for (i in 0 until childCount) {
             val child = getChildAt(i) ?: continue
@@ -97,14 +105,14 @@ class DynamicGroupContainer(context: Context) : ViewGroup(context) {
                 continue
             }
             val pt = if (i < placedTiles.size) placedTiles[i] else null
-            val col = pt?.col ?: (i % 2)
-            val row = pt?.row ?: (i / 2)
+            val col = pt?.col ?: (i % cols)
+            val row = pt?.row ?: (i / cols)
             val colSpan = pt?.colSpan ?: 1
             val rowSpan = pt?.rowSpan ?: 1
 
             val childLeft = pad + col * (colW + gap)
             val childTop = pad + row * (rowH + gap)
-            val childW = if (colSpan >= 2) availW else colW
+            val childW = if (colSpan > 1) (colSpan * colW + (colSpan - 1) * gap) else colW
             val childH = if (rowSpan > 1) (rowSpan * rowH + (rowSpan - 1) * gap) else rowH
 
             child.layout(childLeft, childTop, childLeft + childW, childTop + childH)
@@ -165,11 +173,11 @@ object ControlCenterGrouping {
         }
     }
 
-    fun computeGroupLayout(specs: List<String>, tileSizesList: List<String>): GroupLayoutResult? {
+    fun computeGroupLayout(specs: List<String>, tileSizesList: List<String>, targetCols: Int = 2): GroupLayoutResult? {
         if (specs.size < 2 || specs.size != tileSizesList.size) return null
 
         // Specialized iOS 7-tile cluster (3 normal 1x1 + 4 shrunken mini tiles in slot (1,1))
-        if (specs.size == 7 && tileSizesList.all { it == "C" }) {
+        if (specs.size == 7 && tileSizesList.all { it == "C" } && targetCols == 2) {
             val placed = mutableListOf<PlacedTile>()
             placed.add(PlacedTile(specs[0], 0, 0, 1, 1, "C"))
             placed.add(PlacedTile(specs[1], 1, 0, 1, 1, "C"))
@@ -177,22 +185,29 @@ object ControlCenterGrouping {
             for (i in 3 until 7) {
                 placed.add(PlacedTile(specs[i], 1, 1, 1, 1, "C"))
             }
-            return GroupLayoutResult(2, placed, "7_IOS_CLUSTER")
+            return GroupLayoutResult(2, placed, "7_IOS_CLUSTER", 2)
         }
 
-        val grid = Array(6) { arrayOfNulls<String>(2) }
+        val cols = targetCols.coerceIn(1, 4)
+        val grid = Array(6) { arrayOfNulls<String>(cols) }
         val placed = mutableListOf<PlacedTile>()
 
         for (i in specs.indices) {
             val spec = specs[i]
             val type = tileSizesList[i]
-            val colSpan = if (type == "E") 2 else 1
-            val rowSpan = if (type == "V") 2 else 1
+            val colSpan = when (type) {
+                "E", "L" -> 2.coerceAtMost(cols)
+                else -> 1
+            }
+            val rowSpan = when (type) {
+                "V", "L" -> 2
+                else -> 1
+            }
 
             var startR = -1
             var startC = -1
             findLoop@ for (r in 0 until 6) {
-                for (c in 0 until 2) {
+                for (c in 0 until cols) {
                     if (grid[r][c] == null) {
                         startR = r
                         startC = c
@@ -202,7 +217,7 @@ object ControlCenterGrouping {
             }
             if (startR == -1) return null
 
-            if (startC + colSpan > 2) return null
+            if (startC + colSpan > cols) return null
             if (startR + rowSpan > 6) return null
 
             for (dr in 0 until rowSpan) {
@@ -224,22 +239,23 @@ object ControlCenterGrouping {
         if (h !in 1..6) return null
 
         for (r in 0 until h) {
-            for (c in 0 until 2) {
+            for (c in 0 until cols) {
                 if (grid[r][c] == null) return null
             }
         }
 
         val layoutType = when {
-            h == 2 && specs.size == 4 && tileSizesList.all { it == "C" } -> "4_CIRCULAR"
-            h == 1 && specs.size == 2 && tileSizesList.all { it == "C" } -> "2_CIRCULAR_HORIZ"
-            h == 2 && specs.size == 2 && tileSizesList.all { it == "E" } -> "2_EXPANDED"
-            h == 2 && specs.size == 2 && tileSizesList.all { it == "V" } -> "2_VERTICAL"
-            h == 2 && specs.size == 3 && tileSizesList[0] == "E" && tileSizesList[1] == "C" && tileSizesList[2] == "C" -> "1_EXP_2_CIRC"
-            h == 2 && specs.size == 3 && tileSizesList[0] == "V" && tileSizesList[1] == "C" && tileSizesList[2] == "C" -> "1_VERT_2_CIRC"
+            h == 2 && cols == 2 && specs.size == 4 && tileSizesList.all { it == "C" } -> "4_CIRCULAR"
+            h == 1 && cols == 2 && specs.size == 2 && tileSizesList.all { it == "C" } -> "2_CIRCULAR_HORIZ"
+            h == 2 && cols == 1 && specs.size == 2 && tileSizesList.all { it == "C" } -> "2_CIRCULAR_VERT"
+            h == 2 && cols == 2 && specs.size == 2 && tileSizesList.all { it == "E" } -> "2_EXPANDED"
+            h == 2 && cols == 2 && specs.size == 2 && tileSizesList.all { it == "V" } -> "2_VERTICAL"
+            h == 2 && cols == 2 && specs.size == 3 && tileSizesList[0] == "E" && tileSizesList[1] == "C" && tileSizesList[2] == "C" -> "1_EXP_2_CIRC"
+            h == 2 && cols == 2 && specs.size == 3 && tileSizesList[0] == "V" && tileSizesList[1] == "C" && tileSizesList[2] == "C" -> "1_VERT_2_CIRC"
             else -> "DYNAMIC_${h}R"
         }
 
-        return GroupLayoutResult(h, placed, layoutType)
+        return GroupLayoutResult(h, placed, layoutType, cols)
     }
 
     fun computeGroupLayoutForGroup(group: TileGroup): GroupLayoutResult? {
@@ -275,7 +291,115 @@ object ControlCenterGrouping {
             }
             inferred
         }
-        return computeGroupLayout(group.specs, sizes)
+        return computeGroupLayout(group.specs, sizes, group.getEffectiveColCount())
+    }
+
+    fun matrixTransposeGroup(group: TileGroup): Boolean {
+        try {
+            val oldCols = group.getEffectiveColCount()
+            val oldRows = group.getEffectiveRowCount()
+            val layoutRes = computeGroupLayoutForGroup(group) ?: return false
+
+            val transposedPlaced = mutableListOf<PlacedTile>()
+            for (pt in layoutRes.placedTiles) {
+                val newCol = pt.row
+                val newRow = pt.col
+                val newColSpan = pt.rowSpan
+                val newRowSpan = pt.colSpan
+                val newType = when (pt.type) {
+                    "E" -> "V"
+                    "V" -> "E"
+                    else -> pt.type
+                }
+                transposedPlaced.add(PlacedTile(pt.spec, newCol, newRow, newColSpan, newRowSpan, newType))
+            }
+
+            // Sort in standard row-major reading order (top-to-bottom, left-to-right)
+            transposedPlaced.sortWith(compareBy({ it.row }, { it.col }))
+
+            val newCols = oldRows.coerceIn(1, 4)
+            val newRows = oldCols.coerceIn(1, 6)
+
+            group.specs.clear()
+            group.specs.addAll(transposedPlaced.map { it.spec })
+            group.tileSizes = transposedPlaced.map { it.type }.joinToString(",")
+            group.colCount = newCols
+            group.rowCount = newRows
+
+            val newLayoutType = when {
+                newRows == 2 && newCols == 2 && group.specs.size == 4 && transposedPlaced.all { it.type == "C" } -> "4_CIRCULAR"
+                newRows == 1 && newCols == 2 && group.specs.size == 2 && transposedPlaced.all { it.type == "C" } -> "2_CIRCULAR_HORIZ"
+                newRows == 2 && newCols == 1 && group.specs.size == 2 && transposedPlaced.all { it.type == "C" } -> "2_CIRCULAR_VERT"
+                newRows == 2 && newCols == 2 && group.specs.size == 2 && transposedPlaced.all { it.type == "E" } -> "2_EXPANDED"
+                newRows == 2 && newCols == 2 && group.specs.size == 2 && transposedPlaced.all { it.type == "V" } -> "2_VERTICAL"
+                newRows == 2 && newCols == 2 && group.specs.size == 3 && transposedPlaced[0].type == "E" -> "1_EXP_2_CIRC"
+                newRows == 2 && newCols == 2 && group.specs.size == 3 && transposedPlaced[0].type == "V" -> "1_VERT_2_CIRC"
+                else -> "DYNAMIC_${newRows}R"
+            }
+            group.layoutType = newLayoutType
+            group.isVertical = (newLayoutType == "2_VERTICAL" || newLayoutType == "2_CIRCULAR_VERT" || newLayoutType == "1_VERT_2_CIRC" || newCols < newRows)
+
+            val firstCard = transposedPlaced.firstOrNull { it.type == "E" || it.type == "V" }
+            group.cardSpec = firstCard?.spec ?: ""
+
+            for (tile in transposedPlaced) {
+                when (tile.type) {
+                    "V" -> {
+                        ControlCenterConfigHolder.sVerticalTileSpecs.add(tile.spec)
+                        ControlCenterConfigHolder.sExpandedTileSpecs.remove(tile.spec)
+                        ControlCenterConfigHolder.sCircularCardSpecs.remove(tile.spec)
+                    }
+                    "E" -> {
+                        ControlCenterConfigHolder.sExpandedTileSpecs.add(tile.spec)
+                        ControlCenterConfigHolder.sVerticalTileSpecs.remove(tile.spec)
+                        ControlCenterConfigHolder.sCircularCardSpecs.remove(tile.spec)
+                    }
+                    "C" -> {
+                        ControlCenterConfigHolder.sExpandedTileSpecs.remove(tile.spec)
+                        ControlCenterConfigHolder.sVerticalTileSpecs.remove(tile.spec)
+                        if ("wifi".equals(tile.spec, ignoreCase = true) || "cell".equals(tile.spec, ignoreCase = true)) {
+                            ControlCenterConfigHolder.sCircularCardSpecs.add(tile.spec)
+                        }
+                    }
+                }
+            }
+            return true
+        } catch (t: Throwable) {
+            Log.e(TAG, "matrixTransposeGroup error", t)
+            return false
+        }
+    }
+
+    fun rotateTileGroup(group: TileGroup, ctx: Context, itemView: View) {
+        try {
+            val oldCols = group.getEffectiveColCount()
+            val oldRows = group.getEffectiveRowCount()
+            val type = group.getEffectiveLayoutType()
+
+            if (type == "2_CIRCULAR_VERT" || type == "2_CIRCULAR_HORIZ" || (group.specs.size == 2 && (oldRows == 1 || oldCols == 1))) {
+                group.isVertical = !group.isVertical
+                if (group.isVertical) {
+                    group.layoutType = "2_CIRCULAR_VERT"
+                    group.colCount = 1
+                    group.rowCount = 2
+                } else {
+                    group.layoutType = "2_CIRCULAR_HORIZ"
+                    group.colCount = 2
+                    group.rowCount = 1
+                }
+            } else {
+                matrixTransposeGroup(group)
+            }
+
+            ControlCenterConfigHolder.savePriorities(ctx)
+            ControlCenterFullUnlock.ensureTileFitsLandscapeAfterResize("group:${group.id}", ctx)
+            ControlCenterConfigHolder.refreshRecyclerView(itemView)
+            ControlCenterConfigHolder.updateAllVisibleTileBadges()
+            ControlCenterConfigHolder.refreshAdapter(itemView.rootView, ctx, true)
+            itemView.performHapticFeedback(android.view.HapticFeedbackConstants.CLOCK_TICK)
+        } catch (t: Throwable) {
+            Log.e(TAG, "rotateTileGroup error", t)
+        }
     }
 
     fun createDynamicGroupViewHolder(parent: ViewGroup, qsListCtrl: Any?, classLoader: ClassLoader, rowCount: Int): Any? {
@@ -366,6 +490,20 @@ object ControlCenterGrouping {
                 visibility = View.GONE
             }
             wrapper.addView(disassembleIndicator)
+
+            val rotateBtn = ImageView(ctx).apply {
+                id = 0x7f099992
+                val rSize = (26 * density).toInt()
+                val rlp = FrameLayout.LayoutParams(rSize, rSize).apply {
+                    gravity = Gravity.TOP or Gravity.END
+                    val rMargin = (6 * density).toInt()
+                    setMargins(0, rMargin, rMargin, 0)
+                }
+                layoutParams = rlp
+                setImageDrawable(RotateIconDrawable(density))
+                visibility = View.GONE
+            }
+            wrapper.addView(rotateBtn)
 
             root.addView(wrapper)
 
@@ -1215,6 +1353,10 @@ object ControlCenterGrouping {
                     val iconFrame = childView.findViewById<View>(iconFrameId)
                     iconFrame?.background = null
                 }
+                if (isChildOfIosCluster(childView)) {
+                    childView.background = null
+                    childView.clipToOutline = false
+                }
             }
         } catch (t: Throwable) {
             Log.e(TAG, "applyNonAdvancedStyleToChildTile error", t)
@@ -1305,10 +1447,12 @@ object ControlCenterGrouping {
             }
 
             if (container is DynamicGroupContainer) {
-                if (forceRebuild || container.childCount == 0 || container.getTag(0x7f099997) != resolvedGroup.id) {
+                val layoutSig = "${resolvedGroup.id}_${resolvedGroup.getEffectiveColCount()}x${resolvedGroup.getEffectiveRowCount()}_${resolvedGroup.tileSizes}"
+                if (forceRebuild || container.childCount == 0 || container.getTag(0x7f099997) != layoutSig) {
                     container.removeAllViews()
-                    container.setTag(0x7f099997, resolvedGroup.id)
+                    container.setTag(0x7f099997, layoutSig)
                     container.rowCount = rowCount
+                    container.colCount = resolvedGroup.getEffectiveColCount()
 
                     val layoutRes = computeGroupLayoutForGroup(resolvedGroup)
                     if (layoutRes != null) {
@@ -1448,12 +1592,18 @@ object ControlCenterGrouping {
                                 val curState = getStateM.invoke(tileObj)
                                 if (curState != null) {
                                     for (vm in childView.javaClass.methods) {
-                                        if (vm.name == "updateState" && vm.parameterTypes.size == 3) {
+                                        if (vm.name == "updateState") {
                                             vm.isAccessible = true
-                                            val isConnected = (childSpec == "wifi" || childSpec == "cell")
-                                            vm.invoke(childView, curState, isConnected, false)
-                                            applyNonAdvancedStyleToChildTile(childView, curState, classLoader)
-                                            break
+                                            if (vm.parameterTypes.size == 3) {
+                                                val isConnected = (childSpec == "wifi" || childSpec == "cell")
+                                                vm.invoke(childView, curState, isConnected, false)
+                                                applyNonAdvancedStyleToChildTile(childView, curState, classLoader)
+                                                break
+                                            } else if (vm.parameterTypes.size == 1) {
+                                                vm.invoke(childView, curState)
+                                                applyNonAdvancedStyleToChildTile(childView, curState, classLoader)
+                                                break
+                                            }
                                         }
                                     }
                                 }
@@ -1490,6 +1640,11 @@ object ControlCenterGrouping {
     fun updateChildHolderFrame(parentHolder: Any?, childHolder: Any?) {
         if (parentHolder == null || childHolder == null) return
         try {
+            val childView = getViewHolderItemView(childHolder)
+            if (childView != null && isChildOfIosCluster(childView)) {
+                return
+            }
+
             val parentClass = parentHolder.javaClass
             val childClass = childHolder.javaClass
 

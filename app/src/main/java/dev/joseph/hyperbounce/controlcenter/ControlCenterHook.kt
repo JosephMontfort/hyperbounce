@@ -849,6 +849,9 @@ object ControlCenterHook {
                                 if (itemView != null) {
                                     val rotateBtn = itemView.findViewById<View>(0x7f099992)
                                     if (rotateBtn != null) {
+                                        val group = itemView.getTag(0x7f099994) as? TileGroup
+                                            ?: ControlCenterConfigHolder.isGroupAnchor(itemView.getTag(0x7f099990) as? String)
+                                        val isIosCluster = (group != null && group.isIosFolderCluster())
                                         val rawArgs = chain.args
                                         val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as? Array<*>
                                         var isEdit = false
@@ -860,7 +863,9 @@ object ControlCenterHook {
                                                 }
                                             }
                                         }
-                                        rotateBtn.visibility = if (isEdit) View.VISIBLE else View.GONE
+                                        val canRotate = isEdit && !ControlCenterConfigHolder.sIsGroupSelectMode && !ControlCenterConfigHolder.sIsDisassembleMode && !isIosCluster
+                                        rotateBtn.visibility = if (canRotate) View.VISIBLE else View.GONE
+                                        if (canRotate) rotateBtn.bringToFront()
                                     }
                                 }
                             } catch (t: Throwable) {}
@@ -1925,8 +1930,7 @@ object ControlCenterHook {
                                 if (spec != null) {
                                     val g = ControlCenterConfigHolder.isGroupAnchor(spec)
                                     if (g != null) {
-                                        if (g.getEffectiveLayoutType() == "2_CIRCULAR_VERT") return@intercept 1
-                                        return@intercept 2
+                                        return@intercept g.getEffectiveColCount().coerceIn(1, 4)
                                     }
                                     if (ControlCenterConfigHolder.sCircularCardSpecs.contains(spec)) {
                                         return@intercept 1
@@ -2274,42 +2278,19 @@ object ControlCenterHook {
                                         }
                                         val rotateBtn = itemView.findViewById<View>(0x7f099992)
                                         if (rotateBtn != null) {
-                                            if (isEdit) {
+                                            val isIosCluster = group.isIosFolderCluster()
+                                            val canRotate = isEdit && !ControlCenterConfigHolder.sIsGroupSelectMode && !ControlCenterConfigHolder.sIsDisassembleMode && !isIosCluster
+                                            if (canRotate) {
                                                 rotateBtn.visibility = View.VISIBLE
                                                 rotateBtn.bringToFront()
                                                 rotateBtn.isClickable = true
                                                 rotateBtn.setOnClickListener {
-                                                    try {
-                                                        when (group.getEffectiveLayoutType()) {
-                                                            "2_CIRCULAR_VERT", "2_CIRCULAR_HORIZ" -> {
-                                                                group.isVertical = !group.isVertical
-                                                                group.layoutType = if (group.isVertical) "2_CIRCULAR_VERT" else "2_CIRCULAR_HORIZ"
-                                                            }
-                                                            "2_EXPANDED", "2_VERTICAL" -> {
-                                                                java.util.Collections.swap(group.specs, 0, 1)
-                                                            }
-                                                            "1_EXP_2_CIRC", "1_VERT_2_CIRC", "4_CIRCULAR" -> {
-                                                                java.util.Collections.rotate(group.specs, 1)
-                                                            }
-                                                            else -> {
-                                                                if (group.specs.size == 2) {
-                                                                    group.isVertical = !group.isVertical
-                                                                } else {
-                                                                    java.util.Collections.rotate(group.specs, 1)
-                                                                }
-                                                            }
-                                                        }
-                                                        ControlCenterConfigHolder.savePriorities(ctx)
-                                                        ControlCenterFullUnlock.ensureTileFitsLandscapeAfterResize("group:${group.id}", ctx)
-                                                        ControlCenterConfigHolder.refreshRecyclerView(itemView)
-                                                        ControlCenterConfigHolder.updateAllVisibleTileBadges()
-                                                        ControlCenterConfigHolder.refreshAdapter(itemView.rootView, ctx, true)
-                                                    } catch (t: Throwable) {
-                                                        Log.e(TAG, "Rotate group click error", t)
-                                                    }
+                                                    ControlCenterGrouping.rotateTileGroup(group, ctx, itemView)
                                                 }
                                             } else {
                                                 rotateBtn.visibility = View.GONE
+                                                rotateBtn.isClickable = false
+                                                rotateBtn.setOnClickListener(null)
                                             }
                                         }
 
@@ -2792,8 +2773,12 @@ object ControlCenterHook {
 
                                             val rotateBtn = itemView.findViewById<View>(0x7f099992)
                                             if (rotateBtn != null) {
-                                                rotateBtn.visibility = View.VISIBLE
-                                                rotateBtn.bringToFront()
+                                                val group = itemView.getTag(0x7f099994) as? TileGroup
+                                                    ?: ControlCenterConfigHolder.isGroupAnchor(itemView.getTag(0x7f099990) as? String)
+                                                val isIosCluster = (group != null && group.isIosFolderCluster())
+                                                val canRotate = !ControlCenterConfigHolder.sIsGroupSelectMode && !ControlCenterConfigHolder.sIsDisassembleMode && !isIosCluster
+                                                rotateBtn.visibility = if (canRotate) View.VISIBLE else View.GONE
+                                                if (canRotate) rotateBtn.bringToFront()
                                             }
                                         } else {
                                             if (isCircularTile) {
@@ -2928,6 +2913,19 @@ object ControlCenterHook {
             try {
                 val tileViewClass = Class.forName("miui.systemui.controlcenter.qs.tileview.QSTileItemView", false, classLoader)
                 for (m in tileViewClass.declaredMethods) {
+                    if (m.name == "updateBlurBlendBackground" || m.name == "updateDrawableBackground" || m.name == "updateBackground") {
+                        m.isAccessible = true
+                        module.hook(m).intercept { chain ->
+                            val itemView = chain.thisObject as? View
+                            if (itemView != null && ControlCenterGrouping.isChildOfIosCluster(itemView)) {
+                                itemView.background = null
+                                itemView.clipToOutline = false
+                                null
+                            } else {
+                                chain.proceed()
+                            }
+                        }
+                    }
                     if (m.name == "updateState") {
                         m.isAccessible = true
                         module.hook(m).intercept { chain ->
@@ -2939,6 +2937,10 @@ object ControlCenterHook {
                                     f.get(itemView)
                                 } catch (t: Throwable) { null }
                                 ControlCenterGrouping.applyNonAdvancedStyleToChildTile(itemView, state, classLoader)
+                            }
+                            if (itemView != null && ControlCenterGrouping.isChildOfIosCluster(itemView)) {
+                                itemView.background = null
+                                itemView.clipToOutline = false
                             }
                             result
                         }

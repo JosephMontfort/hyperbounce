@@ -209,6 +209,8 @@ object IosTileGroupFolder {
                 child.scaleY = 1.0f
                 child.translationX = 0f
                 child.translationY = 0f
+                child.background = null
+                child.clipToOutline = false
 
                 val tileLabelId = context.resources.getIdentifier("tile_label", "id", context.packageName)
                 if (tileLabelId != 0) {
@@ -260,6 +262,32 @@ object IosTileGroupFolder {
             setOnClickListener {
                 val parentCluster = parent as? IosClusterContainer ?: return@setOnClickListener
                 openExpandedFolder(parentCluster)
+            }
+        }
+
+        override fun onViewAdded(child: View) {
+            super.onViewAdded(child)
+            child.background = null
+            child.clipToOutline = false
+            child.addOnLayoutChangeListener { v, _, _, _, _, _, _, _, _ ->
+                v.background = null
+                v.clipToOutline = false
+                val baseSize = getBaseTileSize()
+                val pad = (4 * resources.displayMetrics.density).toInt()
+                val gap = (4 * resources.displayMetrics.density).toInt()
+                val availW = Math.max(0, width - 2 * pad - gap)
+                val subW = availW / 2f
+                val availH = Math.max(0, height - 2 * pad - gap)
+                val subH = availH / 2f
+                val targetSize = Math.min(subW, subH)
+                val scale = if (baseSize > 0 && targetSize > 10) (targetSize / baseSize.toFloat()).coerceIn(0.2f, 0.6f) else 0.42f
+                val halfBase = baseSize / 2f
+                v.pivotX = halfBase
+                v.pivotY = halfBase
+                v.scaleX = scale
+                v.scaleY = scale
+                v.translationX = 0f
+                v.translationY = 0f
             }
         }
 
@@ -368,6 +396,10 @@ object IosTileGroupFolder {
                 child.pivotY = halfBase
                 child.scaleX = scale
                 child.scaleY = scale
+                child.translationX = 0f
+                child.translationY = 0f
+                child.background = null
+                child.clipToOutline = false
                 child.visibility = View.VISIBLE
                 child.alpha = 1.0f
 

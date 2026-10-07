@@ -73,16 +73,29 @@ data class TileGroup(
     var cardSpec: String = "",
     var isTransparent: Boolean = false,
     var rowCount: Int = 2,
-    var tileSizes: String = ""
+    var tileSizes: String = "",
+    var colCount: Int = 2
 ) {
-    fun getEffectiveRowCount(): Int {
-        if (rowCount in 1..6) return rowCount
+    fun isIosFolderCluster(): Boolean {
+        return specs.size == 7 || getEffectiveLayoutType() == "7_IOS_CLUSTER"
+    }
+
+    fun getEffectiveColCount(): Int {
         val type = getEffectiveLayoutType()
-        return when (type) {
-            "2_CIRCULAR_HORIZ" -> 1
-            "2_CIRCULAR_VERT" -> 2
-            else -> 2
-        }
+        if (type == "2_CIRCULAR_VERT") return 1
+        if (type == "2_CIRCULAR_HORIZ") return 2
+        if (type == "7_IOS_CLUSTER") return 2
+        if (colCount in 1..4) return colCount
+        return 2
+    }
+
+    fun getEffectiveRowCount(): Int {
+        val type = getEffectiveLayoutType()
+        if (type == "2_CIRCULAR_VERT") return 2
+        if (type == "2_CIRCULAR_HORIZ") return 1
+        if (type == "7_IOS_CLUSTER") return 2
+        if (rowCount in 1..6) return rowCount
+        return 2
     }
 
     fun getEffectiveLayoutType(): String {
@@ -118,7 +131,7 @@ data class TileGroup(
             "2_EXPANDED" -> Pair(2, 2)
             "2_VERTICAL" -> Pair(2, 2)
             "7_IOS_CLUSTER" -> Pair(2, 2)
-            else -> Pair(2, getEffectiveRowCount().coerceIn(1, 6))
+            else -> Pair(getEffectiveColCount(), getEffectiveRowCount())
         }
     }
 
@@ -130,7 +143,7 @@ data class TileGroup(
                type == "1_EXP_2_CIRC" ||
                type == "1_VERT_2_CIRC" ||
                type == "7_IOS_CLUSTER" ||
-               (getEffectiveRowCount() == 2)
+               (getEffectiveColCount() == 2 && getEffectiveRowCount() == 2)
     }
 }
 
@@ -458,8 +471,9 @@ object ControlCenterConfigHolder {
                                     val isTransparent = if (parts.size >= 6) "T".equals(parts[5], ignoreCase = true) else false
                                     val rowCount = if (parts.size >= 7) parts[6].toIntOrNull() ?: 2 else 2
                                     val tileSizes = if (parts.size >= 8) parts[7] else ""
+                                    val colCount = if (parts.size >= 9) parts[8].toIntOrNull() ?: 2 else 2
                                     if (gSpecs.size >= 2) {
-                                        newGroups.add(TileGroup(gId, gSpecs, isVert, layoutType, cardSpec, isTransparent, rowCount, tileSizes))
+                                        newGroups.add(TileGroup(gId, gSpecs, isVert, layoutType, cardSpec, isTransparent, rowCount, tileSizes, colCount))
                                     }
                                 }
                             }
@@ -560,8 +574,9 @@ object ControlCenterConfigHolder {
                                 val isTransparent = if (parts.size >= 6) "T".equals(parts[5], ignoreCase = true) else false
                                 val rowCount = if (parts.size >= 7) parts[6].toIntOrNull() ?: 2 else 2
                                 val tileSizes = if (parts.size >= 8) parts[7] else ""
+                                val colCount = if (parts.size >= 9) parts[8].toIntOrNull() ?: 2 else 2
                                 if (gSpecs.size >= 2) {
-                                    newGroups.add(TileGroup(gId, gSpecs, isVert, layoutType, cardSpec, isTransparent, rowCount, tileSizes))
+                                    newGroups.add(TileGroup(gId, gSpecs, isVert, layoutType, cardSpec, isTransparent, rowCount, tileSizes, colCount))
                                 }
                             }
                         }
@@ -643,6 +658,7 @@ object ControlCenterConfigHolder {
                     groupsSb.append(":").append(if (g.isTransparent) "T" else "F")
                     groupsSb.append(":").append(g.getEffectiveRowCount())
                     groupsSb.append(":").append(g.tileSizes)
+                    groupsSb.append(":").append(g.getEffectiveColCount())
                 }
             }
             json.put("tile_groups_v2", groupsSb.toString())
