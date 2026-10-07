@@ -946,14 +946,9 @@ object ControlCenterHook {
 
                     if (m.name == "prepareLocation") {
                         m.isAccessible = true
-                        val shrinkCenterXField = try { holderClass.getDeclaredField("shrinkCenterX").apply { isAccessible = true } } catch (t: Throwable) { null }
-                        val shrinkCenterYField = try { holderClass.getDeclaredField("shrinkCenterY").apply { isAccessible = true } } catch (t: Throwable) { null }
-                        val delayPerField = try { holderClass.getDeclaredField("delayPer").apply { isAccessible = true } } catch (t: Throwable) { null }
-
                         module.hook(m).intercept { chain ->
                             val holder = chain.thisObject
-                            val itemView = (holder as? androidx.recyclerview.widget.RecyclerView.ViewHolder)?.itemView
-                                ?: ControlCenterGrouping.getViewHolderItemView(holder)
+                            val itemView = ControlCenterGrouping.getViewHolderItemView(holder)
                             if (itemView != null && ControlCenterGrouping.isChildOfIosCluster(itemView)) {
                                 return@intercept null
                             }
@@ -961,15 +956,33 @@ object ControlCenterHook {
                             if (ControlCenterConfigHolder.config.isLowEndAnim() || !ControlCenterConfigHolder.config.isAnimActive) return@intercept result
 
                             try {
-                                val ctx: Context? = itemView?.context
+                                var ctx: Context? = null
+                                try {
+                                    val getCtxMethod = holder.javaClass.getMethod("getContext")
+                                    ctx = getCtxMethod.invoke(holder) as? Context
+                                } catch (t: Throwable) {
+                                    try {
+                                        val ivField = holder.javaClass.getField("itemView")
+                                        val iv = ivField.get(holder) as? View
+                                        if (iv != null) ctx = iv.context
+                                    } catch (t2: Throwable) {}
+                                }
                                 if (ctx == null) return@intercept result
 
                                 val screenW = ctx.resources.displayMetrics.widthPixels.toFloat()
                                 val screenH = ctx.resources.displayMetrics.heightPixels.toFloat()
 
-                                shrinkCenterXField?.setFloat(holder, screenW / 2.0f)
-                                shrinkCenterYField?.setFloat(holder, screenH / 2.0f)
-                                delayPerField?.setFloat(holder, 0.0f)
+                                val shrinkCenterXField = holderClass.getDeclaredField("shrinkCenterX")
+                                shrinkCenterXField.isAccessible = true
+                                shrinkCenterXField.setFloat(holder, screenW / 2.0f)
+
+                                val shrinkCenterYField = holderClass.getDeclaredField("shrinkCenterY")
+                                shrinkCenterYField.isAccessible = true
+                                shrinkCenterYField.setFloat(holder, screenH / 2.0f)
+
+                                val delayPerField = holderClass.getDeclaredField("delayPer")
+                                delayPerField.isAccessible = true
+                                delayPerField.setFloat(holder, 0.0f)
                             } catch (t: Throwable) {
                                 Log.e(TAG, "prepareLocation hook error", t)
                             }
@@ -979,23 +992,25 @@ object ControlCenterHook {
 
                     if (m.name == "updateEases") {
                         m.isAccessible = true
-                        val delayPerField = try { holderClass.getDeclaredField("delayPer").apply { isAccessible = true } } catch (t: Throwable) { null }
-                        val releaseTransYEaseField = try { holderClass.getDeclaredField("releaseTransYEase").apply { isAccessible = true } } catch (t: Throwable) { null }
-
                         module.hook(m).intercept { chain ->
                             val holder = chain.thisObject
-                            val itemView = (holder as? androidx.recyclerview.widget.RecyclerView.ViewHolder)?.itemView
-                                ?: ControlCenterGrouping.getViewHolderItemView(holder)
+                            val itemView = ControlCenterGrouping.getViewHolderItemView(holder)
                             if (itemView != null && ControlCenterGrouping.isChildOfIosCluster(itemView)) {
                                 return@intercept null
                             }
                             val result = try { chain.proceed() } catch (t: Throwable) { null }
                             if (ControlCenterConfigHolder.config.isLowEndAnim() || !ControlCenterConfigHolder.config.isAnimActive) return@intercept result
                             try {
-                                delayPerField?.setFloat(holder, 0.0f)
+                                val holder = chain.thisObject
+
+                                val delayPerField = holderClass.getDeclaredField("delayPer")
+                                delayPerField.isAccessible = true
+                                delayPerField.setFloat(holder, 0.0f)
 
                                 val bounceEase = getStyleMethod.invoke(null, -2, floatArrayOf(0.88f, 0.38f))
-                                releaseTransYEaseField?.set(holder, bounceEase)
+                                val releaseTransYEaseField = holderClass.getDeclaredField("releaseTransYEase")
+                                releaseTransYEaseField.isAccessible = true
+                                releaseTransYEaseField.set(holder, bounceEase)
 
                                 if (!ControlCenterConfigHolder.config.isLowEndAnim() && ControlCenterConfigHolder.config.isAnimActive) {
                                     val showEaseField = holderClass.getDeclaredField("showEase")
@@ -1059,23 +1074,29 @@ object ControlCenterHook {
 
                     if (m.name == "onFrameCallback") {
                         m.isAccessible = true
-                        val expandScaleRatioField = try { holderClass.getDeclaredField("expandScaleRatio").apply { isAccessible = true } } catch (t: Throwable) { null }
-                        val expandTransYField = try { holderClass.getDeclaredField("expandTransY").apply { isAccessible = true } } catch (t: Throwable) { null }
-                        val spreadRowField = try { holderClass.getDeclaredField("spreadRow").apply { isAccessible = true } } catch (t: Throwable) { null }
-
                         module.hook(m).intercept { chain ->
                             val holder = chain.thisObject
-                            val itemView = (holder as? androidx.recyclerview.widget.RecyclerView.ViewHolder)?.itemView
-                                ?: ControlCenterGrouping.getViewHolderItemView(holder)
+                            val itemView = ControlCenterGrouping.getViewHolderItemView(holder)
                             if (itemView != null && ControlCenterGrouping.isChildOfIosCluster(itemView)) {
                                 return@intercept null
                             }
                             val result = chain.proceed()
-                            if (ControlCenterConfigHolder.config.isJellyActive && itemView != null) {
+                            if (ControlCenterConfigHolder.config.isJellyActive) {
                                 try {
-                                    val progress = expandScaleRatioField?.getFloat(holder) ?: return@intercept result
-                                    val expandTransY = expandTransYField?.getFloat(holder) ?: return@intercept result
-                                    val row = spreadRowField?.getInt(holder) ?: 0
+                                    val ivField = holderClass.getField("itemView")
+                                    val itemView = ivField.get(holder) as? View ?: return@intercept result
+
+                                    val expandScaleRatioField = holderClass.getDeclaredField("expandScaleRatio")
+                                    expandScaleRatioField.isAccessible = true
+                                    val progress = expandScaleRatioField.getFloat(holder)
+
+                                    val expandTransYField = holderClass.getDeclaredField("expandTransY")
+                                    expandTransYField.isAccessible = true
+                                    val expandTransY = expandTransYField.getFloat(holder)
+
+                                    val spreadRowField = holderClass.getDeclaredField("spreadRow")
+                                    spreadRowField.isAccessible = true
+                                    val row = spreadRowField.getInt(holder)
 
                                     val viewWidth = itemView.width
                                     val viewHeight = itemView.height
@@ -2535,8 +2556,7 @@ object ControlCenterHook {
                                                     curLp.height = tallH
                                                     itemView.layoutParams = curLp
                                                 }
-                                            } else if (ControlCenterConfigHolder.sExpandedTileSpecs.contains(spec) ||
-                                                       ((spec == "wifi" || spec == "cell") && !ControlCenterConfigHolder.sCircularCardSpecs.contains(spec))) {
+                                            } else if (ControlCenterConfigHolder.sExpandedTileSpecs.contains(spec) || spec == "wifi" || spec == "cell") {
                                                 if (curLp != null && curLp.height != cardH) {
                                                     curLp.height = cardH
                                                     itemView.layoutParams = curLp
@@ -2934,6 +2954,10 @@ object ControlCenterHook {
                             if (itemView != null && ControlCenterGrouping.isChildOfIosCluster(itemView)) {
                                 itemView.background = null
                                 itemView.clipToOutline = false
+                                val p = itemView.parent
+                                if (p is IosTileGroupFolder.MiniClusterView) {
+                                    p.post { p.requestLayout() }
+                                }
                             }
                             result
                         }

@@ -560,7 +560,6 @@ object ControlCenterGrouping {
 
     fun getViewHolderItemView(holder: Any?): View? {
         if (holder == null) return null
-        if (holder is androidx.recyclerview.widget.RecyclerView.ViewHolder) return holder.itemView
         var clazz: Class<*>? = holder.javaClass
         while (clazz != null) {
             try {
@@ -661,9 +660,6 @@ object ControlCenterGrouping {
         if (holder == null) return
         val childView = getViewHolderItemView(holder)
         val isIosChild = childView != null && isChildOfIosCluster(childView)
-        if (isIosChild && childView != null) {
-            childView.setTag(0x7f09999c, true)
-        }
         var sc: Class<*>? = holder.javaClass
         while (sc != null) {
             try {
@@ -1384,27 +1380,12 @@ object ControlCenterGrouping {
     }
 
     fun isChildOfIosCluster(view: View): Boolean {
-        val tag = view.getTag(0x7f09999c)
-        if (tag is Boolean) return tag
-        val p = view.parent
-        if (p is IosTileGroupFolder.IosClusterContainer || p is IosTileGroupFolder.MiniClusterView) {
-            view.setTag(0x7f09999c, true)
-            return true
-        }
-        if (p != null) {
-            var curr: android.view.ViewParent? = p
-            while (curr != null) {
-                if (curr is IosTileGroupFolder.IosClusterContainer || curr is IosTileGroupFolder.MiniClusterView) {
-                    view.setTag(0x7f09999c, true)
-                    return true
-                }
-                if (curr is View && curr.getTag(0x7f09999c) == true) {
-                    view.setTag(0x7f09999c, true)
-                    return true
-                }
-                curr = curr.parent
-            }
-            view.setTag(0x7f09999c, false)
+        if (view.getTag(0x7f09999c) == true) return true
+        var p = view.parent
+        while (p != null) {
+            if (p is IosTileGroupFolder.IosClusterContainer || p is IosTileGroupFolder.MiniClusterView) return true
+            if (p is View && p.getTag(0x7f09999c) == true) return true
+            p = p.parent
         }
         return false
     }
@@ -2948,26 +2929,8 @@ object ControlCenterGrouping {
                                     for (i in rg.specs.indices) {
                                         val s = rg.specs[i]
                                         when (sizes[i]) {
-                                            "E" -> {
-                                                ControlCenterConfigHolder.sExpandedTileSpecs.add(s)
-                                                ControlCenterConfigHolder.sVerticalTileSpecs.remove(s)
-                                                ControlCenterConfigHolder.sCircularCardSpecs.remove(s)
-                                                ControlCenterConfigHolder.sLargeTileSpecs.remove(s)
-                                            }
-                                            "V" -> {
-                                                ControlCenterConfigHolder.sVerticalTileSpecs.add(s)
-                                                ControlCenterConfigHolder.sExpandedTileSpecs.remove(s)
-                                                ControlCenterConfigHolder.sCircularCardSpecs.remove(s)
-                                                ControlCenterConfigHolder.sLargeTileSpecs.remove(s)
-                                            }
-                                            "C" -> {
-                                                if ("wifi".equals(s, ignoreCase = true) || "cell".equals(s, ignoreCase = true)) {
-                                                    ControlCenterConfigHolder.sCircularCardSpecs.add(s)
-                                                }
-                                                ControlCenterConfigHolder.sExpandedTileSpecs.remove(s)
-                                                ControlCenterConfigHolder.sVerticalTileSpecs.remove(s)
-                                                ControlCenterConfigHolder.sLargeTileSpecs.remove(s)
-                                            }
+                                            "E" -> ControlCenterConfigHolder.sExpandedTileSpecs.add(s)
+                                            "V" -> ControlCenterConfigHolder.sVerticalTileSpecs.add(s)
                                         }
                                     }
                                 } else {
@@ -2976,60 +2939,27 @@ object ControlCenterGrouping {
                                         "2_EXPANDED" -> {
                                             for (s in rg.specs) {
                                                 ControlCenterConfigHolder.sExpandedTileSpecs.add(s)
-                                                ControlCenterConfigHolder.sVerticalTileSpecs.remove(s)
-                                                ControlCenterConfigHolder.sCircularCardSpecs.remove(s)
-                                                ControlCenterConfigHolder.sLargeTileSpecs.remove(s)
                                             }
                                         }
                                         "2_VERTICAL" -> {
                                             for (s in rg.specs) {
                                                 ControlCenterConfigHolder.sVerticalTileSpecs.add(s)
-                                                ControlCenterConfigHolder.sExpandedTileSpecs.remove(s)
-                                                ControlCenterConfigHolder.sCircularCardSpecs.remove(s)
-                                                ControlCenterConfigHolder.sLargeTileSpecs.remove(s)
                                             }
                                         }
                                         "1_EXP_2_CIRC" -> {
                                             val card = if (rg.cardSpec.isNotEmpty()) rg.cardSpec else rg.specs.firstOrNull()
-                                            for (s in rg.specs) {
-                                                if (s == card) {
-                                                    ControlCenterConfigHolder.sExpandedTileSpecs.add(s)
-                                                    ControlCenterConfigHolder.sCircularCardSpecs.remove(s)
-                                                } else {
-                                                    if ("wifi".equals(s, ignoreCase = true) || "cell".equals(s, ignoreCase = true)) {
-                                                        ControlCenterConfigHolder.sCircularCardSpecs.add(s)
-                                                    }
-                                                    ControlCenterConfigHolder.sExpandedTileSpecs.remove(s)
-                                                }
-                                                ControlCenterConfigHolder.sVerticalTileSpecs.remove(s)
-                                                ControlCenterConfigHolder.sLargeTileSpecs.remove(s)
+                                            if (card != null) {
+                                                ControlCenterConfigHolder.sExpandedTileSpecs.add(card)
                                             }
                                         }
                                         "1_VERT_2_CIRC" -> {
                                             val card = if (rg.cardSpec.isNotEmpty()) rg.cardSpec else rg.specs.firstOrNull()
-                                            for (s in rg.specs) {
-                                                if (s == card) {
-                                                    ControlCenterConfigHolder.sVerticalTileSpecs.add(s)
-                                                    ControlCenterConfigHolder.sCircularCardSpecs.remove(s)
-                                                } else {
-                                                    if ("wifi".equals(s, ignoreCase = true) || "cell".equals(s, ignoreCase = true)) {
-                                                        ControlCenterConfigHolder.sCircularCardSpecs.add(s)
-                                                    }
-                                                    ControlCenterConfigHolder.sVerticalTileSpecs.remove(s)
-                                                }
-                                                ControlCenterConfigHolder.sExpandedTileSpecs.remove(s)
-                                                ControlCenterConfigHolder.sLargeTileSpecs.remove(s)
+                                            if (card != null) {
+                                                ControlCenterConfigHolder.sVerticalTileSpecs.add(card)
                                             }
                                         }
                                         else -> {
-                                            for (s in rg.specs) {
-                                                if ("wifi".equals(s, ignoreCase = true) || "cell".equals(s, ignoreCase = true)) {
-                                                    ControlCenterConfigHolder.sCircularCardSpecs.add(s)
-                                                }
-                                                ControlCenterConfigHolder.sExpandedTileSpecs.remove(s)
-                                                ControlCenterConfigHolder.sVerticalTileSpecs.remove(s)
-                                                ControlCenterConfigHolder.sLargeTileSpecs.remove(s)
-                                            }
+                                            // Circular tiles remain circular
                                         }
                                     }
                                 }
