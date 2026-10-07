@@ -220,6 +220,8 @@ object ControlCenterHook {
         return false
     }
 
+    const val UNIVERSAL_MARK_TAG = 0x7f09998f
+
     fun hideAllCustomBadges(v: View?) {
         if (v == null) return
         val resizeTag = 0x7f099999
@@ -238,11 +240,12 @@ object ControlCenterHook {
         clearBadge(v.findViewById(resizeTag))
         clearBadge(v.findViewById(selectTag))
         clearBadge(v.findViewById(rotateTag))
+        clearBadge(v.findViewById(UNIVERSAL_MARK_TAG))
 
         if (v is ViewGroup) {
             for (i in 0 until v.childCount) {
                 val ch = v.getChildAt(i) ?: continue
-                if (ch.id == resizeTag || ch.id == selectTag || ch.id == rotateTag) {
+                if (ch.id == resizeTag || ch.id == selectTag || ch.id == rotateTag || ch.id == UNIVERSAL_MARK_TAG) {
                     clearBadge(ch)
                 }
             }
@@ -257,11 +260,164 @@ object ControlCenterHook {
                     clearBadge(childTile.findViewById(resizeTag))
                     clearBadge(childTile.findViewById(selectTag))
                     clearBadge(childTile.findViewById(rotateTag))
+                    clearBadge(childTile.findViewById(UNIVERSAL_MARK_TAG))
                     childTile.isClickable = true
                     childTile.isLongClickable = true
                     childTile.isFocusable = true
                 }
             }
+        }
+    }
+
+    fun applyUniversalMarkButton(itemView: View, spec: String, isAdded: Boolean, record: Any? = null) {
+        if (isChildOfContainer(itemView) ||
+            itemView.findViewById<View>(0x7f099995) != null ||
+            ControlCenterConfigHolder.isGroupAnchor(spec) != null ||
+            ControlCenterConfigHolder.isGroupMember(spec)) {
+            itemView.findViewById<View>(UNIVERSAL_MARK_TAG)?.visibility = View.GONE
+            return
+        }
+
+        val markBtn = itemView.findViewById<ImageView>(UNIVERSAL_MARK_TAG)
+        if (!ControlCenterConfigHolder.sIsEditMode ||
+            ControlCenterConfigHolder.sIsGroupSelectMode ||
+            ControlCenterConfigHolder.sIsDisassembleMode ||
+            ControlCenterConfigHolder.sIsDraggingResizeHandle ||
+            FluidTileResizeHandler.isDragging) {
+            markBtn?.visibility = View.GONE
+            markBtn?.setOnClickListener(null)
+            markBtn?.isClickable = false
+            return
+        }
+
+        if (itemView !is ViewGroup) return
+
+        val density = itemView.context.resources.displayMetrics.density
+        val markSize = (26 * density).toInt()
+        val margin = (6 * density).toInt()
+
+        val targetMark = markBtn ?: ImageView(itemView.context).apply {
+            id = UNIVERSAL_MARK_TAG
+            val lp = FrameLayout.LayoutParams(markSize, markSize).apply {
+                gravity = Gravity.TOP or Gravity.END
+                setMargins(0, margin, margin, 0)
+            }
+            layoutParams = lp
+            itemView.addView(this)
+        }
+
+        val removeRes = targetMark.context.resources.getIdentifier("ic_qs_tile_mark_remove", "drawable", targetMark.context.packageName).takeIf { it != 0 } ?: 0x7f080634
+        val addRes = targetMark.context.resources.getIdentifier("ic_qs_tile_mark_add", "drawable", targetMark.context.packageName).takeIf { it != 0 } ?: 0x7f080633
+
+        targetMark.setImageResource(if (isAdded) removeRes else addRes)
+        targetMark.contentDescription = if (isAdded) "Remove" else "Add"
+        targetMark.visibility = View.VISIBLE
+        targetMark.isClickable = true
+
+        fun applyMarkLayout() {
+            val bw = targetMark.measuredWidth.takeIf { it > 0 } ?: markSize
+            val bh = targetMark.measuredHeight.takeIf { it > 0 } ?: markSize
+            val w = itemView.width
+            if (w > 0) {
+                targetMark.layout(w - bw - margin, margin, w - margin, margin + bh)
+            }
+            targetMark.bringToFront()
+        }
+
+        applyMarkLayout()
+
+        if (itemView.getTag(0x7f09998d) == null) {
+            itemView.setTag(0x7f09998d, true)
+            itemView.addOnLayoutChangeListener { _, l, t, r, b, _, _, _, _ ->
+                val curMark = itemView.findViewById<ImageView>(UNIVERSAL_MARK_TAG)
+                if (curMark != null && curMark.visibility == View.VISIBLE) {
+                    val w = r - l
+                    val bw = curMark.measuredWidth.takeIf { it > 0 } ?: markSize
+                    val bh = curMark.measuredHeight.takeIf { it > 0 } ?: markSize
+                    if (w > 0) {
+                        curMark.layout(w - bw - margin, margin, w - margin, margin + bh)
+                    }
+                    curMark.bringToFront()
+                }
+            }
+        }
+
+        targetMark.setOnClickListener { v ->
+            v.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+            if (isAdded) {
+                removeComponent(itemView.context, spec, record, itemView)
+            } else {
+                addComponent(itemView.context, spec, record, itemView)
+            }
+        }
+    }
+
+    fun removeComponent(context: Context, spec: String, record: Any?, itemView: View) {
+        try {
+            ControlCenterConfigHolder.sRemovedComponentSpecs.add(spec)
+            ControlCenterConfigHolder.savePriorities(context)
+            if (spec == "wifi" || spec == "cell" || spec == "media" || spec == "brightness" || spec == "volume") {
+                if (record != null && ControlCenterConfigHolder.sQSListController != null) {
+                    try {
+                        val m = ControlCenterConfigHolder.sQSListController!!.javaClass.getMethod("removeTile", record.javaClass)
+                        m.invoke(ControlCenterConfigHolder.sQSListController, record)
+                    } catch (t: Throwable) {}
+                }
+            } else {
+                val targetRecord = record ?: ControlCenterConfigHolder.findRecordForSpec(spec)
+                if (targetRecord != null && ControlCenterConfigHolder.sQSListController != null) {
+                    try {
+                        val m = ControlCenterConfigHolder.sQSListController!!.javaClass.getMethod("removeTile", targetRecord.javaClass)
+                        m.invoke(ControlCenterConfigHolder.sQSListController, targetRecord)
+                    } catch (t: Throwable) {
+                        try {
+                            val markActionF = targetRecord.javaClass.getDeclaredField("markClickAction")
+                            markActionF.isAccessible = true
+                            val fn = markActionF.get(targetRecord) as? kotlin.jvm.functions.Function1<View, *>
+                            fn?.invoke(itemView)
+                        } catch (t2: Throwable) {}
+                    }
+                }
+            }
+            ControlCenterConfigHolder.refreshAdapter(itemView.rootView, context, isStructuralChange = true)
+            ControlCenterConfigHolder.updateAllVisibleTileBadges()
+        } catch (t: Throwable) {
+            Log.e(TAG, "removeComponent error for spec $spec", t)
+        }
+    }
+
+    fun addComponent(context: Context, spec: String, record: Any?, itemView: View) {
+        try {
+            ControlCenterConfigHolder.sRemovedComponentSpecs.remove(spec)
+            ControlCenterFullUnlock.restoreComponentSlotOrder(spec)
+            ControlCenterConfigHolder.savePriorities(context)
+            if (spec == "wifi" || spec == "cell" || spec == "media" || spec == "brightness" || spec == "volume") {
+                if (record != null && ControlCenterConfigHolder.sQSListController != null) {
+                    try {
+                        val m = ControlCenterConfigHolder.sQSListController!!.javaClass.getMethod("addTile", record.javaClass)
+                        m.invoke(ControlCenterConfigHolder.sQSListController, record)
+                    } catch (t: Throwable) {}
+                }
+            } else {
+                val targetRecord = record ?: ControlCenterConfigHolder.findRecordForSpec(spec)
+                if (targetRecord != null && ControlCenterConfigHolder.sQSListController != null) {
+                    try {
+                        val m = ControlCenterConfigHolder.sQSListController!!.javaClass.getMethod("addTile", targetRecord.javaClass)
+                        m.invoke(ControlCenterConfigHolder.sQSListController, targetRecord)
+                    } catch (t: Throwable) {
+                        try {
+                            val markActionF = targetRecord.javaClass.getDeclaredField("markClickAction")
+                            markActionF.isAccessible = true
+                            val fn = markActionF.get(targetRecord) as? kotlin.jvm.functions.Function1<View, *>
+                            fn?.invoke(itemView)
+                        } catch (t2: Throwable) {}
+                    }
+                }
+            }
+            ControlCenterConfigHolder.refreshAdapter(itemView.rootView, context, isStructuralChange = true)
+            ControlCenterConfigHolder.updateAllVisibleTileBadges()
+        } catch (t: Throwable) {
+            Log.e(TAG, "addComponent error for spec $spec", t)
         }
     }
 
@@ -1005,7 +1161,19 @@ object ControlCenterHook {
                             m.isAccessible = true
                             module.hook(m).intercept { chain ->
                                 val orig = chain.proceed() as Boolean
-                                if (ControlCenterConfigHolder.config.isModularEditActive && ControlCenterConfigHolder.sIsEditMode) {
+                                val spec = when (simpleName) {
+                                    "MediaPlayerController" -> "media"
+                                    "BrightnessSliderController" -> "brightness"
+                                    "VolumeSliderController" -> "volume"
+                                    else -> null
+                                }
+                                if (spec != null && ControlCenterConfigHolder.sRemovedComponentSpecs.contains(spec)) {
+                                    if (ControlCenterConfigHolder.sIsEditMode) {
+                                        true
+                                    } else {
+                                        false
+                                    }
+                                } else if (ControlCenterConfigHolder.config.isModularEditActive && ControlCenterConfigHolder.sIsEditMode) {
                                     true
                                 } else {
                                     orig
@@ -1077,10 +1245,36 @@ object ControlCenterHook {
                             val list = chain.proceed() as? List<*>
                             if (list != null) {
                                 for (item in list) {
-                                    if (item != null && !ControlCenterConfigHolder.sAllQSRecords.contains(item)) {
-                                        ControlCenterConfigHolder.sAllQSRecords.add(item)
+                                    if (item != null) {
+                                        val spec = ControlCenterConfigHolder.getRecordSpec(item)
+                                        if (spec == "wifi") ControlCenterConfigHolder.sWifiCardRecord = item
+                                        if (spec == "cell") ControlCenterConfigHolder.sCellCardRecord = item
+                                        if (!ControlCenterConfigHolder.sAllQSRecords.contains(item)) {
+                                            ControlCenterConfigHolder.sAllQSRecords.add(item)
+                                        }
                                     }
                                 }
+                            }
+                            if (list != null && !ControlCenterConfigHolder.sIsEditMode && ControlCenterConfigHolder.sRemovedComponentSpecs.isNotEmpty()) {
+                                val filtered = list.filter { item ->
+                                    val spec = ControlCenterConfigHolder.getRecordSpec(item)
+                                    spec == null || !ControlCenterConfigHolder.sRemovedComponentSpecs.contains(spec)
+                                }
+                                if (filtered.isEmpty()) return@intercept emptyList<Any>()
+                                if (ControlCenterConfigHolder.config.isModularEditActive && filtered.size >= 2) {
+                                    val resultList = ArrayList(filtered)
+                                    val first = filtered[0]
+                                    val second = filtered[1]
+                                    if (!ControlCenterConfigHolder.sIsWifiFirst) {
+                                        resultList[0] = second
+                                        resultList[1] = first
+                                    } else {
+                                        resultList[0] = first
+                                        resultList[1] = second
+                                    }
+                                    return@intercept resultList
+                                }
+                                return@intercept filtered
                             }
                             if (ControlCenterConfigHolder.config.isModularEditActive && list != null && list.size >= 2) {
                                 val resultList = ArrayList(list)
@@ -1428,6 +1622,36 @@ object ControlCenterHook {
                                             val holder = ControlCenterGrouping.createLargeCardViewHolder(parent, qsListCtrl, classLoader)
                                             if (holder != null) return@intercept holder
                                         }
+                                        if (viewType == 3484336 || viewType == 63342) {
+                                            val ctrl = ControlCenterConfigHolder.sMediaPlayerController
+                                            if (ctrl != null) {
+                                                try {
+                                                    val m = ctrl.javaClass.getMethod("createViewHolder", ViewGroup::class.java, Int::class.javaPrimitiveType)
+                                                    val h = m.invoke(ctrl, parent, viewType)
+                                                    if (h != null) return@intercept h
+                                                } catch (t: Throwable) {}
+                                            }
+                                        }
+                                        if (viewType == 3484338 || viewType == 274442) {
+                                            val ctrl = ControlCenterConfigHolder.sBrightnessSliderController
+                                            if (ctrl != null) {
+                                                try {
+                                                    val m = ctrl.javaClass.getMethod("createViewHolder", ViewGroup::class.java, Int::class.javaPrimitiveType)
+                                                    val h = m.invoke(ctrl, parent, viewType)
+                                                    if (h != null) return@intercept h
+                                                } catch (t: Throwable) {}
+                                            }
+                                        }
+                                        if (viewType == 3484339 || viewType == 865269) {
+                                            val ctrl = ControlCenterConfigHolder.sVolumeSliderController
+                                            if (ctrl != null) {
+                                                try {
+                                                    val m = ctrl.javaClass.getMethod("createViewHolder", ViewGroup::class.java, Int::class.javaPrimitiveType)
+                                                    val h = m.invoke(ctrl, parent, viewType)
+                                                    if (h != null) return@intercept h
+                                                } catch (t: Throwable) {}
+                                            }
+                                        }
                                     }
                                 } catch (t: Throwable) {
                                     Log.e(TAG, "QSListController.createViewHolder inflation error", t)
@@ -1455,7 +1679,8 @@ object ControlCenterHook {
                                     val holder = ControlCenterFullUnlock.createLandscapeDividerViewHolder(parent, classLoader)
                                     if (holder != null) return@intercept holder
                                 }
-                                if (vt == 2274 || vt == 2275 || vt == 2276 || vt in 2281..2284 || vt in 2285..2290 || vt == 2273 || vt == 2277 || vt == 2278) {
+                                if (vt == 2274 || vt == 2275 || vt == 2276 || vt in 2281..2284 || vt in 2285..2290 || vt == 2273 || vt == 2277 || vt == 2278 ||
+                                    vt == 3484336 || vt == 63342 || vt == 3484338 || vt == 274442 || vt == 3484339 || vt == 865269) {
                                     try {
                                         val adapterObj = chain.thisObject
                                         ControlCenterConfigHolder.sMainPanelAdapter = adapterObj
@@ -1500,6 +1725,27 @@ object ControlCenterHook {
                                         } else if (vt == 2278) {
                                             val holder = ControlCenterGrouping.createLargeCardViewHolder(parent, qsListCtrl, classLoader)
                                             if (holder != null) return@intercept holder
+                                        } else if (vt == 3484336 || vt == 63342) {
+                                            val ctrl = ControlCenterConfigHolder.sMediaPlayerController
+                                            if (ctrl != null) {
+                                                val m = ctrl.javaClass.getMethod("createViewHolder", ViewGroup::class.java, Int::class.javaPrimitiveType)
+                                                val h = m.invoke(ctrl, parent, vt)
+                                                if (h != null) return@intercept h
+                                            }
+                                        } else if (vt == 3484338 || vt == 274442) {
+                                            val ctrl = ControlCenterConfigHolder.sBrightnessSliderController
+                                            if (ctrl != null) {
+                                                val m = ctrl.javaClass.getMethod("createViewHolder", ViewGroup::class.java, Int::class.javaPrimitiveType)
+                                                val h = m.invoke(ctrl, parent, vt)
+                                                if (h != null) return@intercept h
+                                            }
+                                        } else if (vt == 3484339 || vt == 865269) {
+                                            val ctrl = ControlCenterConfigHolder.sVolumeSliderController
+                                            if (ctrl != null) {
+                                                val m = ctrl.javaClass.getMethod("createViewHolder", ViewGroup::class.java, Int::class.javaPrimitiveType)
+                                                val h = m.invoke(ctrl, parent, vt)
+                                                if (h != null) return@intercept h
+                                            }
                                         }
                                     } catch (t: Throwable) {
                                         Log.e(TAG, "MainPanelAdapter.onCreateViewHolder $vt intercept error", t)
@@ -1710,7 +1956,9 @@ object ControlCenterHook {
                                 val specField = qsRecordClass.getDeclaredField("spec")
                                 specField.isAccessible = true
                                 val spec = specField.get(record) as? String
-                                if ("wifi" == spec || "cell" == spec) return@intercept true
+                                if ("wifi" == spec || "cell" == spec) {
+                                    return@intercept !ControlCenterConfigHolder.sRemovedComponentSpecs.contains(spec)
+                                }
                             } catch (t: Throwable) {}
                             chain.proceed()
                         }
@@ -1724,7 +1972,12 @@ object ControlCenterHook {
                                 val specField = qsRecordClass.getDeclaredField("spec")
                                 specField.isAccessible = true
                                 val spec = specField.get(record) as? String
-                                if ("wifi" == spec || "cell" == spec) return@intercept false
+                                if (spec != null) {
+                                    if (ControlCenterConfigHolder.isGroupMember(spec) || ControlCenterConfigHolder.isGroupAnchor(spec) != null) {
+                                        return@intercept false
+                                    }
+                                    return@intercept true
+                                }
                             } catch (t: Throwable) {}
                             chain.proceed()
                         }
@@ -1800,6 +2053,16 @@ object ControlCenterHook {
                                     specField.isAccessible = true
                                     val spec = specField.get(record) as? String
                                     if ("wifi" == spec || "cell" == spec) {
+                                        ControlCenterConfigHolder.sRemovedComponentSpecs.remove(spec)
+                                        ControlCenterFullUnlock.restoreComponentSlotOrder(spec)
+                                        val ctxField = try { record.javaClass.getDeclaredField("context") } catch (e: Throwable) { null }
+                                        ctxField?.isAccessible = true
+                                        val ctx = (ctxField?.get(record) as? Context) ?: ControlCenterConfigHolder.sLastKnownContext
+                                        if (ctx != null) {
+                                            ControlCenterConfigHolder.savePriorities(ctx)
+                                            ControlCenterConfigHolder.refreshAdapter(null, ctx, isStructuralChange = true)
+                                            ControlCenterConfigHolder.updateAllVisibleTileBadges()
+                                        }
                                         return@intercept null
                                     }
                                 }
@@ -1821,6 +2084,15 @@ object ControlCenterHook {
                                     val spec = specField.get(record) as? String
 
                                     if ("wifi" == spec || "cell" == spec) {
+                                        ControlCenterConfigHolder.sRemovedComponentSpecs.add(spec)
+                                        val ctxField = try { record.javaClass.getDeclaredField("context") } catch (e: Throwable) { null }
+                                        ctxField?.isAccessible = true
+                                        val ctx = (ctxField?.get(record) as? Context) ?: ControlCenterConfigHolder.sLastKnownContext
+                                        if (ctx != null) {
+                                            ControlCenterConfigHolder.savePriorities(ctx)
+                                            ControlCenterConfigHolder.refreshAdapter(null, ctx, isStructuralChange = true)
+                                            ControlCenterConfigHolder.updateAllVisibleTileBadges()
+                                        }
                                         return@intercept null
                                     }
 
@@ -1945,25 +2217,26 @@ object ControlCenterHook {
                                     }
 
                                     if (spec == "wifi" || spec == "cell") {
+                                        val isCardAdded = !ControlCenterConfigHolder.sRemovedComponentSpecs.contains(spec)
                                         try {
                                             val setAddedM = record.javaClass.getMethod("setAdded", Boolean::class.javaPrimitiveType)
-                                            setAddedM.invoke(record, true)
+                                            setAddedM.invoke(record, isCardAdded)
                                         } catch (t: Throwable) {
                                             try {
                                                 val addedF = record.javaClass.getDeclaredField("added")
                                                 addedF.isAccessible = true
-                                                addedF.setBoolean(record, true)
+                                                addedF.setBoolean(record, isCardAdded)
                                             } catch (t2: Throwable) {}
                                         }
                                         if (tileViewObj != null) {
                                             try {
                                                 val updateAddedM = tileViewObj.javaClass.getMethod("updateAdded", Boolean::class.javaPrimitiveType, Boolean::class.javaPrimitiveType)
-                                                updateAddedM.invoke(tileViewObj, true, false)
+                                                updateAddedM.invoke(tileViewObj, isCardAdded, false)
                                             } catch (t: Throwable) {
                                                 try {
                                                     val setAddedM = tileViewObj.javaClass.getDeclaredMethod("setAdded", Boolean::class.javaPrimitiveType)
                                                     setAddedM.isAccessible = true
-                                                    setAddedM.invoke(tileViewObj, true)
+                                                    setAddedM.invoke(tileViewObj, isCardAdded)
                                                 } catch (t2: Throwable) {}
                                             }
                                         }
@@ -2217,8 +2490,13 @@ object ControlCenterHook {
                                                              curBadge.bringToFront()
                                                          }
                                                      } else if (curHandle != null) {
-                                                         if (!ControlCenterConfigHolder.sIsDisassembleMode) {
+                                                         val curSpecStr = (itemView.getTag(0x7f099990) as? String) ?: curSpec
+                                                         val isCurCard = curSpecStr == "wifi" || curSpecStr == "cell"
+                                                         val isCurAdded = if (isCurCard) !ControlCenterConfigHolder.sRemovedComponentSpecs.contains(curSpecStr) else ControlCenterConfigHolder.isTileAdded(curSpecStr)
+                                                         if (isCurAdded && !ControlCenterConfigHolder.sIsDisassembleMode) {
                                                              curHandle.visibility = View.VISIBLE
+                                                         } else {
+                                                             curHandle.visibility = View.GONE
                                                          }
                                                          if (curHandle.visibility == View.VISIBLE) {
                                                              val bw = curHandle.measuredWidth.takeIf { it > 0 } ?: badgeSize
@@ -2237,8 +2515,16 @@ object ControlCenterHook {
                                              }
                                          }
 
+                                        val isCard = spec == "wifi" || spec == "cell"
+                                        val isAdded = if (isCard) !ControlCenterConfigHolder.sRemovedComponentSpecs.contains(spec) else ControlCenterConfigHolder.isTileAdded(spec)
+                                        if (isEdit && spec != null && (!isCircular || isCard)) {
+                                            applyUniversalMarkButton(itemView, spec, isAdded, record)
+                                        } else if (!isEdit) {
+                                            itemView.findViewById<View>(UNIVERSAL_MARK_TAG)?.visibility = View.GONE
+                                        }
+
                                         if (resizeHandle != null) {
-                                            if (isEdit && !ControlCenterConfigHolder.sIsGroupSelectMode && !ControlCenterConfigHolder.sIsDisassembleMode) {
+                                            if (isEdit && isAdded && !ControlCenterConfigHolder.sIsGroupSelectMode && !ControlCenterConfigHolder.sIsDisassembleMode) {
                                                 resizeHandle.visibility = View.VISIBLE
                                                 val bw = resizeHandle.measuredWidth.takeIf { it > 0 } ?: badgeSize
                                                 val bh = resizeHandle.measuredHeight.takeIf { it > 0 } ?: badgeSize
@@ -2407,23 +2693,30 @@ object ControlCenterHook {
                                             }
 
                                             if (resizeHandle != null && !isChildOfContainer(itemView)) {
-                                                val shouldShow = !ControlCenterConfigHolder.sIsGroupSelectMode && !ControlCenterConfigHolder.sIsDisassembleMode
+                                                val curSpec = (itemView.getTag(0x7f099990) as? String) ?: spec
+                                                val curIsExp = if (curSpec != null) ControlCenterConfigHolder.sExpandedTileSpecs.contains(curSpec) else false
+                                                val curIsVert = if (curSpec != null) ControlCenterConfigHolder.sVerticalTileSpecs.contains(curSpec) else false
+                                                val curIsLarge = if (curSpec != null) ControlCenterConfigHolder.sLargeTileSpecs.contains(curSpec) else false
+                                                val isCardClass = itemView.javaClass.name.contains("Card")
+                                                val curIsCirc = if (curSpec != null && ControlCenterConfigHolder.sCircularCardSpecs.contains(curSpec)) {
+                                                    true
+                                                } else {
+                                                    !curIsExp && !curIsVert && !curIsLarge && !isCardClass
+                                                }
+
+                                                val isCurCard = curSpec == "wifi" || curSpec == "cell"
+                                                val isCurAdded = if (isCurCard) !ControlCenterConfigHolder.sRemovedComponentSpecs.contains(curSpec) else ControlCenterConfigHolder.isTileAdded(curSpec)
+                                                if (curSpec != null && (!curIsCirc || isCurCard)) {
+                                                    applyUniversalMarkButton(itemView, curSpec, isCurAdded, null)
+                                                }
+
+                                                val shouldShow = isCurAdded && !ControlCenterConfigHolder.sIsGroupSelectMode && !ControlCenterConfigHolder.sIsDisassembleMode
                                                 if (shouldShow) {
                                                     resizeHandle.visibility = View.VISIBLE
                                                     val bw = resizeHandle.measuredWidth.takeIf { it > 0 } ?: badgeSize
                                                     val bh = resizeHandle.measuredHeight.takeIf { it > 0 } ?: badgeSize
                                                     val iconFrameId = itemView.resources.getIdentifier("icon_frame", "id", itemView.context.packageName)
                                                     val curIconFrame = if (iconFrameId != 0) itemView.findViewById<View>(iconFrameId) else null
-                                                    val curSpec = (itemView.getTag(0x7f099990) as? String) ?: spec
-                                                    val curIsExp = if (curSpec != null) ControlCenterConfigHolder.sExpandedTileSpecs.contains(curSpec) else false
-                                                    val curIsVert = if (curSpec != null) ControlCenterConfigHolder.sVerticalTileSpecs.contains(curSpec) else false
-                                                    val curIsLarge = if (curSpec != null) ControlCenterConfigHolder.sLargeTileSpecs.contains(curSpec) else false
-                                                    val isCardClass = itemView.javaClass.name.contains("Card")
-                                                    val curIsCirc = if (curSpec != null && ControlCenterConfigHolder.sCircularCardSpecs.contains(curSpec)) {
-                                                        true
-                                                    } else {
-                                                        !curIsExp && !curIsVert && !curIsLarge && !isCardClass
-                                                    }
 
                                                     fun applyHandleLayout() {
                                                         if (curIsCirc && curIconFrame != null && curIconFrame.width > 0 && curIconFrame.height > 0) {
@@ -2775,7 +3068,11 @@ object ControlCenterHook {
                     if (m.name == "onBindViewHolder" && m.parameterTypes.size >= 2 && m.parameterTypes[1] == Int::class.javaPrimitiveType) {
                         m.isAccessible = true
                         module.hook(m).intercept { chain ->
-                            val result = chain.proceed()
+                            val result = try {
+                                chain.proceed()
+                            } catch (t: Throwable) {
+                                null
+                            }
                             try {
                                 val rawArgs = chain.args
                                 val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as? Array<*>
@@ -3521,18 +3818,27 @@ object ControlCenterHook {
                 } catch (t: Throwable) {}
             }
 
+            val spec = if (isBrightness) "brightness" else "volume"
+            val isAdded = !ControlCenterConfigHolder.sRemovedComponentSpecs.contains(spec)
+
+            if (ControlCenterConfigHolder.sIsEditMode) {
+                applyUniversalMarkButton(itemView, spec, isAdded, holder)
+            } else {
+                itemView.findViewById<View>(UNIVERSAL_MARK_TAG)?.visibility = View.GONE
+            }
+
             val rotateTag = 0x7f099992
             var rotateBtn = itemView.findViewById<ImageView>(rotateTag)
             if (ControlCenterConfigHolder.sIsEditMode) {
-                val shouldShow = !ControlCenterConfigHolder.sIsGroupSelectMode && !ControlCenterConfigHolder.sIsDisassembleMode
+                val shouldShow = isAdded && !ControlCenterConfigHolder.sIsGroupSelectMode && !ControlCenterConfigHolder.sIsDisassembleMode
                 if (rotateBtn == null && itemView is ViewGroup) {
                     val rSize = (32 * density).toInt()
                     rotateBtn = ImageView(ctx).apply {
                         id = rotateTag
                         val lp = FrameLayout.LayoutParams(rSize, rSize).apply {
-                            gravity = Gravity.TOP or Gravity.END
+                            gravity = Gravity.TOP or Gravity.START
                             val m = (6 * density).toInt()
-                            setMargins(0, m, m, 0)
+                            setMargins(m, m, 0, 0)
                         }
                         layoutParams = lp
                         setImageDrawable(RotateIconDrawable())
@@ -3541,6 +3847,14 @@ object ControlCenterHook {
                         }
                     }
                     itemView.addView(rotateBtn)
+                } else if (rotateBtn != null) {
+                    val lp = rotateBtn.layoutParams as? FrameLayout.LayoutParams
+                    if (lp != null && lp.gravity != (Gravity.TOP or Gravity.START)) {
+                        lp.gravity = Gravity.TOP or Gravity.START
+                        val m = (6 * density).toInt()
+                        lp.setMargins(m, m, 0, 0)
+                        rotateBtn.layoutParams = lp
+                    }
                 }
                 if (rotateBtn != null) {
                     rotateBtn.visibility = if (shouldShow) View.VISIBLE else View.GONE
@@ -3576,7 +3890,7 @@ object ControlCenterHook {
                     resizeHandle.layoutParams = ControlCenterConfigHolder.createMediaBadgeLayoutParams(itemView as ViewGroup, badgeSize)
                 }
                 if (resizeHandle != null) {
-                    val shouldShowResize = !ControlCenterConfigHolder.sIsGroupSelectMode && !ControlCenterConfigHolder.sIsDisassembleMode
+                    val shouldShowResize = isAdded && !ControlCenterConfigHolder.sIsGroupSelectMode && !ControlCenterConfigHolder.sIsDisassembleMode
                     resizeHandle.visibility = if (shouldShowResize) View.VISIBLE else View.GONE
                     if (shouldShowResize) {
                         val bw = resizeHandle.measuredWidth.takeIf { it > 0 } ?: badgeSize
@@ -5957,10 +6271,17 @@ object ControlCenterHook {
                 itemView.setTag(listenerTag, layoutListener)
             }
 
+            val isAdded = !ControlCenterConfigHolder.sRemovedComponentSpecs.contains("media")
+            if (ControlCenterConfigHolder.sIsEditMode) {
+                applyUniversalMarkButton(itemView, "media", isAdded, holder)
+            } else {
+                itemView.findViewById<View>(UNIVERSAL_MARK_TAG)?.visibility = View.GONE
+            }
+
             val resizeTag = 0x7f099999
             var resizeHandle = itemView.findViewById<ImageView>(resizeTag)
             if (ControlCenterConfigHolder.sIsEditMode) {
-                val shouldShow = !ControlCenterConfigHolder.sIsGroupSelectMode && !ControlCenterConfigHolder.sIsDisassembleMode
+                val shouldShow = isAdded && !ControlCenterConfigHolder.sIsGroupSelectMode && !ControlCenterConfigHolder.sIsDisassembleMode
                 val badgeSize = (38 * density).toInt()
                 if (resizeHandle == null && itemView is ViewGroup) {
                     resizeHandle = ImageView(ctx).apply {

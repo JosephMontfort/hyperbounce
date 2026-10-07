@@ -210,6 +210,89 @@ object ControlCenterConfigHolder {
         override fun initialValue(): HashSet<Any> = HashSet()
     }
 
+    val sRemovedComponentSpecs = ConcurrentHashMap.newKeySet<String>()
+
+    @Volatile var sWifiCardRecord: Any? = null
+    @Volatile var sCellCardRecord: Any? = null
+    @Volatile var sMediaPlayerController: Any? = null
+    @Volatile var sBrightnessSliderController: Any? = null
+    @Volatile var sVolumeSliderController: Any? = null
+    @Volatile var sCachedLineDivider: Any? = null
+    @Volatile var sCachedSystemTextDivider: Any? = null
+
+    fun getRemovedComponentItem(spec: String): Any? {
+        return when (spec) {
+            "wifi" -> sWifiCardRecord ?: findRecordForSpec("wifi")
+            "cell" -> sCellCardRecord ?: findRecordForSpec("cell")
+            "media" -> sMediaPlayerController
+            "brightness" -> sBrightnessSliderController
+            "volume" -> sVolumeSliderController
+            else -> findRecordForSpec(spec)
+        }
+    }
+
+    fun isTileAdded(spec: String): Boolean {
+        if (sRemovedComponentSpecs.contains(spec)) return false
+        val added = getAddedTilesList()
+        if (added != null) {
+            for (rec in added) {
+                if (rec != null && getRecordSpec(rec) == spec) return true
+            }
+            return false
+        }
+        return true
+    }
+
+    fun getAddedTilesList(): List<*>? {
+        val qsList = sQSListController ?: return null
+        return try {
+            val f = qsList.javaClass.getDeclaredField("addedTiles")
+            f.isAccessible = true
+            f.get(qsList) as? List<*>
+        } catch (t: Throwable) {
+            try {
+                val m = qsList.javaClass.getMethod("getAddedTiles")
+                m.invoke(qsList) as? List<*>
+            } catch (t2: Throwable) { null }
+        }
+    }
+
+    fun findRecordForSpec(spec: String): Any? {
+        if (spec == "wifi" && sWifiCardRecord != null) return sWifiCardRecord
+        if (spec == "cell" && sCellCardRecord != null) return sCellCardRecord
+        for (rec in sAllQSRecords) {
+            if (rec != null && getRecordSpec(rec) == spec) return rec
+        }
+        val added = getAddedTilesList()
+        if (added != null) {
+            for (rec in added) {
+                if (rec != null && getRecordSpec(rec) == spec) return rec
+            }
+        }
+        val qsList = sQSListController
+        if (qsList != null) {
+            try {
+                val sysF = qsList.javaClass.getDeclaredField("systemTiles")
+                sysF.isAccessible = true
+                val sysList = sysF.get(qsList) as? List<*>
+                if (sysList != null) {
+                    for (rec in sysList) {
+                        if (rec != null && getRecordSpec(rec) == spec) return rec
+                    }
+                }
+                val pkgF = qsList.javaClass.getDeclaredField("packageTiles")
+                pkgF.isAccessible = true
+                val pkgList = pkgF.get(qsList) as? List<*>
+                if (pkgList != null) {
+                    for (rec in pkgList) {
+                        if (rec != null && getRecordSpec(rec) == spec) return rec
+                    }
+                }
+            } catch (t: Throwable) {}
+        }
+        return null
+    }
+
     fun updateFromPrefs(prefs: SharedPreferences) {
         val defaultMode = DevicePipelineDetector.getDefaultAnimEngineMode()
         val engineMode = if (prefs.contains("cc_anim_engine_mode")) {
@@ -343,6 +426,13 @@ object ControlCenterConfigHolder {
                     sVolumeSliderHorizontal = json.optBoolean("volume_slider_horizontal", sVolumeSliderHorizontal)
                     sBrightnessSliderWidth = json.optInt("brightness_slider_width", sBrightnessSliderWidth).coerceIn(2, 4)
                     sVolumeSliderWidth = json.optInt("volume_slider_width", sVolumeSliderWidth).coerceIn(2, 4)
+                    val removedSpecsStr = json.optString("removed_component_specs", "")
+                    sRemovedComponentSpecs.clear()
+                    if (!TextUtils.isEmpty(removedSpecsStr)) {
+                        for (spec in removedSpecsStr.split(",")) {
+                            if (spec.trim().isNotEmpty()) sRemovedComponentSpecs.add(spec.trim())
+                        }
+                    }
                     if (json.has("landscape_right_max_rows")) {
                         config.landscapeRightMaxRows = json.optInt("landscape_right_max_rows", 3).coerceIn(1, 6)
                     }
@@ -438,6 +528,13 @@ object ControlCenterConfigHolder {
                 sVolumeSliderHorizontal = prefs.getBoolean("volume_slider_horizontal", sVolumeSliderHorizontal)
                 sBrightnessSliderWidth = prefs.getInt("brightness_slider_width", sBrightnessSliderWidth).coerceIn(2, 4)
                 sVolumeSliderWidth = prefs.getInt("volume_slider_width", sVolumeSliderWidth).coerceIn(2, 4)
+                val removedStr = prefs.getString("removed_component_specs", "")
+                sRemovedComponentSpecs.clear()
+                if (!TextUtils.isEmpty(removedStr)) {
+                    for (spec in removedStr!!.split(",")) {
+                        if (spec.trim().isNotEmpty()) sRemovedComponentSpecs.add(spec.trim())
+                    }
+                }
                 if (prefs.contains("landscape_right_max_rows")) {
                     config.landscapeRightMaxRows = prefs.getInt("landscape_right_max_rows", 3).coerceIn(1, 6)
                 }
@@ -515,6 +612,14 @@ object ControlCenterConfigHolder {
                 circCardSb.append(spec)
             }
             json.put("circular_card_specs", circCardSb.toString())
+
+            val removedSb = StringBuilder()
+            for (spec in sRemovedComponentSpecs) {
+                if (removedSb.isNotEmpty()) removedSb.append(",")
+                removedSb.append(spec)
+            }
+            json.put("removed_component_specs", removedSb.toString())
+
             json.put("media_player_size", sMediaPlayerSize)
             json.put("brightness_slider_horizontal", sBrightnessSliderHorizontal)
             json.put("volume_slider_horizontal", sVolumeSliderHorizontal)
@@ -567,6 +672,7 @@ object ControlCenterConfigHolder {
                 editor.putString("vertical_tile_specs", vertSb.toString())
                 editor.putString("large_tile_specs", largeSb.toString())
                 editor.putString("circular_card_specs", circCardSb.toString())
+                editor.putString("removed_component_specs", removedSb.toString())
                 editor.putString("media_player_size", sMediaPlayerSize)
                 editor.putBoolean("brightness_slider_horizontal", sBrightnessSliderHorizontal)
                 editor.putBoolean("volume_slider_horizontal", sVolumeSliderHorizontal)
@@ -600,6 +706,7 @@ object ControlCenterConfigHolder {
             val prefs = ctx.getSharedPreferences("hyperbounce_cc_layout", Context.MODE_PRIVATE)
             prefs?.edit()?.clear()?.apply()
 
+            sRemovedComponentSpecs.clear()
             sTileGroups.clear()
             sExpandedTileSpecs.clear()
             sExpandedTileSpecs.add("wifi")
@@ -1122,6 +1229,8 @@ object ControlCenterConfigHolder {
 
                     // Special Handling for Sliders
                     if (isSlider) {
+                        val isAdded = !sRemovedComponentSpecs.contains(spec)
+                        ControlCenterHook.applyUniversalMarkButton(itemView, spec, isAdded)
                         if (selectBadge != null) selectBadge.visibility = View.GONE
 
                         if (rotateBtn == null && itemView is ViewGroup) {
@@ -1129,19 +1238,27 @@ object ControlCenterConfigHolder {
                             rotateBtn = ImageView(itemView.context).apply {
                                 id = rotateTag
                                 val lp = android.widget.FrameLayout.LayoutParams(rSize, rSize).apply {
-                                    gravity = android.view.Gravity.TOP or android.view.Gravity.END
+                                    gravity = android.view.Gravity.TOP or android.view.Gravity.START
                                     val m = (6 * density).toInt()
-                                    setMargins(0, m, m, 0)
+                                    setMargins(m, m, 0, 0)
                                 }
                                 layoutParams = lp
                                 setImageDrawable(RotateIconDrawable())
                             }
                             itemView.addView(rotateBtn)
+                        } else if (rotateBtn != null) {
+                            val lp = rotateBtn.layoutParams as? android.widget.FrameLayout.LayoutParams
+                            if (lp != null && lp.gravity != (android.view.Gravity.TOP or android.view.Gravity.START)) {
+                                lp.gravity = android.view.Gravity.TOP or android.view.Gravity.START
+                                val m = (6 * density).toInt()
+                                lp.setMargins(m, m, 0, 0)
+                                rotateBtn.layoutParams = lp
+                            }
                         }
                         val isBright = "brightness".equals(spec, ignoreCase = true)
                         val isHoriz = if (isBright) sBrightnessSliderHorizontal else sVolumeSliderHorizontal
                         if (rotateBtn != null) {
-                            val shouldShowRotate = !sIsGroupSelectMode && !sIsDisassembleMode
+                            val shouldShowRotate = isAdded && !sIsGroupSelectMode && !sIsDisassembleMode
                             rotateBtn.visibility = if (shouldShowRotate) View.VISIBLE else View.GONE
                             if (shouldShowRotate) {
                                 rotateBtn.bringToFront()
@@ -1169,7 +1286,7 @@ object ControlCenterConfigHolder {
                                 resizeHandle.layoutParams = createMediaBadgeLayoutParams(itemView as ViewGroup, badgeSize)
                             }
                             if (resizeHandle != null) {
-                                val shouldShowResize = !sIsGroupSelectMode && !sIsDisassembleMode
+                                val shouldShowResize = isAdded && !sIsGroupSelectMode && !sIsDisassembleMode
                                 resizeHandle.visibility = if (shouldShowResize) View.VISIBLE else View.GONE
                                 if (shouldShowResize) {
                                     val bw = resizeHandle.measuredWidth.takeIf { it > 0 } ?: badgeSize
@@ -1204,6 +1321,8 @@ object ControlCenterConfigHolder {
 
                     // Special Handling for Media Player
                     if (isMedia) {
+                        val isAdded = !sRemovedComponentSpecs.contains("media")
+                        ControlCenterHook.applyUniversalMarkButton(itemView, "media", isAdded)
                         if (rotateBtn != null) rotateBtn.visibility = View.GONE
                         if (selectBadge != null) selectBadge.visibility = View.GONE
 
@@ -1219,7 +1338,7 @@ object ControlCenterConfigHolder {
                             resizeHandle.layoutParams = createMediaBadgeLayoutParams(itemView as ViewGroup, badgeSize)
                         }
                         if (resizeHandle != null) {
-                            val shouldShowMediaResize = !sIsGroupSelectMode && !sIsDisassembleMode
+                            val shouldShowMediaResize = isAdded && !sIsGroupSelectMode && !sIsDisassembleMode
                             resizeHandle.visibility = if (shouldShowMediaResize) View.VISIBLE else View.GONE
                             if (shouldShowMediaResize) {
                                 val bw = resizeHandle.measuredWidth.takeIf { it > 0 } ?: badgeSize
@@ -1490,6 +1609,12 @@ object ControlCenterConfigHolder {
                         }
                     } else {
                         // Normal Edit Mode
+                        val isAdded = if (isCard) !sRemovedComponentSpecs.contains(spec) else isTileAdded(spec)
+                        val record = findRecordForSpec(spec)
+                        if (!isCircular) {
+                            ControlCenterHook.applyUniversalMarkButton(itemView, spec, isAdded, record)
+                        }
+
                         if (selectBadge != null) {
                             selectBadge.visibility = View.GONE
                             selectBadge.setOnClickListener(null)
@@ -1517,19 +1642,26 @@ object ControlCenterConfigHolder {
                             itemView.addView(resizeHandle)
                         }
                         if (resizeHandle != null) {
-                            resizeHandle.visibility = View.VISIBLE
-                            val bw = resizeHandle.measuredWidth.takeIf { it > 0 } ?: badgeSize
-                            val bh = resizeHandle.measuredHeight.takeIf { it > 0 } ?: badgeSize
-                            if (isCircular && curIconFrame != null && curIconFrame.width > 0 && curIconFrame.height > 0) {
-                                val iRight = curIconFrame.right
-                                val iBottom = curIconFrame.bottom
-                                resizeHandle.layout(iRight - bw, iBottom - bh, iRight, iBottom)
-                            } else if (itemView.width > 0 && itemView.height > 0) {
-                                resizeHandle.layout(itemView.width - bw, itemView.height - bh, itemView.width, itemView.height)
+                            if (isAdded) {
+                                resizeHandle.visibility = View.VISIBLE
+                                val bw = resizeHandle.measuredWidth.takeIf { it > 0 } ?: badgeSize
+                                val bh = resizeHandle.measuredHeight.takeIf { it > 0 } ?: badgeSize
+                                if (isCircular && curIconFrame != null && curIconFrame.width > 0 && curIconFrame.height > 0) {
+                                    val iRight = curIconFrame.right
+                                    val iBottom = curIconFrame.bottom
+                                    resizeHandle.layout(iRight - bw, iBottom - bh, iRight, iBottom)
+                                } else if (itemView.width > 0 && itemView.height > 0) {
+                                    resizeHandle.layout(itemView.width - bw, itemView.height - bh, itemView.width, itemView.height)
+                                }
+                                resizeHandle.bringToFront()
+                                resizeHandle.isClickable = true
+                                FluidTileResizeHandler.attach(resizeHandle, itemView.context, spec, itemView, density)
+                            } else {
+                                resizeHandle.visibility = View.GONE
+                                resizeHandle.isClickable = false
+                                resizeHandle.setOnClickListener(null)
+                                resizeHandle.setOnTouchListener(null)
                             }
-                            resizeHandle.bringToFront()
-                            resizeHandle.isClickable = true
-                            FluidTileResizeHandler.attach(resizeHandle, itemView.context, spec, itemView, density)
                         }
                     }
                     } catch (t: Throwable) {

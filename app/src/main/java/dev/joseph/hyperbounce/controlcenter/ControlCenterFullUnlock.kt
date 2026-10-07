@@ -705,6 +705,24 @@ object ControlCenterFullUnlock {
                 sProxyHandlers.remove("card:$spec")
             }
 
+            // 2b. Remove components that are marked as removed
+            for (spec in ControlCenterConfigHolder.sRemovedComponentSpecs) {
+                val slotIds = when (spec) {
+                    "wifi" -> listOf("card:wifi", "tile:wifi")
+                    "cell" -> listOf("card:cell", "tile:cell")
+                    "media" -> listOf("component:media")
+                    "brightness" -> listOf("component:brightness")
+                    "volume" -> listOf("component:volume")
+                    else -> listOf("tile:$spec", "card:$spec")
+                }
+                for (sId in slotIds) {
+                    sKnownSlots.remove(sId)
+                    sUnifiedSlotOrder.remove(sId)
+                    sProxyCache.remove(sId)
+                    sProxyHandlers.remove(sId)
+                }
+            }
+
             // 3. Deduplicate sUnifiedSlotOrder while preserving order
             val seen = HashSet<String>()
             val deduped = ArrayList<String>()
@@ -719,6 +737,66 @@ object ControlCenterFullUnlock {
             }
         } catch (t: Throwable) {
             Log.e(TAG, "cleanStaleSlots error", t)
+        }
+    }
+
+    /**
+     * Restores a removed component or tile back into sUnifiedSlotOrder at its
+     * prioritized position.
+     */
+    fun restoreComponentSlotOrder(spec: String) {
+        try {
+            val slotId = when (spec) {
+                "wifi" -> "card:wifi"
+                "cell" -> "card:cell"
+                "media" -> "component:media"
+                "brightness" -> "component:brightness"
+                "volume" -> "component:volume"
+                else -> "tile:$spec"
+            }
+            if (sUnifiedSlotOrder.contains(slotId)) return
+
+            val preferredOrder = listOf(
+                "card:wifi",
+                "card:cell",
+                "component:media",
+                "component:brightness",
+                "component:volume"
+            )
+            val targetIdx = preferredOrder.indexOf(slotId)
+            if (targetIdx != -1) {
+                var insertPos = -1
+                for (i in (targetIdx + 1) until preferredOrder.size) {
+                    val nextId = preferredOrder[i]
+                    val idx = sUnifiedSlotOrder.indexOf(nextId)
+                    if (idx != -1) {
+                        insertPos = idx
+                        break
+                    }
+                }
+                if (insertPos != -1) {
+                    sUnifiedSlotOrder.add(insertPos, slotId)
+                } else {
+                    var lastBeforeIdx = -1
+                    for (i in (targetIdx - 1) downTo 0) {
+                        val prevId = preferredOrder[i]
+                        val idx = sUnifiedSlotOrder.indexOf(prevId)
+                        if (idx != -1) {
+                            lastBeforeIdx = idx
+                            break
+                        }
+                    }
+                    if (lastBeforeIdx != -1) {
+                        sUnifiedSlotOrder.add(lastBeforeIdx + 1, slotId)
+                    } else {
+                        sUnifiedSlotOrder.add(0, slotId)
+                    }
+                }
+            } else {
+                sUnifiedSlotOrder.add(slotId)
+            }
+        } catch (t: Throwable) {
+            Log.e(TAG, "restoreComponentSlotOrder error for $spec", t)
         }
     }
 
@@ -1155,6 +1233,11 @@ object ControlCenterFullUnlock {
                         for (i in items.indices) {
                             val item = items[i]
                             val spec = ControlCenterConfigHolder.getRecordSpec(item)
+                            if (spec == "wifi") {
+                                ControlCenterConfigHolder.sWifiCardRecord = item
+                            } else if (spec == "cell") {
+                                ControlCenterConfigHolder.sCellCardRecord = item
+                            }
                             var vt = 2273
                             try {
                                 val getTypeM = item.javaClass.getMethod("getType")
@@ -1177,22 +1260,48 @@ object ControlCenterFullUnlock {
                                 }
                             }
 
+                            if (spec != null && ControlCenterConfigHolder.sRemovedComponentSpecs.contains(spec)) {
+                                sKnownSlots.remove("card:$spec")
+                                sKnownSlots.remove("tile:$spec")
+                                sUnifiedSlotOrder.remove("card:$spec")
+                                sUnifiedSlotOrder.remove("tile:$spec")
+                                continue
+                            }
+
                             val id = if (spec == "wifi") "card:wifi" else if (spec == "cell") "card:cell" else "card:$spec"
                             val spans = getItemSpans(item, vt, spec)
                             sKnownSlots[id] = SlotItem(id, controller, item, vt, spans.first, spans.second)
                         }
                     } else if (ctrlName.contains("MediaPlayerController")) {
                         val item = items.firstOrNull() ?: controller
-                        val spans = getItemSpans(item, 3484336, null)
-                        sKnownSlots["component:media"] = SlotItem("component:media", controller, item, 3484336, spans.first, spans.second)
+                        ControlCenterConfigHolder.sMediaPlayerController = item
+                        if (ControlCenterConfigHolder.sRemovedComponentSpecs.contains("media")) {
+                            sKnownSlots.remove("component:media")
+                            sUnifiedSlotOrder.remove("component:media")
+                        } else {
+                            val spans = getItemSpans(item, 3484336, null)
+                            sKnownSlots["component:media"] = SlotItem("component:media", controller, item, 3484336, spans.first, spans.second)
+                        }
                     } else if (ctrlName.contains("BrightnessSliderController")) {
                         val item = items.firstOrNull() ?: controller
-                        val spans = getItemSpans(item, 3484338, null)
-                        sKnownSlots["component:brightness"] = SlotItem("component:brightness", controller, item, 3484338, spans.first, spans.second)
+                        ControlCenterConfigHolder.sBrightnessSliderController = item
+                        if (ControlCenterConfigHolder.sRemovedComponentSpecs.contains("brightness")) {
+                            sKnownSlots.remove("component:brightness")
+                            sUnifiedSlotOrder.remove("component:brightness")
+                        } else {
+                            val spans = getItemSpans(item, 3484338, null)
+                            sKnownSlots["component:brightness"] = SlotItem("component:brightness", controller, item, 3484338, spans.first, spans.second)
+                        }
                     } else if (ctrlName.contains("VolumeSliderController")) {
                         val item = items.firstOrNull() ?: controller
-                        val spans = getItemSpans(item, 3484339, null)
-                        sKnownSlots["component:volume"] = SlotItem("component:volume", controller, item, 3484339, spans.first, spans.second)
+                        ControlCenterConfigHolder.sVolumeSliderController = item
+                        if (ControlCenterConfigHolder.sRemovedComponentSpecs.contains("volume")) {
+                            sKnownSlots.remove("component:volume")
+                            sUnifiedSlotOrder.remove("component:volume")
+                        } else {
+                            val spans = getItemSpans(item, 3484339, null)
+                            sKnownSlots["component:volume"] = SlotItem("component:volume", controller, item, 3484339, spans.first, spans.second)
+                        }
                     } else if (ctrlName.contains("DeviceCenterEntryController")) {
                         // Check if available in settings
                         val isAvail = try {
@@ -1216,6 +1325,7 @@ object ControlCenterFullUnlock {
                             sKnownSlots["component:device_controls"] = SlotItem("component:device_controls", controller, item, 2668765, spans.first, spans.second)
                         }
                     } else if (ctrlName.contains("QSListController")) {
+                        ControlCenterConfigHolder.sQSListController = realController
                         val rawFooterItems = ArrayList<Any>()
                         val seenAvailableSpecs = HashSet<String>()
                         var inActiveSection = true
@@ -1235,12 +1345,18 @@ object ControlCenterFullUnlock {
                                 vt = getTypeM.invoke(item) as Int
                             } catch (t: Throwable) {}
 
+                            if (vt == 3484337) {
+                                ControlCenterConfigHolder.sCachedLineDivider = item
+                            } else if (vt == 8398 && ControlCenterConfigHolder.sCachedSystemTextDivider == null) {
+                                ControlCenterConfigHolder.sCachedSystemTextDivider = item
+                            }
+
                             val isDividerOrHeader = (vt == 8398 || vt == 3484337 || vt == 8397)
                             if (isDividerOrHeader) {
                                 inActiveSection = false
                             }
 
-                            val isAdded = inActiveSection && (addedTilesList == null || addedTilesList.contains(item))
+                            val isAdded = inActiveSection && (addedTilesList == null || addedTilesList.contains(item)) && (spec == null || !ControlCenterConfigHolder.sRemovedComponentSpecs.contains(spec))
 
                             if (isAdded && !isDividerOrHeader) {
                                 if (spec != null) {
@@ -1292,6 +1408,81 @@ object ControlCenterFullUnlock {
 
                         if (orderRemoved && context != null) {
                             saveOrder(context)
+                        }
+
+                        // In Edit Mode: inject removed components (wifi, cell, media, brightness, volume) into System toggles section
+                        if (ControlCenterConfigHolder.sIsEditMode) {
+                            val removedItemsToInject = ArrayList<Any>()
+                            if (ControlCenterConfigHolder.sRemovedComponentSpecs.contains("wifi")) {
+                                val rItem = ControlCenterConfigHolder.sWifiCardRecord ?: ControlCenterConfigHolder.getRemovedComponentItem("wifi")
+                                if (rItem != null) removedItemsToInject.add(rItem)
+                            }
+                            if (ControlCenterConfigHolder.sRemovedComponentSpecs.contains("cell")) {
+                                val rItem = ControlCenterConfigHolder.sCellCardRecord ?: ControlCenterConfigHolder.getRemovedComponentItem("cell")
+                                if (rItem != null) removedItemsToInject.add(rItem)
+                            }
+                            if (ControlCenterConfigHolder.sRemovedComponentSpecs.contains("media")) {
+                                val rItem = ControlCenterConfigHolder.sMediaPlayerController ?: ControlCenterConfigHolder.getRemovedComponentItem("media")
+                                if (rItem != null) removedItemsToInject.add(rItem)
+                            }
+                            if (ControlCenterConfigHolder.sRemovedComponentSpecs.contains("brightness")) {
+                                val rItem = ControlCenterConfigHolder.sBrightnessSliderController ?: ControlCenterConfigHolder.getRemovedComponentItem("brightness")
+                                if (rItem != null) removedItemsToInject.add(rItem)
+                            }
+                            if (ControlCenterConfigHolder.sRemovedComponentSpecs.contains("volume")) {
+                                val rItem = ControlCenterConfigHolder.sVolumeSliderController ?: ControlCenterConfigHolder.getRemovedComponentItem("volume")
+                                if (rItem != null) removedItemsToInject.add(rItem)
+                            }
+
+                            if (removedItemsToInject.isNotEmpty()) {
+                                var sysHeaderIdx = -1
+                                for (idx in rawFooterItems.indices) {
+                                    val fItem = rawFooterItems[idx]
+                                    var fVt = 0
+                                    try {
+                                        val getTypeM = fItem.javaClass.getMethod("getType")
+                                        fVt = getTypeM.invoke(fItem) as Int
+                                    } catch (t: Throwable) {}
+                                    if (fVt == 8398) {
+                                        sysHeaderIdx = idx
+                                        break
+                                    }
+                                }
+
+                                if (sysHeaderIdx != -1) {
+                                    var insertIdx = sysHeaderIdx + 1
+                                    for (toInject in removedItemsToInject) {
+                                        if (!rawFooterItems.contains(toInject)) {
+                                            rawFooterItems.add(insertIdx, toInject)
+                                            insertIdx++
+                                        }
+                                    }
+                                } else {
+                                    // If systemTextDivider wasn't in rawFooterItems, restore cached dividers if available
+                                    val cachedLine = ControlCenterConfigHolder.sCachedLineDivider
+                                    val cachedSys = ControlCenterConfigHolder.sCachedSystemTextDivider
+                                    if (cachedLine != null && !rawFooterItems.contains(cachedLine)) {
+                                        rawFooterItems.add(0, cachedLine)
+                                    }
+                                    val insertBase = if (rawFooterItems.isNotEmpty() && cachedLine != null) 1 else 0
+                                    if (cachedSys != null && !rawFooterItems.contains(cachedSys)) {
+                                        rawFooterItems.add(insertBase, cachedSys)
+                                        var insertIdx = insertBase + 1
+                                        for (toInject in removedItemsToInject) {
+                                            if (!rawFooterItems.contains(toInject)) {
+                                                rawFooterItems.add(insertIdx, toInject)
+                                                insertIdx++
+                                            }
+                                        }
+                                    } else {
+                                        for (toInject in removedItemsToInject) {
+                                            if (!rawFooterItems.contains(toInject)) {
+                                                rawFooterItems.add(toInject)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                         }
 
                         // Clean up consecutive or empty dividers from rawFooterItems
