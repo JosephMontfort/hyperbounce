@@ -2557,8 +2557,7 @@ object ControlCenterHook {
                         m.isAccessible = true
                         module.hook(m).intercept { chain ->
                             val itemView = chain.thisObject as? View
-                            val isGroup = itemView != null && (itemView.getTag(0x7f099995) != null || (itemView.findViewById<View>(0x7f099995) != null).also { if (it) itemView.setTag(0x7f099995, java.lang.Boolean.TRUE) })
-                            if (isGroup) {
+                            if (itemView != null && itemView.findViewById<View>(0x7f099995) != null) {
                                 if (ControlCenterConfigHolder.sIsDisassembleMode || (ControlCenterConfigHolder.sIsEditMode && !ControlCenterConfigHolder.sIsGroupSelectMode)) {
                                     chain.proceed()
                                 } else {
@@ -2573,8 +2572,7 @@ object ControlCenterHook {
                         m.isAccessible = true
                         module.hook(m).intercept { chain ->
                             val itemView = chain.thisObject as? View
-                            val isGroup = itemView != null && (itemView.getTag(0x7f099995) != null || (itemView.findViewById<View>(0x7f099995) != null).also { if (it) itemView.setTag(0x7f099995, java.lang.Boolean.TRUE) })
-                            if (isGroup) {
+                            if (itemView != null && itemView.findViewById<View>(0x7f099995) != null) {
                                 if (ControlCenterConfigHolder.sIsDisassembleMode || (ControlCenterConfigHolder.sIsEditMode && !ControlCenterConfigHolder.sIsGroupSelectMode)) {
                                     chain.proceed()
                                 } else {
@@ -3315,21 +3313,19 @@ object ControlCenterHook {
             applyMediaPlayerLayout(holder)
         } else {
             val itemView = ControlCenterGrouping.getViewHolderItemView(holder)
-            if (itemView != null && (itemView.getTag(0x7f099995) != null || itemView.findViewById<ViewGroup>(0x7f099995) != null)) {
+            if (itemView != null && itemView.findViewById<ViewGroup>(0x7f099995) != null) {
                 var group = itemView.getTag(0x7f099994) as? TileGroup
-                if (group != null) {
-                    // Already bound by QSTileRecord.onBindViewHolder with its active controller
-                    return
-                }
-                val spec = itemView.getTag(0x7f099990) as? String
-                    ?: try {
-                        val itemF = holder.javaClass.getDeclaredField("item")
-                        itemF.isAccessible = true
-                        ControlCenterConfigHolder.getRecordSpec(itemF.get(holder))
-                    } catch (t: Throwable) { null }
-                if (spec != null) {
-                    itemView.setTag(0x7f099990, spec)
-                    group = ControlCenterConfigHolder.isGroupAnchor(spec)
+                if (group == null) {
+                    val spec = itemView.getTag(0x7f099990) as? String
+                        ?: try {
+                            val itemF = holder.javaClass.getDeclaredField("item")
+                            itemF.isAccessible = true
+                            ControlCenterConfigHolder.getRecordSpec(itemF.get(holder))
+                        } catch (t: Throwable) { null }
+                    if (spec != null) {
+                        itemView.setTag(0x7f099990, spec)
+                        group = ControlCenterConfigHolder.isGroupAnchor(spec)
+                    }
                 }
                 if (group != null) {
                     ControlCenterGrouping.rebindGroupContainer(itemView, group, null, classLoader)
