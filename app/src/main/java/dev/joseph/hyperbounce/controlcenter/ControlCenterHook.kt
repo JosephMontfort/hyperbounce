@@ -976,12 +976,12 @@ object ControlCenterHook {
                         m.isAccessible = true
                         module.hook(m).intercept { chain ->
                             val holder = chain.thisObject
-                            if (holder != null && ControlCenterGrouping.sIosClusterHolders.contains(holder)) {
+                            if (holder != null && ControlCenterGrouping.sGroupChildHolders.contains(holder)) {
                                 return@intercept null
                             }
                             val itemView = ControlCenterGrouping.getViewHolderItemView(holder)
-                            if (itemView != null && ControlCenterGrouping.isChildOfIosCluster(itemView)) {
-                                if (holder != null) ControlCenterGrouping.sIosClusterHolders.add(holder)
+                            if (itemView != null && ControlCenterGrouping.isChildOfGroup(itemView)) {
+                                if (holder != null) ControlCenterGrouping.sGroupChildHolders.add(holder)
                                 return@intercept null
                             }
                             val result = try { chain.proceed() } catch (t: Throwable) { null }
@@ -1032,12 +1032,12 @@ object ControlCenterHook {
                         m.isAccessible = true
                         module.hook(m).intercept { chain ->
                             val holder = chain.thisObject
-                            if (holder != null && ControlCenterGrouping.sIosClusterHolders.contains(holder)) {
+                            if (holder != null && ControlCenterGrouping.sGroupChildHolders.contains(holder)) {
                                 return@intercept null
                             }
                             val itemView = ControlCenterGrouping.getViewHolderItemView(holder)
-                            if (itemView != null && ControlCenterGrouping.isChildOfIosCluster(itemView)) {
-                                if (holder != null) ControlCenterGrouping.sIosClusterHolders.add(holder)
+                            if (itemView != null && ControlCenterGrouping.isChildOfGroup(itemView)) {
+                                if (holder != null) ControlCenterGrouping.sGroupChildHolders.add(holder)
                                 return@intercept null
                             }
                             val result = try { chain.proceed() } catch (t: Throwable) { null }
@@ -1126,12 +1126,12 @@ object ControlCenterHook {
                         m.isAccessible = true
                         module.hook(m).intercept { chain ->
                             val holder = chain.thisObject
-                            if (holder != null && ControlCenterGrouping.sIosClusterHolders.contains(holder)) {
+                            if (holder != null && ControlCenterGrouping.sGroupChildHolders.contains(holder)) {
                                 return@intercept null
                             }
                             val itemView = ControlCenterGrouping.getViewHolderItemView(holder)
-                            if (itemView != null && ControlCenterGrouping.isChildOfIosCluster(itemView)) {
-                                if (holder != null) ControlCenterGrouping.sIosClusterHolders.add(holder)
+                            if (itemView != null && ControlCenterGrouping.isChildOfGroup(itemView)) {
+                                if (holder != null) ControlCenterGrouping.sGroupChildHolders.add(holder)
                                 return@intercept null
                             }
                             val result = chain.proceed()
@@ -2195,19 +2195,6 @@ object ControlCenterHook {
                                     specField.isAccessible = true
                                     val spec = specField.get(record) as? String
 
-                                    if ("wifi" == spec || "cell" == spec) {
-                                        ControlCenterConfigHolder.sRemovedComponentSpecs.add(spec)
-                                        val ctxField = try { record.javaClass.getDeclaredField("context") } catch (e: Throwable) { null }
-                                        ctxField?.isAccessible = true
-                                        val ctx = (ctxField?.get(record) as? Context) ?: ControlCenterConfigHolder.sLastKnownContext
-                                        if (ctx != null) {
-                                            ControlCenterConfigHolder.savePriorities(ctx)
-                                            ControlCenterConfigHolder.refreshAdapter(null, ctx, isStructuralChange = true)
-                                            ControlCenterConfigHolder.updateAllVisibleTileBadges()
-                                        }
-                                        return@intercept null
-                                    }
-
                                     val t = Throwable()
                                     for (elem in t.stackTrace) {
                                         if (elem.className.contains("clickAction") && !elem.className.contains("markClickAction")) {
@@ -2260,6 +2247,19 @@ object ControlCenterHook {
                                             }
                                             return@intercept null
                                         }
+                                    }
+
+                                    if ("wifi" == spec || "cell" == spec) {
+                                        ControlCenterConfigHolder.sRemovedComponentSpecs.add(spec)
+                                        val ctxField = try { record.javaClass.getDeclaredField("context") } catch (e: Throwable) { null }
+                                        ctxField?.isAccessible = true
+                                        val ctx = (ctxField?.get(record) as? Context) ?: ControlCenterConfigHolder.sLastKnownContext
+                                        if (ctx != null) {
+                                            ControlCenterConfigHolder.savePriorities(ctx)
+                                            ControlCenterConfigHolder.refreshAdapter(null, ctx, isStructuralChange = true)
+                                            ControlCenterConfigHolder.updateAllVisibleTileBadges()
+                                        }
+                                        return@intercept null
                                     }
                                 }
                             } catch (t: Throwable) {

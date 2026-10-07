@@ -130,7 +130,8 @@ class DynamicGroupContainer(context: Context) : ViewGroup(context) {
 object ControlCenterGrouping {
     private const val TAG = "HyperBounce_CC_Group"
 
-    val sIosClusterHolders: MutableSet<Any> = java.util.Collections.newSetFromMap(java.util.WeakHashMap<Any, Boolean>())
+    val sGroupChildHolders: MutableSet<Any> = java.util.Collections.newSetFromMap(java.util.WeakHashMap<Any, Boolean>())
+    val sIosClusterHolders: MutableSet<Any> get() = sGroupChildHolders
     private var sResMarginId: Int = -1
     private var sResUnitId: Int = -1
     private var sRes2RowsId: Int = -1
@@ -665,9 +666,9 @@ object ControlCenterGrouping {
     fun attachSubHolder(holder: Any?) {
         if (holder == null) return
         val childView = getViewHolderItemView(holder)
-        val isIosChild = childView != null && isChildOfIosCluster(childView)
-        if (isIosChild) {
-            sIosClusterHolders.add(holder)
+        val isGroupChild = childView != null && isChildOfGroup(childView)
+        if (isGroupChild) {
+            sGroupChildHolders.add(holder)
             try {
                 val sm = holder.javaClass.getMethod("setIgnoreHolderScale", Boolean::class.javaPrimitiveType)
                 sm.invoke(holder, true)
@@ -695,7 +696,7 @@ object ControlCenterGrouping {
                     mpaField.set(holder, ControlCenterConfigHolder.sMainPanelAdapter)
                 }
             } catch (t: Throwable) {}
-            if (!isIosChild) {
+            if (!isGroupChild) {
                 try {
                     val fcField = sc.getDeclaredField("frameCallback")
                     fcField.isAccessible = true
@@ -1421,6 +1422,38 @@ object ControlCenterGrouping {
         return false
     }
 
+    fun isChildOfGroup(view: View?): Boolean {
+        if (view == null) return false
+        val cached = view.getTag(0x7f09999b)
+        if (cached is Boolean) return cached
+        var cur: android.view.ViewParent? = view.parent
+        while (cur != null) {
+            if (cur is DynamicGroupContainer ||
+                cur is IosTileGroupFolder.IosClusterContainer ||
+                cur is IosTileGroupFolder.MiniClusterView ||
+                cur is IosTileGroupFolder.IosFolderExpandedOverlay) {
+                view.setTag(0x7f09999b, true)
+                return true
+            }
+            if (cur is View) {
+                val pid = cur.id
+                if (pid == 0x7f099995 || pid == 0x7f099996 || cur.getTag(0x7f099995) != null || cur.getTag(0x7f099993) != null || cur.getTag(0x7f09999c) == true) {
+                    view.setTag(0x7f09999b, true)
+                    return true
+                }
+                if (cur.javaClass.name.contains("RecyclerView")) {
+                    view.setTag(0x7f09999b, false)
+                    return false
+                }
+            }
+            cur = cur.parent
+        }
+        if (view.parent != null) {
+            view.setTag(0x7f09999b, false)
+        }
+        return false
+    }
+
     fun rebindGroupContainer(
         anchorView: View,
         group: TileGroup?,
@@ -1532,6 +1565,7 @@ object ControlCenterGrouping {
                             for (i in 0 until 3) {
                                 val child = inflateTileForType("C", iosCluster, activeCtrl, classLoader)
                                 child.setTag(0x7f09999c, true)
+                                child.setTag(0x7f09999b, true)
                                 iosCluster.addView(child)
                                 val h = createSubHolderForView(child, mainPanelController, classLoader)
                                 attachSubHolder(h)
@@ -1542,6 +1576,7 @@ object ControlCenterGrouping {
                             for (i in 3 until 7) {
                                 val child = inflateTileForType("C", iosCluster.miniClusterView, activeCtrl, classLoader)
                                 child.setTag(0x7f09999c, true)
+                                child.setTag(0x7f09999b, true)
                                 iosCluster.miniClusterView.addView(child)
                                 val h = createSubHolderForView(child, mainPanelController, classLoader)
                                 attachSubHolder(h)
@@ -1559,6 +1594,7 @@ object ControlCenterGrouping {
                             for (i in resolvedGroup.specs.indices) {
                                 val pt = layoutRes.placedTiles[i]
                                 val child = inflateTileForType(pt.type, container, activeCtrl, classLoader)
+                                child.setTag(0x7f09999b, true)
                                 container.addView(child)
                                 val h = createSubHolderForView(child, mainPanelController, classLoader)
                                 attachSubHolder(h)
@@ -1581,6 +1617,7 @@ object ControlCenterGrouping {
                 for (i in 0 until count) {
                     val childTile = getChildTileAt(container, i)
                     if (childTile != null) {
+                        childTile.setTag(0x7f09999b, true)
                         val h = createSubHolderForView(childTile, mainPanelController, classLoader)
                         attachSubHolder(h)
                         subHolders[i] = h
@@ -1700,10 +1737,10 @@ object ControlCenterGrouping {
     fun updateChildHolderFrame(parentHolder: Any?, childHolder: Any?) {
         if (parentHolder == null || childHolder == null) return
         try {
-            if (sIosClusterHolders.contains(childHolder)) return
+            if (sGroupChildHolders.contains(childHolder)) return
             val childView = getViewHolderItemView(childHolder)
-            if (childView != null && isChildOfIosCluster(childView)) {
-                sIosClusterHolders.add(childHolder)
+            if (childView != null && isChildOfGroup(childView)) {
+                sGroupChildHolders.add(childHolder)
                 return
             }
 
