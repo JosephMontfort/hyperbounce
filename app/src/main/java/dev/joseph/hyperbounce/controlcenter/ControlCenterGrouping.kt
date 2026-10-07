@@ -122,6 +122,49 @@ class DynamicGroupContainer(context: Context) : ViewGroup(context) {
 object ControlCenterGrouping {
     private const val TAG = "HyperBounce_CC_Group"
 
+    private object GroupContainerBlurCache {
+        var initialized = false
+        var getBlurM: Method? = null
+        var setPassWindowBlur: Method? = null
+        var setModeMethod: Method? = null
+        var blendColors: Any? = null
+        var setBlendMethod: Method? = null
+        var clearBlendMethod: Method? = null
+        var commonUtilsInst: Any? = null
+        var clearEffectMethod: Method? = null
+
+        fun init(classLoader: ClassLoader) {
+            if (initialized) return
+            try {
+                val ccUtils = Class.forName("miui.systemui.controlcenter.utils.ControlCenterUtils", false, classLoader)
+                getBlurM = ccUtils.getMethod("getBackgroundBlurOpenedInDefaultTheme", Context::class.java)
+
+                val miBlurClass = Class.forName("miui.systemui.util.MiBlurCompat", false, classLoader)
+                try {
+                    setPassWindowBlur = miBlurClass.getMethod("setPassWindowBlurEnabledCompat", View::class.java, Boolean::class.javaPrimitiveType)
+                } catch (_: Throwable) {}
+                setModeMethod = miBlurClass.getMethod("setMiViewBlurModeCompat", View::class.java, Int::class.javaPrimitiveType)
+
+                val tokenClass = Class.forName("miui.systemui.util.MiuiColorBlendToken", false, classLoader)
+                val tokenInst = tokenClass.getDeclaredField("INSTANCE").get(null)
+                val getBlendMethod = tokenClass.getMethod("getCC_TILE_DEFAULT_BLEND_COLORS")
+                blendColors = getBlendMethod.invoke(tokenInst)
+
+                if (blendColors != null) {
+                    setBlendMethod = miBlurClass.getMethod("setMiBackgroundBlendColors", View::class.java, blendColors!!.javaClass)
+                }
+                clearBlendMethod = miBlurClass.getMethod("clearMiBackgroundBlendColorCompat", View::class.java)
+
+                val commonUtilsClass = Class.forName("miui.systemui.util.CommonUtils", false, classLoader)
+                commonUtilsInst = commonUtilsClass.getDeclaredField("INSTANCE").get(null)
+                clearEffectMethod = commonUtilsClass.getMethod("clearMiBlurBlendEffect", View::class.java)
+            } catch (t: Throwable) {
+                Log.e(TAG, "GroupContainerBlurCache init error", t)
+            }
+            initialized = true
+        }
+    }
+
     fun computeGroupLayout(specs: List<String>, tileSizesList: List<String>): GroupLayoutResult? {
         if (specs.size < 2 || specs.size != tileSizesList.size) return null
 
@@ -960,12 +1003,12 @@ object ControlCenterGrouping {
                 return
             }
 
+            GroupContainerBlurCache.init(classLoader)
+
             // Check if Background Blur is enabled in system
             var blurEnabled = false
             try {
-                val ccUtils = Class.forName("miui.systemui.controlcenter.utils.ControlCenterUtils", false, classLoader)
-                val getBlurM = ccUtils.getMethod("getBackgroundBlurOpenedInDefaultTheme", Context::class.java)
-                blurEnabled = getBlurM.invoke(null, ctx) as Boolean
+                blurEnabled = GroupContainerBlurCache.getBlurM?.invoke(null, ctx) as? Boolean ?: false
             } catch (t: Throwable) {}
 
             try {
@@ -988,40 +1031,27 @@ object ControlCenterGrouping {
             if (blurEnabled) {
                 view.background = null
                 try {
-                    val miBlurClass = Class.forName("miui.systemui.util.MiBlurCompat", false, classLoader)
-                    try {
-                        val setPassWindowBlur = miBlurClass.getMethod("setPassWindowBlurEnabledCompat", View::class.java, Boolean::class.javaPrimitiveType)
-                        setPassWindowBlur.invoke(null, view, true)
-                    } catch (t: Throwable) {}
+                    GroupContainerBlurCache.setPassWindowBlur?.invoke(null, view, true)
+                    GroupContainerBlurCache.setModeMethod?.invoke(null, view, 1)
 
-                    val setModeMethod = miBlurClass.getMethod("setMiViewBlurModeCompat", View::class.java, Int::class.javaPrimitiveType)
-                    setModeMethod.invoke(null, view, 1)
-
-                    val tokenClass = Class.forName("miui.systemui.util.MiuiColorBlendToken", false, classLoader)
-                    val tokenInst = tokenClass.getDeclaredField("INSTANCE").get(null)
-                    val getBlendMethod = tokenClass.getMethod("getCC_TILE_DEFAULT_BLEND_COLORS")
-                    val blendColors = getBlendMethod.invoke(tokenInst)
-
-                    val setBlendMethod = miBlurClass.getMethod("setMiBackgroundBlendColors", View::class.java, blendColors.javaClass)
-                    setBlendMethod.invoke(null, view, blendColors)
+                    val colors = GroupContainerBlurCache.blendColors
+                    if (colors != null) {
+                        GroupContainerBlurCache.setBlendMethod?.invoke(null, view, colors)
+                    }
                 } catch (t: Throwable) {
                     Log.e(TAG, "applyGroupContainerStyle MiBlur error", t)
                 }
             } else {
                 try {
-                    val miBlurClass = Class.forName("miui.systemui.util.MiBlurCompat", false, classLoader)
-                    val setModeMethod = miBlurClass.getMethod("setMiViewBlurModeCompat", View::class.java, Int::class.javaPrimitiveType)
-                    setModeMethod.invoke(null, view, 0)
-
-                    val clearBlendMethod = miBlurClass.getMethod("clearMiBackgroundBlendColorCompat", View::class.java)
-                    clearBlendMethod.invoke(null, view)
+                    GroupContainerBlurCache.setModeMethod?.invoke(null, view, 0)
+                    GroupContainerBlurCache.clearBlendMethod?.invoke(null, view)
                 } catch (t: Throwable) {}
 
                 try {
-                    val commonUtilsClass = Class.forName("miui.systemui.util.CommonUtils", false, classLoader)
-                    val commonUtils = commonUtilsClass.getDeclaredField("INSTANCE").get(null)
-                    val clearEffect = commonUtilsClass.getMethod("clearMiBlurBlendEffect", View::class.java)
-                    clearEffect.invoke(commonUtils, view)
+                    val cu = GroupContainerBlurCache.commonUtilsInst
+                    if (cu != null) {
+                        GroupContainerBlurCache.clearEffectMethod?.invoke(cu, view)
+                    }
                 } catch (t: Throwable) {}
 
                 var cardBg: android.graphics.drawable.Drawable? = null

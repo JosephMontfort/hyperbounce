@@ -2530,7 +2530,7 @@ object ControlCenterHook {
             try {
                 val cardViewClass = Class.forName("miui.systemui.controlcenter.qs.tileview.QSCardItemView", false, classLoader)
                 for (m in cardViewClass.declaredMethods) {
-                    if (m.name == "updateBlurBlendBackground" || m.name == "updateDrawableBackground" || m.name == "updateBackground" || m.name == "updateClip") {
+                    if (m.name == "updateBlurBlendBackground" || m.name == "updateDrawableBackground" || m.name == "updateBackground") {
                         m.isAccessible = true
                         module.hook(m).intercept { chain ->
                             val itemView = chain.thisObject as? View
