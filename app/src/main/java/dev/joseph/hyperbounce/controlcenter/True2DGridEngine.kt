@@ -146,23 +146,38 @@ object True2DGridEngine {
         sLastCalculatedGrid = null
     }
 
+    @Volatile var sCachedWordlessMode: Boolean? = null
     private var lastWordlessState: Boolean? = null
 
+    fun updateWordlessModeCache(enabled: Boolean) {
+        if (sCachedWordlessMode != enabled) {
+            sCachedWordlessMode = enabled
+            invalidateAll()
+        }
+    }
+
     fun isCircularTileLabelsEnabled(context: Context?): Boolean {
+        val cached = sCachedWordlessMode
+        if (cached != null) return cached
         val ctx = context ?: ControlCenterConfigHolder.sLastKnownContext ?: return false
         return try {
-            android.provider.Settings.Secure.getInt(ctx.contentResolver, "wordless_mode", 0) == 0
+            val enabled = android.provider.Settings.Secure.getInt(ctx.contentResolver, "wordless_mode", 0) == 0
+            sCachedWordlessMode = enabled
+            enabled
         } catch (t: Throwable) {
             false
         }
     }
 
+    private var sLabelHeightResId: Int = -1
     fun getLabelHeight(context: Context?): Int {
         if (context != null) {
             try {
-                val resId = context.resources.getIdentifier("qs_tile_item_label_height", "dimen", context.packageName)
-                if (resId != 0) {
-                    val h = context.resources.getDimensionPixelSize(resId)
+                if (sLabelHeightResId == -1) {
+                    sLabelHeightResId = context.resources.getIdentifier("qs_tile_item_label_height", "dimen", context.packageName)
+                }
+                if (sLabelHeightResId != 0) {
+                    val h = context.resources.getDimensionPixelSize(sLabelHeightResId)
                     if (h > 0) return h
                 }
                 return (32.0f * context.resources.displayMetrics.density + 0.5f).toInt()
@@ -171,12 +186,15 @@ object True2DGridEngine {
         return 80
     }
 
+    private var sUnitRowHeightResId: Int = -1
     fun getUnitRowHeight(context: Context?): Int {
         if (context != null) {
             try {
-                val resId = context.resources.getIdentifier("control_center_universal_1_row_with_margin_size", "dimen", context.packageName)
-                if (resId != 0) {
-                    val h = context.resources.getDimensionPixelSize(resId)
+                if (sUnitRowHeightResId == -1) {
+                    sUnitRowHeightResId = context.resources.getIdentifier("control_center_universal_1_row_with_margin_size", "dimen", context.packageName)
+                }
+                if (sUnitRowHeightResId != 0) {
+                    val h = context.resources.getDimensionPixelSize(sUnitRowHeightResId)
                     if (h > 0) return h
                 }
                 return (85.5f * context.resources.displayMetrics.density + 0.5f).toInt()
@@ -184,6 +202,8 @@ object True2DGridEngine {
         }
         return 214
     }
+
+    private var sTileLabelResId: Int = -1
 
     fun getGridData(adapter: Any?, context: Context?): AdapterGridData {
         val currentWordless = isCircularTileLabelsEnabled(context)
@@ -472,6 +492,8 @@ object True2DGridEngine {
         var glmCachedBordersField: Field? = null
         var glmDecorInsetsField: Field? = null
         var glmOrientationField: Field? = null
+        var glmSpanIndexField: Field? = null
+        var glmSpanSizeField: Field? = null
         var lmRecyclerViewField: Field? = null
 
         var addViewMethod: Method? = null
@@ -519,6 +541,11 @@ object True2DGridEngine {
                     glmDecorInsetsField = glmClass.getDeclaredField("mDecorInsets").apply { isAccessible = true }
                 } catch (t: Throwable) {}
                 glmOrientationField = lmClass.getDeclaredField("mOrientation").apply { isAccessible = true }
+                try {
+                    val glmParamsClass = Class.forName("androidx.recyclerview.widget.GridLayoutManager\$LayoutParams", false, classLoader)
+                    glmSpanIndexField = glmParamsClass.getField("mSpanIndex").apply { isAccessible = true }
+                    glmSpanSizeField = glmParamsClass.getField("mSpanSize").apply { isAccessible = true }
+                } catch (t: Throwable) {}
                 try {
                     lmRecyclerViewField = rvlClass.getDeclaredField("mRecyclerView").apply { isAccessible = true }
                 } catch (t: Throwable) {}
@@ -725,10 +752,8 @@ object True2DGridEngine {
 
                 val lp = view.layoutParams as ViewGroup.MarginLayoutParams
                 try {
-                    val spanIndexField = lp.javaClass.getField("mSpanIndex")
-                    spanIndexField.setInt(lp, col)
-                    val spanSizeField = lp.javaClass.getField("mSpanSize")
-                    spanSizeField.setInt(lp, spanW)
+                    ReflectionCache.glmSpanIndexField?.setInt(lp, col)
+                    ReflectionCache.glmSpanSizeField?.setInt(lp, spanW)
                 } catch (t: Throwable) {}
 
                 val horizMargin = lp.leftMargin + lp.rightMargin + decorInsets.left + decorInsets.right
@@ -743,7 +768,10 @@ object True2DGridEngine {
                 val isLabelEnabled = isCircularTileLabelsEnabled(context)
                 val labelHeight = if (isLabelEnabled) getLabelHeight(context) else 0
 
-                val tileLabelId = context?.resources?.getIdentifier("tile_label", "id", context.packageName) ?: 0
+                if (sTileLabelResId == -1 && context != null) {
+                    sTileLabelResId = context.resources.getIdentifier("tile_label", "id", context.packageName)
+                }
+                val tileLabelId = if (sTileLabelResId > 0) sTileLabelResId else 0
                 val isCircularTile = spanW == 1 && spanH == 1 && !isHeader && (
                     view.javaClass.name.contains("QSTileItemView") ||
                     (tileLabelId != 0 && view.findViewById<View?>(tileLabelId) != null)

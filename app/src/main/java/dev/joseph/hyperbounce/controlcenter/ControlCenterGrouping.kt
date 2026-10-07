@@ -131,6 +131,10 @@ object ControlCenterGrouping {
     private const val TAG = "HyperBounce_CC_Group"
 
     val sIosClusterHolders: MutableSet<Any> = java.util.Collections.newSetFromMap(java.util.WeakHashMap<Any, Boolean>())
+    private var sResMarginId: Int = -1
+    private var sResUnitId: Int = -1
+    private var sRes2RowsId: Int = -1
+    private val sListFieldsCache = java.util.concurrent.ConcurrentHashMap<Class<*>, List<java.lang.reflect.Field>>()
 
     private object GroupContainerBlurCache {
         var initialized = false
@@ -1437,13 +1441,13 @@ object ControlCenterGrouping {
             val ctx = anchorView.context
             val density = ctx.resources.displayMetrics.density
             val rowCount = resolvedGroup.getEffectiveRowCount()
-            val resMarginId = ctx.resources.getIdentifier("control_center_universal_margin_y", "dimen", ctx.packageName)
-            val resUnitId = ctx.resources.getIdentifier("control_center_universal_unit_height", "dimen", ctx.packageName)
-            val unitHeight = if (resUnitId != 0) ctx.resources.getDimensionPixelSize(resUnitId) else (78 * density).toInt()
-            val gapY = if (resMarginId != 0) ctx.resources.getDimensionPixelSize(resMarginId) else (10 * density).toInt()
-            val res2RowsId = ctx.resources.getIdentifier("control_center_universal_2_rows_size", "dimen", ctx.packageName)
-            val cardH = if (rowCount == 2 && res2RowsId != 0) {
-                ctx.resources.getDimensionPixelSize(res2RowsId)
+            if (sResMarginId == -1) sResMarginId = ctx.resources.getIdentifier("control_center_universal_margin_y", "dimen", ctx.packageName)
+            if (sResUnitId == -1) sResUnitId = ctx.resources.getIdentifier("control_center_universal_unit_height", "dimen", ctx.packageName)
+            if (sRes2RowsId == -1) sRes2RowsId = ctx.resources.getIdentifier("control_center_universal_2_rows_size", "dimen", ctx.packageName)
+            val unitHeight = if (sResUnitId > 0) ctx.resources.getDimensionPixelSize(sResUnitId) else (78 * density).toInt()
+            val gapY = if (sResMarginId > 0) ctx.resources.getDimensionPixelSize(sResMarginId) else (10 * density).toInt()
+            val cardH = if (rowCount == 2 && sRes2RowsId > 0) {
+                ctx.resources.getDimensionPixelSize(sRes2RowsId)
             } else {
                 rowCount * unitHeight + (rowCount - 1) * gapY
             }
@@ -1470,11 +1474,20 @@ object ControlCenterGrouping {
             val activeCtrl = qsListCtrl ?: ControlCenterConfigHolder.sQSListController
             val recordMap = HashMap<String, Any>()
             if (activeCtrl != null) {
-                val listFieldNames = arrayOf("addedTiles", "copiedTiles", "systemTiles", "packageTiles", "records")
-                for (fn in listFieldNames) {
+                val ctrlClass = activeCtrl.javaClass
+                val fields = sListFieldsCache.computeIfAbsent(ctrlClass) { clazz ->
+                    val listFieldNames = arrayOf("addedTiles", "copiedTiles", "systemTiles", "packageTiles", "records")
+                    val found = ArrayList<Field>()
+                    for (fn in listFieldNames) {
+                        try {
+                            val f = clazz.getDeclaredField(fn).apply { isAccessible = true }
+                            found.add(f)
+                        } catch (t: Throwable) {}
+                    }
+                    found
+                }
+                for (f in fields) {
                     try {
-                        val f = activeCtrl.javaClass.getDeclaredField(fn)
-                        f.isAccessible = true
                         val list = f.get(activeCtrl) as? List<*>
                         if (list != null) {
                             for (r in list) {

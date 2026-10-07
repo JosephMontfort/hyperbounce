@@ -53,6 +53,11 @@ object ControlCenterHook {
     @Volatile private var sShowEaseField: Field? = null
     @Volatile private var sHideEaseField: Field? = null
     @Volatile private var sShrinkXEaseField: Field? = null
+    @Volatile private var sIconFrameResId: Int = -1
+    @Volatile private var sTileLabelResId: Int = -1
+    @Volatile private var sCardHResId: Int = -1
+    @Volatile private var sRes2RowsId: Int = -1
+    @Volatile private var sUnitRowHResId: Int = -1
 
     fun initSystemUIHooks(module: XposedModule, classLoader: ClassLoader?) {
         if (classLoader == null || sysuiHooked) return
@@ -453,9 +458,7 @@ object ControlCenterHook {
                 return
             }
             val ctx = itemView.context
-            val isWordless = try {
-                android.provider.Settings.Secure.getInt(ctx.contentResolver, "wordless_mode", 0) != 0
-            } catch (t: Throwable) { false }
+            val isWordless = !True2DGridEngine.isCircularTileLabelsEnabled(ctx)
 
             // If feature is turned off (wordless_mode != 0), labels are NEVER shown
             // If feature is turned on (wordless_mode == 0), labels are shown unless hidden by visible == false
@@ -472,8 +475,10 @@ object ControlCenterHook {
                 }
             } catch (t: Throwable) {}
 
-            val iconFrameId = ctx.resources.getIdentifier("icon_frame", "id", ctx.packageName)
-            val tileLabelId = ctx.resources.getIdentifier("tile_label", "id", ctx.packageName)
+            if (sIconFrameResId == -1) sIconFrameResId = ctx.resources.getIdentifier("icon_frame", "id", ctx.packageName)
+            if (sTileLabelResId == -1) sTileLabelResId = ctx.resources.getIdentifier("tile_label", "id", ctx.packageName)
+            val iconFrameId = if (sIconFrameResId > 0) sIconFrameResId else 0
+            val tileLabelId = if (sTileLabelResId > 0) sTileLabelResId else 0
             val tileLabel = if (tileLabelId != 0) itemView.findViewById<View>(tileLabelId) else null
             if (tileLabel != null) {
                 tileLabel.visibility = if (shouldShow) View.VISIBLE else View.GONE
@@ -1292,9 +1297,12 @@ object ControlCenterHook {
                     if (m.name == "updateTextMode") {
                         m.isAccessible = true
                         module.hook(m).intercept { chain ->
+                            val isLabelsOn = chain.args.getOrNull(0) as? Boolean
+                            if (isLabelsOn != null) {
+                                True2DGridEngine.updateWordlessModeCache(isLabelsOn)
+                            }
                             val result = chain.proceed()
                             try {
-                                True2DGridEngine.invalidateAll()
                                 ControlCenterConfigHolder.updateAllVisibleTileBadges()
                                 val rv = ControlCenterConfigHolder.sRecyclerView?.get()
                                 rv?.post {
@@ -1481,21 +1489,54 @@ object ControlCenterHook {
                                                 lp.topMargin = 0
                                                 itemView.layoutParams = lp
                                             }
-                                            fun restoreWordlessViews(v: View) {
-                                                v.visibility = View.VISIBLE
-                                                v.alpha = 1.0f
-                                                if (v is ViewGroup) {
-                                                    for (ci in 0 until v.childCount) {
-                                                        restoreWordlessViews(v.getChildAt(ci))
+                                            if (ControlCenterConfigHolder.sIsEditMode) {
+                                                fun restoreWordlessViews(v: View) {
+                                                    v.visibility = View.VISIBLE
+                                                    v.alpha = 1.0f
+                                                    if (v is ViewGroup) {
+                                                        for (ci in 0 until v.childCount) {
+                                                            restoreWordlessViews(v.getChildAt(ci))
+                                                        }
                                                     }
                                                 }
+                                                restoreWordlessViews(itemView)
+                                            } else {
+                                                itemView.visibility = View.GONE
+                                                itemView.alpha = 0.0f
                                             }
-                                            restoreWordlessViews(itemView)
                                         }
                                     }
                                 } catch (t: Throwable) {}
                             }
                             result
+                        }
+                    }
+                }
+            } catch (t: Throwable) {}
+
+            // 9b. Hook WordlessModeController$WordlessModeViewHolder.update to prevent stock downward slide on exit
+            try {
+                val wordlessHolderClass = Class.forName("miui.systemui.controlcenter.panel.main.qs.WordlessModeController\$WordlessModeViewHolder", false, classLoader)
+                for (m in wordlessHolderClass.declaredMethods) {
+                    if (m.name == "update") {
+                        m.isAccessible = true
+                        module.hook(m).intercept { chain ->
+                            val isShow = chain.args.getOrNull(0) as? Boolean ?: true
+                            if (!isShow) {
+                                try {
+                                    val holder = chain.thisObject
+                                    val setTargetTransYM = holder.javaClass.getMethod("setTargetTransY", Float::class.javaPrimitiveType)
+                                    setTargetTransYM.invoke(holder, -100.0f)
+                                    val itemViewField = holder.javaClass.getField("itemView")
+                                    val itemView = itemViewField.get(holder) as? View
+                                    itemView?.animate()?.alpha(0f)?.setDuration(150)?.withEndAction {
+                                        itemView.visibility = View.GONE
+                                    }?.start()
+                                } catch (t: Throwable) {}
+                                null
+                            } else {
+                                chain.proceed()
+                            }
                         }
                     }
                 }
@@ -2439,7 +2480,8 @@ object ControlCenterHook {
                                         val isVertical = ControlCenterConfigHolder.sVerticalTileSpecs.contains(spec)
                                         val isLarge = ControlCenterConfigHolder.sLargeTileSpecs.contains(spec)
                                         val isCircular = ControlCenterConfigHolder.sCircularCardSpecs.contains(spec) || (!isExpanded && !isVertical && !isLarge && !itemView.javaClass.name.contains("Card") && (itemView.javaClass.name.contains("Tile") || itemView.javaClass.name.contains("QSTileItemView")))
-                                        val iconFrameId = ctx.resources.getIdentifier("icon_frame", "id", ctx.packageName)
+                                        if (sIconFrameResId == -1) sIconFrameResId = ctx.resources.getIdentifier("icon_frame", "id", ctx.packageName)
+                                        val iconFrameId = if (sIconFrameResId > 0) sIconFrameResId else 0
                                         val iconFrame = if (iconFrameId != 0) itemView.findViewById<View>(iconFrameId) else null
 
                                         if (isCircular) {
@@ -2602,10 +2644,12 @@ object ControlCenterHook {
                                         }
 
                                         if (spec != null) {
-                                            val cardHId = ctx.resources.getIdentifier("qs_card_item_height", "dimen", ctx.packageName)
-                                            val cardH = if (cardHId != 0) ctx.resources.getDimensionPixelSize(cardHId) else (71.5f * density).toInt()
-                                            val res2RowsId = ctx.resources.getIdentifier("control_center_universal_2_rows_size", "dimen", ctx.packageName)
-                                            val tallH = if (res2RowsId != 0) ctx.resources.getDimensionPixelSize(res2RowsId) else (157 * density).toInt()
+                                            if (sCardHResId == -1) sCardHResId = ctx.resources.getIdentifier("qs_card_item_height", "dimen", ctx.packageName)
+                                            val cardH = if (sCardHResId > 0) ctx.resources.getDimensionPixelSize(sCardHResId) else (71.5f * density).toInt()
+
+                                            if (sRes2RowsId == -1) sRes2RowsId = ctx.resources.getIdentifier("control_center_universal_2_rows_size", "dimen", ctx.packageName)
+                                            val tallH = if (sRes2RowsId > 0) ctx.resources.getDimensionPixelSize(sRes2RowsId) else (157 * density).toInt()
+
                                             val curLp = itemView.layoutParams
                                             if (ControlCenterConfigHolder.sVerticalTileSpecs.contains(spec) || ControlCenterConfigHolder.sLargeTileSpecs.contains(spec)) {
                                                 if (curLp != null && curLp.height != tallH) {
@@ -2619,8 +2663,8 @@ object ControlCenterHook {
                                                     itemView.layoutParams = curLp
                                                 }
                                             } else {
-                                                val unitRowHId = ctx.resources.getIdentifier("control_center_universal_1_row_with_margin_size", "dimen", ctx.packageName)
-                                                val unitRowH = if (unitRowHId != 0) ctx.resources.getDimensionPixelSize(unitRowHId) else (80 * density).toInt()
+                                                if (sUnitRowHResId == -1) sUnitRowHResId = ctx.resources.getIdentifier("control_center_universal_1_row_with_margin_size", "dimen", ctx.packageName)
+                                                val unitRowH = if (sUnitRowHResId > 0) ctx.resources.getDimensionPixelSize(sUnitRowHResId) else (80 * density).toInt()
                                                 if (curLp != null && (curLp.height > unitRowH || curLp.height == tallH)) {
                                                     curLp.height = unitRowH
                                                     itemView.layoutParams = curLp

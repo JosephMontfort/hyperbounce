@@ -136,7 +136,13 @@ object FluidTileResizeHandler {
      * the companion app configuration switch.
      */
     fun attach(handleView: View, ctx: Context, spec: String, tileView: View, density: Float) {
-        if (ControlCenterConfigHolder.config.fluidResizeEnabled) {
+        val attachedSpec = handleView.getTag(0x7f099993) as? String
+        val isFluid = ControlCenterConfigHolder.config.fluidResizeEnabled
+        val attachedFluid = handleView.getTag(0x7f099994) as? Boolean
+        if (attachedSpec == spec && attachedFluid == isFluid) return
+        handleView.setTag(0x7f099993, spec)
+        handleView.setTag(0x7f099994, isFluid)
+        if (isFluid) {
             handleView.setOnTouchListener(FluidTileResizeTouchListener(ctx, spec, tileView, density))
         } else {
             handleView.setOnTouchListener(TileResizeDragTouchListener(ctx, spec, tileView, density))

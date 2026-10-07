@@ -1714,6 +1714,7 @@ object ControlCenterConfigHolder {
     }
 }
 
+    @Volatile private var sWordlessResId: Int = -1
     @Volatile private var sLastExitEditTime: Long = 0L
 
     fun cleanupAllVisibleViews(rv: ViewGroup?) {
@@ -1722,6 +1723,18 @@ object ControlCenterConfigHolder {
             val childCount = rv.childCount
             for (i in 0 until childCount) {
                 val itemView = rv.getChildAt(i) ?: continue
+
+                if (sWordlessResId == -1) {
+                    sWordlessResId = itemView.context.resources.getIdentifier("qs_wordless_mode", "id", itemView.context.packageName)
+                }
+                val cName = itemView.javaClass.name
+                if (cName.contains("Wordless") || (sWordlessResId > 0 && itemView.findViewById<View?>(sWordlessResId) != null)) {
+                    itemView.visibility = View.GONE
+                    itemView.alpha = 0f
+                    itemView.translationY = 0f
+                    continue
+                }
+
                 ControlCenterHook.hideAllCustomBadges(itemView)
                 hideAllRotateButtons(itemView as? ViewGroup)
                 itemView.isClickable = true
