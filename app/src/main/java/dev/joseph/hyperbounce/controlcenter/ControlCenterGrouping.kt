@@ -1398,10 +1398,6 @@ object ControlCenterGrouping {
                             val currentMode = modeClass.getMethod("valueOf", String::class.java).invoke(null, if (isEdit) "EDIT" else "NORMAL")
                             val updateModeMethod = childRecord.javaClass.getMethod("updateMode", modeClass, Boolean::class.javaPrimitiveType)
                             updateModeMethod.invoke(childRecord, currentMode, false)
-                            try {
-                                val onModeChangedM = childView.javaClass.getMethod("onModeChanged", modeClass, Boolean::class.javaPrimitiveType)
-                                onModeChangedM.invoke(childView, currentMode, false)
-                            } catch (t: Throwable) {}
                         } catch (t: Throwable) {}
 
                         try {
