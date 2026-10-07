@@ -220,7 +220,8 @@ object ControlCenterConfigHolder {
     @Volatile var sCachedLineDivider: Any? = null
     @Volatile var sCachedSystemTextDivider: Any? = null
 
-    fun getRemovedComponentItem(spec: String): Any? {
+    fun getRemovedComponentItem(spec: String?): Any? {
+        if (spec == null) return null
         return when (spec) {
             "wifi" -> sWifiCardRecord ?: findRecordForSpec("wifi")
             "cell" -> sCellCardRecord ?: findRecordForSpec("cell")
@@ -231,7 +232,8 @@ object ControlCenterConfigHolder {
         }
     }
 
-    fun isTileAdded(spec: String): Boolean {
+    fun isTileAdded(spec: String?): Boolean {
+        if (spec == null) return false
         if (sRemovedComponentSpecs.contains(spec)) return false
         val added = getAddedTilesList()
         if (added != null) {
@@ -257,7 +259,8 @@ object ControlCenterConfigHolder {
         }
     }
 
-    fun findRecordForSpec(spec: String): Any? {
+    fun findRecordForSpec(spec: String?): Any? {
+        if (spec == null) return null
         if (spec == "wifi" && sWifiCardRecord != null) return sWifiCardRecord
         if (spec == "cell" && sCellCardRecord != null) return sCellCardRecord
         for (rec in sAllQSRecords) {

@@ -282,8 +282,7 @@ object ControlCenterHook {
         if (!ControlCenterConfigHolder.sIsEditMode ||
             ControlCenterConfigHolder.sIsGroupSelectMode ||
             ControlCenterConfigHolder.sIsDisassembleMode ||
-            ControlCenterConfigHolder.sIsDraggingResizeHandle ||
-            FluidTileResizeHandler.isDragging) {
+            ControlCenterConfigHolder.sIsDraggingResizeHandle) {
             markBtn?.visibility = View.GONE
             markBtn?.setOnClickListener(null)
             markBtn?.isClickable = false
