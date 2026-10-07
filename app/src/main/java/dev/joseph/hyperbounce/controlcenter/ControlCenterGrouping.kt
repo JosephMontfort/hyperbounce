@@ -130,6 +130,8 @@ class DynamicGroupContainer(context: Context) : ViewGroup(context) {
 object ControlCenterGrouping {
     private const val TAG = "HyperBounce_CC_Group"
 
+    val sIosClusterHolders: MutableSet<Any> = java.util.Collections.newSetFromMap(java.util.WeakHashMap<Any, Boolean>())
+
     private object GroupContainerBlurCache {
         var initialized = false
         var getBlurM: Method? = null
@@ -660,6 +662,21 @@ object ControlCenterGrouping {
         if (holder == null) return
         val childView = getViewHolderItemView(holder)
         val isIosChild = childView != null && isChildOfIosCluster(childView)
+        if (isIosChild) {
+            sIosClusterHolders.add(holder)
+            try {
+                val sm = holder.javaClass.getMethod("setIgnoreHolderScale", Boolean::class.javaPrimitiveType)
+                sm.invoke(holder, true)
+            } catch (t: Throwable) {}
+            try {
+                val tm = holder.javaClass.getMethod("setIgnoreHolderTranslation", Boolean::class.javaPrimitiveType)
+                tm.invoke(holder, true)
+            } catch (t: Throwable) {}
+            try {
+                val am = holder.javaClass.getMethod("setIgnoreHolderAlpha", Boolean::class.javaPrimitiveType)
+                am.invoke(holder, true)
+            } catch (t: Throwable) {}
+        }
         var sc: Class<*>? = holder.javaClass
         while (sc != null) {
             try {
@@ -1380,12 +1397,22 @@ object ControlCenterGrouping {
     }
 
     fun isChildOfIosCluster(view: View): Boolean {
-        if (view.getTag(0x7f09999c) == true) return true
+        val cached = view.getTag(0x7f09999c)
+        if (cached is Boolean) return cached
         var p = view.parent
         while (p != null) {
-            if (p is IosTileGroupFolder.IosClusterContainer || p is IosTileGroupFolder.MiniClusterView) return true
-            if (p is View && p.getTag(0x7f09999c) == true) return true
+            if (p is IosTileGroupFolder.IosClusterContainer || p is IosTileGroupFolder.MiniClusterView) {
+                view.setTag(0x7f09999c, true)
+                return true
+            }
+            if (p is View && p.getTag(0x7f09999c) == true) {
+                view.setTag(0x7f09999c, true)
+                return true
+            }
             p = p.parent
+        }
+        if (view.parent != null) {
+            view.setTag(0x7f09999c, false)
         }
         return false
     }
@@ -1660,8 +1687,10 @@ object ControlCenterGrouping {
     fun updateChildHolderFrame(parentHolder: Any?, childHolder: Any?) {
         if (parentHolder == null || childHolder == null) return
         try {
+            if (sIosClusterHolders.contains(childHolder)) return
             val childView = getViewHolderItemView(childHolder)
             if (childView != null && isChildOfIosCluster(childView)) {
+                sIosClusterHolders.add(childHolder)
                 return
             }
 

@@ -152,8 +152,6 @@ object IosTileGroupFolder {
                 if (child.translationY != 0f) child.translationY = 0f
                 if (child.scaleX != 1.0f) child.scaleX = 1.0f
                 if (child.scaleY != 1.0f) child.scaleY = 1.0f
-                if (child.background != null) child.background = null
-                if (child.clipToOutline) child.clipToOutline = false
             }
             super.dispatchDraw(canvas)
         }
@@ -232,6 +230,24 @@ object IosTileGroupFolder {
             }
         }
 
+        companion object {
+            private var normalTileLabelId = -1
+            private var normalMarkId = -1
+            private var normalIconFrameId = -1
+
+            private fun resolveNormalIds(context: Context) {
+                if (normalTileLabelId == -1) {
+                    normalTileLabelId = context.resources.getIdentifier("tile_label", "id", context.packageName)
+                }
+                if (normalMarkId == -1) {
+                    normalMarkId = context.resources.getIdentifier("mark", "id", context.packageName)
+                }
+                if (normalIconFrameId == -1) {
+                    normalIconFrameId = context.resources.getIdentifier("icon_frame", "id", context.packageName)
+                }
+            }
+        }
+
         private fun styleCollapsedNormalTile(child: View) {
             try {
                 child.visibility = View.VISIBLE
@@ -243,32 +259,32 @@ object IosTileGroupFolder {
                 child.background = null
                 child.clipToOutline = false
 
-                val tileLabelId = context.resources.getIdentifier("tile_label", "id", context.packageName)
-                if (tileLabelId != 0) {
-                    val tileLabel = child.findViewById<View>(tileLabelId)
+                resolveNormalIds(context)
+                if (normalTileLabelId > 0) {
+                    val tileLabel = child.findViewById<View>(normalTileLabelId)
                     tileLabel?.visibility = View.GONE
                     tileLabel?.alpha = 0f
                 }
 
-                val markId = context.resources.getIdentifier("mark", "id", context.packageName)
-                if (markId != 0) {
-                    val mark = child.findViewById<View>(markId)
+                if (normalMarkId > 0) {
+                    val mark = child.findViewById<View>(normalMarkId)
                     mark?.visibility = View.GONE
                 }
 
-                val iconFrameId = context.resources.getIdentifier("icon_frame", "id", context.packageName)
-                val iconFrame = child.findViewById<View>(iconFrameId)
-                if (iconFrame != null) {
-                    val iflp = iconFrame.layoutParams
-                    if (iflp is FrameLayout.LayoutParams) {
-                        iflp.gravity = Gravity.CENTER
-                        iflp.topMargin = 0
-                        iflp.bottomMargin = 0
-                        iflp.leftMargin = 0
-                        iflp.rightMargin = 0
-                        iconFrame.layoutParams = iflp
+                if (normalIconFrameId > 0) {
+                    val iconFrame = child.findViewById<View>(normalIconFrameId)
+                    if (iconFrame != null) {
+                        val iflp = iconFrame.layoutParams
+                        if (iflp is FrameLayout.LayoutParams) {
+                            iflp.gravity = Gravity.CENTER
+                            iflp.topMargin = 0
+                            iflp.bottomMargin = 0
+                            iflp.leftMargin = 0
+                            iflp.rightMargin = 0
+                            iconFrame.layoutParams = iflp
+                        }
+                        iconFrame.background = null
                     }
-                    iconFrame.background = null
                 }
             } catch (t: Throwable) {}
         }
@@ -280,8 +296,30 @@ object IosTileGroupFolder {
      */
     class MiniClusterView(context: Context) : ViewGroup(context) {
 
+        companion object {
+            private var miniTileLabelId = -1
+            private var miniMarkId = -1
+            private var miniIconFrameId = -1
+
+            private fun resolveMiniIds(context: Context) {
+                if (miniTileLabelId == -1) {
+                    miniTileLabelId = context.resources.getIdentifier("tile_label", "id", context.packageName)
+                }
+                if (miniMarkId == -1) {
+                    miniMarkId = context.resources.getIdentifier("mark", "id", context.packageName)
+                }
+                if (miniIconFrameId == -1) {
+                    miniIconFrameId = context.resources.getIdentifier("icon_frame", "id", context.packageName)
+                }
+            }
+        }
+
         private var downX = 0f
         private var downY = 0f
+
+        private var cachedBaseSize: Int = getBaseTileSize()
+        private var cachedHalfBase: Float = (cachedBaseSize / 2f).coerceAtLeast(1f)
+        private var cachedTargetScale: Float = 0.42f
 
         init {
             isClickable = true
@@ -301,10 +339,19 @@ object IosTileGroupFolder {
             child.setTag(0x7f09999c, true)
             child.background = null
             child.clipToOutline = false
+            if (cachedBaseSize <= 0) {
+                cachedBaseSize = getBaseTileSize()
+                cachedHalfBase = (cachedBaseSize / 2f).coerceAtLeast(1f)
+            }
+            child.pivotX = cachedHalfBase
+            child.pivotY = cachedHalfBase
+            child.scaleX = cachedTargetScale
+            child.scaleY = cachedTargetScale
+            child.translationX = 0f
+            child.translationY = 0f
             child.addOnLayoutChangeListener { v, _, _, _, _, _, _, _, _ ->
                 v.background = null
                 v.clipToOutline = false
-                val baseSize = getBaseTileSize()
                 val pad = (4 * resources.displayMetrics.density).toInt()
                 val gap = (4 * resources.displayMetrics.density).toInt()
                 val availW = Math.max(0, width - 2 * pad - gap)
@@ -312,8 +359,10 @@ object IosTileGroupFolder {
                 val availH = Math.max(0, height - 2 * pad - gap)
                 val subH = availH / 2f
                 val targetSize = Math.min(subW, subH)
+                val baseSize = cachedBaseSize
                 val scale = if (baseSize > 0 && targetSize > 10) (targetSize / baseSize.toFloat()).coerceIn(0.2f, 0.6f) else 0.42f
-                val halfBase = baseSize / 2f
+                cachedTargetScale = scale
+                val halfBase = cachedHalfBase
                 v.pivotX = halfBase
                 v.pivotY = halfBase
                 v.scaleX = scale
@@ -324,27 +373,18 @@ object IosTileGroupFolder {
         }
 
         override fun dispatchDraw(canvas: android.graphics.Canvas) {
-            val pad = (4 * resources.displayMetrics.density).toInt()
-            val gap = (4 * resources.displayMetrics.density).toInt()
-            val availW = Math.max(0, width - 2 * pad - gap)
-            val subW = availW / 2f
-            val availH = Math.max(0, height - 2 * pad - gap)
-            val subH = availH / 2f
-            val baseSize = getBaseTileSize()
-            val targetSize = Math.min(subW, subH)
-            val expectedScale = if (baseSize > 0 && targetSize > 10) (targetSize / baseSize.toFloat()).coerceIn(0.2f, 0.6f) else 0.42f
-            val halfBase = baseSize / 2f
-
+            val scale = cachedTargetScale
+            val halfBase = cachedHalfBase
             for (i in 0 until childCount) {
                 val child = getChildAt(i) ?: continue
                 if (child.translationX != 0f) child.translationX = 0f
                 if (child.translationY != 0f) child.translationY = 0f
-                if (child.pivotX != halfBase) child.pivotX = halfBase
-                if (child.pivotY != halfBase) child.pivotY = halfBase
-                if (child.scaleX != expectedScale) child.scaleX = expectedScale
-                if (child.scaleY != expectedScale) child.scaleY = expectedScale
-                if (child.background != null) child.background = null
-                if (child.clipToOutline) child.clipToOutline = false
+                if (halfBase > 0f) {
+                    if (child.pivotX != halfBase) child.pivotX = halfBase
+                    if (child.pivotY != halfBase) child.pivotY = halfBase
+                }
+                if (child.scaleX != scale) child.scaleX = scale
+                if (child.scaleY != scale) child.scaleY = scale
             }
             super.dispatchDraw(canvas)
         }
@@ -389,33 +429,37 @@ object IosTileGroupFolder {
             val h = MeasureSpec.getSize(heightMeasureSpec)
             setMeasuredDimension(w, h)
 
-            val baseSize = getBaseTileSize()
+            if (cachedBaseSize <= 0) {
+                cachedBaseSize = getBaseTileSize()
+                cachedHalfBase = (cachedBaseSize / 2f).coerceAtLeast(1f)
+            }
+            val baseSize = cachedBaseSize
             val childSpec = MeasureSpec.makeMeasureSpec(baseSize, MeasureSpec.EXACTLY)
 
+            resolveMiniIds(context)
             for (i in 0 until childCount) {
                 val child = getChildAt(i) ?: continue
                 try {
-                    val tileLabelId = context.resources.getIdentifier("tile_label", "id", context.packageName)
-                    if (tileLabelId != 0) {
-                        child.findViewById<View>(tileLabelId)?.visibility = View.GONE
+                    if (miniTileLabelId > 0) {
+                        child.findViewById<View>(miniTileLabelId)?.visibility = View.GONE
                     }
-                    val markId = context.resources.getIdentifier("mark", "id", context.packageName)
-                    if (markId != 0) {
-                        child.findViewById<View>(markId)?.visibility = View.GONE
+                    if (miniMarkId > 0) {
+                        child.findViewById<View>(miniMarkId)?.visibility = View.GONE
                     }
-                    val iconFrameId = context.resources.getIdentifier("icon_frame", "id", context.packageName)
-                    val iconFrame = child.findViewById<View>(iconFrameId)
-                    if (iconFrame != null) {
-                        val lp = iconFrame.layoutParams
-                        if (lp is FrameLayout.LayoutParams) {
-                            lp.gravity = Gravity.CENTER
-                            lp.topMargin = 0
-                            lp.bottomMargin = 0
-                            lp.leftMargin = 0
-                            lp.rightMargin = 0
-                            iconFrame.layoutParams = lp
+                    if (miniIconFrameId > 0) {
+                        val iconFrame = child.findViewById<View>(miniIconFrameId)
+                        if (iconFrame != null) {
+                            val lp = iconFrame.layoutParams
+                            if (lp is FrameLayout.LayoutParams) {
+                                lp.gravity = Gravity.CENTER
+                                lp.topMargin = 0
+                                lp.bottomMargin = 0
+                                lp.leftMargin = 0
+                                lp.rightMargin = 0
+                                iconFrame.layoutParams = lp
+                            }
+                            iconFrame.background = null
                         }
-                        iconFrame.background = null
                     }
                 } catch (t: Throwable) {}
 
@@ -433,11 +477,17 @@ object IosTileGroupFolder {
             val availH = Math.max(0, (b - t) - 2 * pad - gap)
             val subH = availH / 2f
 
-            val baseSize = getBaseTileSize()
+            if (cachedBaseSize <= 0) {
+                cachedBaseSize = getBaseTileSize()
+                cachedHalfBase = (cachedBaseSize / 2f).coerceAtLeast(1f)
+            }
+            val baseSize = cachedBaseSize
             val targetSize = Math.min(subW, subH)
             val scale = if (baseSize > 0 && targetSize > 10) (targetSize / baseSize.toFloat()).coerceIn(0.2f, 0.6f) else 0.42f
-            val halfBase = baseSize / 2f
+            cachedTargetScale = scale
+            val halfBase = cachedHalfBase
 
+            resolveMiniIds(context)
             for (i in 0 until childCount) {
                 val child = getChildAt(i) ?: continue
                 val col = i % 2
@@ -466,27 +516,26 @@ object IosTileGroupFolder {
                 child.isFocusable = false
 
                 try {
-                    val tileLabelId = context.resources.getIdentifier("tile_label", "id", context.packageName)
-                    if (tileLabelId != 0) {
-                        child.findViewById<View>(tileLabelId)?.visibility = View.GONE
+                    if (miniTileLabelId > 0) {
+                        child.findViewById<View>(miniTileLabelId)?.visibility = View.GONE
                     }
-                    val markId = context.resources.getIdentifier("mark", "id", context.packageName)
-                    if (markId != 0) {
-                        child.findViewById<View>(markId)?.visibility = View.GONE
+                    if (miniMarkId > 0) {
+                        child.findViewById<View>(miniMarkId)?.visibility = View.GONE
                     }
-                    val iconFrameId = context.resources.getIdentifier("icon_frame", "id", context.packageName)
-                    val iconFrame = child.findViewById<View>(iconFrameId)
-                    if (iconFrame != null) {
-                        val lp = iconFrame.layoutParams
-                        if (lp is FrameLayout.LayoutParams) {
-                            lp.gravity = Gravity.CENTER
-                            lp.topMargin = 0
-                            lp.bottomMargin = 0
-                            lp.leftMargin = 0
-                            lp.rightMargin = 0
-                            iconFrame.layoutParams = lp
+                    if (miniIconFrameId > 0) {
+                        val iconFrame = child.findViewById<View>(miniIconFrameId)
+                        if (iconFrame != null) {
+                            val lp = iconFrame.layoutParams
+                            if (lp is FrameLayout.LayoutParams) {
+                                lp.gravity = Gravity.CENTER
+                                lp.topMargin = 0
+                                lp.bottomMargin = 0
+                                lp.leftMargin = 0
+                                lp.rightMargin = 0
+                                iconFrame.layoutParams = lp
+                            }
+                            iconFrame.background = null
                         }
-                        iconFrame.background = null
                     }
                 } catch (t: Throwable) {}
             }

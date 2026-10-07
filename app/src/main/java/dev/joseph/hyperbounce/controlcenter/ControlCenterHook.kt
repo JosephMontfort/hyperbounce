@@ -42,6 +42,17 @@ object ControlCenterHook {
     @Volatile var sMediaPlayerViewHolder: java.lang.ref.WeakReference<Any>? = null
     @Volatile var sLastMediaPlayerMetaData: Any? = null
     private val sInChangeVisible = ThreadLocal<Boolean>()
+    @Volatile private var sItemViewField: Field? = null
+    @Volatile private var sExpandScaleRatioField: Field? = null
+    @Volatile private var sExpandTransYField: Field? = null
+    @Volatile private var sSpreadRowField: Field? = null
+    @Volatile private var sShrinkCenterXField: Field? = null
+    @Volatile private var sShrinkCenterYField: Field? = null
+    @Volatile private var sDelayPerField: Field? = null
+    @Volatile private var sReleaseTransYEaseField: Field? = null
+    @Volatile private var sShowEaseField: Field? = null
+    @Volatile private var sHideEaseField: Field? = null
+    @Volatile private var sShrinkXEaseField: Field? = null
 
     fun initSystemUIHooks(module: XposedModule, classLoader: ClassLoader?) {
         if (classLoader == null || sysuiHooked) return
@@ -948,8 +959,12 @@ object ControlCenterHook {
                         m.isAccessible = true
                         module.hook(m).intercept { chain ->
                             val holder = chain.thisObject
+                            if (holder != null && ControlCenterGrouping.sIosClusterHolders.contains(holder)) {
+                                return@intercept null
+                            }
                             val itemView = ControlCenterGrouping.getViewHolderItemView(holder)
                             if (itemView != null && ControlCenterGrouping.isChildOfIosCluster(itemView)) {
+                                if (holder != null) ControlCenterGrouping.sIosClusterHolders.add(holder)
                                 return@intercept null
                             }
                             val result = try { chain.proceed() } catch (t: Throwable) { null }
@@ -972,16 +987,22 @@ object ControlCenterHook {
                                 val screenW = ctx.resources.displayMetrics.widthPixels.toFloat()
                                 val screenH = ctx.resources.displayMetrics.heightPixels.toFloat()
 
-                                val shrinkCenterXField = holderClass.getDeclaredField("shrinkCenterX")
-                                shrinkCenterXField.isAccessible = true
+                                val shrinkCenterXField = sShrinkCenterXField ?: holderClass.getDeclaredField("shrinkCenterX").apply {
+                                    isAccessible = true
+                                    sShrinkCenterXField = this
+                                }
                                 shrinkCenterXField.setFloat(holder, screenW / 2.0f)
 
-                                val shrinkCenterYField = holderClass.getDeclaredField("shrinkCenterY")
-                                shrinkCenterYField.isAccessible = true
+                                val shrinkCenterYField = sShrinkCenterYField ?: holderClass.getDeclaredField("shrinkCenterY").apply {
+                                    isAccessible = true
+                                    sShrinkCenterYField = this
+                                }
                                 shrinkCenterYField.setFloat(holder, screenH / 2.0f)
 
-                                val delayPerField = holderClass.getDeclaredField("delayPer")
-                                delayPerField.isAccessible = true
+                                val delayPerField = sDelayPerField ?: holderClass.getDeclaredField("delayPer").apply {
+                                    isAccessible = true
+                                    sDelayPerField = this
+                                }
                                 delayPerField.setFloat(holder, 0.0f)
                             } catch (t: Throwable) {
                                 Log.e(TAG, "prepareLocation hook error", t)
@@ -994,27 +1015,35 @@ object ControlCenterHook {
                         m.isAccessible = true
                         module.hook(m).intercept { chain ->
                             val holder = chain.thisObject
+                            if (holder != null && ControlCenterGrouping.sIosClusterHolders.contains(holder)) {
+                                return@intercept null
+                            }
                             val itemView = ControlCenterGrouping.getViewHolderItemView(holder)
                             if (itemView != null && ControlCenterGrouping.isChildOfIosCluster(itemView)) {
+                                if (holder != null) ControlCenterGrouping.sIosClusterHolders.add(holder)
                                 return@intercept null
                             }
                             val result = try { chain.proceed() } catch (t: Throwable) { null }
                             if (ControlCenterConfigHolder.config.isLowEndAnim() || !ControlCenterConfigHolder.config.isAnimActive) return@intercept result
                             try {
-                                val holder = chain.thisObject
-
-                                val delayPerField = holderClass.getDeclaredField("delayPer")
-                                delayPerField.isAccessible = true
+                                val delayPerField = sDelayPerField ?: holderClass.getDeclaredField("delayPer").apply {
+                                    isAccessible = true
+                                    sDelayPerField = this
+                                }
                                 delayPerField.setFloat(holder, 0.0f)
 
                                 val bounceEase = getStyleMethod.invoke(null, -2, floatArrayOf(0.88f, 0.38f))
-                                val releaseTransYEaseField = holderClass.getDeclaredField("releaseTransYEase")
-                                releaseTransYEaseField.isAccessible = true
+                                val releaseTransYEaseField = sReleaseTransYEaseField ?: holderClass.getDeclaredField("releaseTransYEase").apply {
+                                    isAccessible = true
+                                    sReleaseTransYEaseField = this
+                                }
                                 releaseTransYEaseField.set(holder, bounceEase)
 
                                 if (!ControlCenterConfigHolder.config.isLowEndAnim() && ControlCenterConfigHolder.config.isAnimActive) {
-                                    val showEaseField = holderClass.getDeclaredField("showEase")
-                                    showEaseField.isAccessible = true
+                                    val showEaseField = sShowEaseField ?: holderClass.getDeclaredField("showEase").apply {
+                                        isAccessible = true
+                                        sShowEaseField = this
+                                    }
                                     val showEase = showEaseField.get(holder)
                                     if (showEase != null) {
                                         val setFactorsMethod = showEase.javaClass.getMethod("setFactors", Float::class.javaPrimitiveType, Float::class.javaPrimitiveType)
@@ -1022,8 +1051,10 @@ object ControlCenterHook {
                                         setFactorsMethod.invoke(showEase, ControlCenterConfigHolder.config.tileShowDamping, ControlCenterConfigHolder.config.tileShowResponse)
                                     }
 
-                                    val hideEaseField = holderClass.getDeclaredField("hideEase")
-                                    hideEaseField.isAccessible = true
+                                    val hideEaseField = sHideEaseField ?: holderClass.getDeclaredField("hideEase").apply {
+                                        isAccessible = true
+                                        sHideEaseField = this
+                                    }
                                     val hideEase = hideEaseField.get(holder)
                                     if (hideEase != null) {
                                         val setFactorsMethod = hideEase.javaClass.getMethod("setFactors", Float::class.javaPrimitiveType, Float::class.javaPrimitiveType)
@@ -1031,8 +1062,10 @@ object ControlCenterHook {
                                         setFactorsMethod.invoke(hideEase, ControlCenterConfigHolder.config.tileHideDamping, ControlCenterConfigHolder.config.tileHideResponse)
                                     }
 
-                                    val shrinkXEaseField = holderClass.getDeclaredField("shrinkXEase")
-                                    shrinkXEaseField.isAccessible = true
+                                    val shrinkXEaseField = sShrinkXEaseField ?: holderClass.getDeclaredField("shrinkXEase").apply {
+                                        isAccessible = true
+                                        sShrinkXEaseField = this
+                                    }
                                     val shrinkXEase = shrinkXEaseField.get(holder)
                                     if (shrinkXEase != null) {
                                         val setFactorsMethod = shrinkXEase.javaClass.getMethod("setFactors", Float::class.javaPrimitiveType, Float::class.javaPrimitiveType)
@@ -1076,45 +1109,56 @@ object ControlCenterHook {
                         m.isAccessible = true
                         module.hook(m).intercept { chain ->
                             val holder = chain.thisObject
+                            if (holder != null && ControlCenterGrouping.sIosClusterHolders.contains(holder)) {
+                                return@intercept null
+                            }
                             val itemView = ControlCenterGrouping.getViewHolderItemView(holder)
                             if (itemView != null && ControlCenterGrouping.isChildOfIosCluster(itemView)) {
+                                if (holder != null) ControlCenterGrouping.sIosClusterHolders.add(holder)
                                 return@intercept null
                             }
                             val result = chain.proceed()
                             if (ControlCenterConfigHolder.config.isJellyActive) {
                                 try {
-                                    val ivField = holderClass.getField("itemView")
-                                    val itemView = ivField.get(holder) as? View ?: return@intercept result
+                                    val targetView = itemView ?: (sItemViewField ?: holderClass.getField("itemView").apply {
+                                        sItemViewField = this
+                                    }).get(holder) as? View ?: return@intercept result
 
-                                    val expandScaleRatioField = holderClass.getDeclaredField("expandScaleRatio")
-                                    expandScaleRatioField.isAccessible = true
+                                    val expandScaleRatioField = sExpandScaleRatioField ?: holderClass.getDeclaredField("expandScaleRatio").apply {
+                                        isAccessible = true
+                                        sExpandScaleRatioField = this
+                                    }
                                     val progress = expandScaleRatioField.getFloat(holder)
 
-                                    val expandTransYField = holderClass.getDeclaredField("expandTransY")
-                                    expandTransYField.isAccessible = true
+                                    val expandTransYField = sExpandTransYField ?: holderClass.getDeclaredField("expandTransY").apply {
+                                        isAccessible = true
+                                        sExpandTransYField = this
+                                    }
                                     val expandTransY = expandTransYField.getFloat(holder)
 
-                                    val spreadRowField = holderClass.getDeclaredField("spreadRow")
-                                    spreadRowField.isAccessible = true
+                                    val spreadRowField = sSpreadRowField ?: holderClass.getDeclaredField("spreadRow").apply {
+                                        isAccessible = true
+                                        sSpreadRowField = this
+                                    }
                                     val row = spreadRowField.getInt(holder)
 
-                                    val viewWidth = itemView.width
-                                    val viewHeight = itemView.height
+                                    val viewWidth = targetView.width
+                                    val viewHeight = targetView.height
                                     if (viewWidth <= 0 || viewHeight <= 0) return@intercept result
 
                                     val isRecentGesture = (System.currentTimeMillis() - ControlCenterConfigHolder.sLastTouchTime) < 700
                                     val isClosing = (progress < 0.99f && ControlCenterConfigHolder.sCurrentVelocityY < -100.0f)
 
                                     if (!ControlCenterConfigHolder.sIsUserFlicking && !isRecentGesture && Math.abs(expandTransY) < 1.0f) {
-                                        itemView.scaleX = 1.0f
-                                        itemView.scaleY = 1.0f
+                                        targetView.scaleX = 1.0f
+                                        targetView.scaleY = 1.0f
                                         return@intercept result
                                     }
 
                                     val absVel = Math.abs(ControlCenterConfigHolder.sCurrentVelocityY)
                                     val velFactor = if (absVel > 0.1f) Math.max(0.35f, Math.min(1.20f, absVel / 3500.0f)) else 0.70f
 
-                                    val density = itemView.context.resources.displayMetrics.density
+                                    val density = targetView.context.resources.displayMetrics.density
                                     val standardCardHeight = 110.0f * density
                                     val heightDampener = Math.max(0.42f, Math.min(1.0f, standardCardHeight / viewHeight))
 
@@ -1140,17 +1184,17 @@ object ControlCenterHook {
                                     val totalScaleY = baseScale + progressStretchY + pullStretchY
                                     val totalScaleX = baseScale - progressSquishX - pullSquishX
 
-                                    itemView.pivotX = viewWidth / 2.0f
+                                    targetView.pivotX = viewWidth / 2.0f
                                     if (expandTransY > 3.0f || (!isClosing && progress > 0.05f && progress < 0.95f)) {
-                                        itemView.pivotY = viewHeight * 0.10f
+                                        targetView.pivotY = viewHeight * 0.10f
                                     } else if (expandTransY < -3.0f || isClosing) {
-                                        itemView.pivotY = viewHeight * 0.90f
+                                        targetView.pivotY = viewHeight * 0.90f
                                     } else {
-                                        itemView.pivotY = viewHeight / 2.0f
+                                        targetView.pivotY = viewHeight / 2.0f
                                     }
 
-                                    itemView.scaleX = Math.max(0.78f, Math.min(1.30f, totalScaleX))
-                                    itemView.scaleY = Math.max(0.78f, Math.min(1.40f, totalScaleY))
+                                    targetView.scaleX = Math.max(0.78f, Math.min(1.30f, totalScaleX))
+                                    targetView.scaleY = Math.max(0.78f, Math.min(1.40f, totalScaleY))
                                 } catch (t: Throwable) {}
                             }
                             result
@@ -2955,10 +2999,6 @@ object ControlCenterHook {
                             if (itemView != null && ControlCenterGrouping.isChildOfIosCluster(itemView)) {
                                 itemView.background = null
                                 itemView.clipToOutline = false
-                                val p = itemView.parent
-                                if (p is IosTileGroupFolder.MiniClusterView) {
-                                    p.post { p.requestLayout() }
-                                }
                             }
                             result
                         }
