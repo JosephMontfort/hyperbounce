@@ -32,12 +32,13 @@ import io.github.libxposed.api.XposedModule
 import java.lang.reflect.Constructor
 import java.lang.reflect.Field
 import java.lang.reflect.Method
-import java.util.Collections
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArrayList
 
 object ControlCenterHook {
     private const val TAG = "HyperBounce_CC_Hook"
     private val hookedPluginLoaders = CopyOnWriteArrayList<ClassLoader>()
+    private val sChangeVisibleMethodCache = ConcurrentHashMap<Class<*>, Method?>()
     @Volatile private var sysuiHooked = false
     @Volatile var sMediaPlayerViewHolder: java.lang.ref.WeakReference<Any>? = null
     @Volatile var sLastMediaPlayerMetaData: Any? = null
@@ -951,14 +952,17 @@ object ControlCenterHook {
                                         for (subHolder in subHolders) {
                                             if (subHolder != null) {
                                                 try {
-                                                    val cvM = subHolder.javaClass.getMethod(
-                                                        "changeVisible",
-                                                        Boolean::class.javaPrimitiveType,
-                                                        Boolean::class.javaPrimitiveType,
-                                                        Boolean::class.javaPrimitiveType
-                                                    )
-                                                    cvM.isAccessible = true
-                                                    cvM.invoke(subHolder, z2, z3, z4)
+                                                    val cvM = sChangeVisibleMethodCache.computeIfAbsent(subHolder.javaClass) { clazz ->
+                                                        try {
+                                                            clazz.getMethod(
+                                                                "changeVisible",
+                                                                Boolean::class.javaPrimitiveType,
+                                                                Boolean::class.javaPrimitiveType,
+                                                                Boolean::class.javaPrimitiveType
+                                                            ).apply { isAccessible = true }
+                                                        } catch (t: Throwable) { null }
+                                                    }
+                                                    cvM?.invoke(subHolder, z2, z3, z4)
                                                 } catch (t: Throwable) {}
                                             }
                                         }
@@ -1705,32 +1709,9 @@ object ControlCenterHook {
                                             val holder = ControlCenterFullUnlock.createLandscapeDividerViewHolder(parent, classLoader)
                                             if (holder != null) return@intercept holder
                                         }
-                                        if (viewType == 2274) {
-                                            val holder = ControlCenterGrouping.createGroupedCardViewHolder(parent, qsListCtrl, classLoader)
-                                            if (holder != null) return@intercept holder
-                                        }
-                                        if (viewType == 2275) {
-                                            val holder = ControlCenterGrouping.createGrouped2TileViewHolder(parent, qsListCtrl, classLoader, false)
-                                            if (holder != null) return@intercept holder
-                                        }
-                                        if (viewType == 2276) {
-                                            val holder = ControlCenterGrouping.createGrouped2TileViewHolder(parent, qsListCtrl, classLoader, true)
-                                            if (holder != null) return@intercept holder
-                                        }
-                                        if (viewType == 2281) {
-                                            val holder = ControlCenterGrouping.createGroupedExpandedViewHolder(parent, qsListCtrl, classLoader)
-                                            if (holder != null) return@intercept holder
-                                        }
-                                        if (viewType == 2282) {
-                                            val holder = ControlCenterGrouping.createGroupedVerticalCardsViewHolder(parent, qsListCtrl, classLoader)
-                                            if (holder != null) return@intercept holder
-                                        }
-                                        if (viewType == 2283) {
-                                            val holder = ControlCenterGrouping.createGroupedMixedExpCircViewHolder(parent, qsListCtrl, classLoader)
-                                            if (holder != null) return@intercept holder
-                                        }
-                                        if (viewType == 2284) {
-                                            val holder = ControlCenterGrouping.createGroupedMixedVertCircViewHolder(parent, qsListCtrl, classLoader)
+                                        if (viewType in 2274..2276 || viewType in 2281..2284) {
+                                            val rowCount = if (viewType == 2275) 1 else 2
+                                            val holder = ControlCenterGrouping.createDynamicGroupViewHolder(parent, qsListCtrl, classLoader, rowCount)
                                             if (holder != null) return@intercept holder
                                         }
                                         if (viewType in 2285..2290) {
@@ -1819,26 +1800,9 @@ object ControlCenterHook {
                                         } catch (t: Throwable) {}
                                         if (qsListCtrl == null) qsListCtrl = ControlCenterConfigHolder.sQSListController
 
-                                        if (vt == 2274) {
-                                            val holder = ControlCenterGrouping.createGroupedCardViewHolder(parent, qsListCtrl, classLoader)
-                                            if (holder != null) return@intercept holder
-                                        } else if (vt == 2275) {
-                                            val holder = ControlCenterGrouping.createGrouped2TileViewHolder(parent, qsListCtrl, classLoader, false)
-                                            if (holder != null) return@intercept holder
-                                        } else if (vt == 2276) {
-                                            val holder = ControlCenterGrouping.createGrouped2TileViewHolder(parent, qsListCtrl, classLoader, true)
-                                            if (holder != null) return@intercept holder
-                                        } else if (vt == 2281) {
-                                            val holder = ControlCenterGrouping.createGroupedExpandedViewHolder(parent, qsListCtrl, classLoader)
-                                            if (holder != null) return@intercept holder
-                                        } else if (vt == 2282) {
-                                            val holder = ControlCenterGrouping.createGroupedVerticalCardsViewHolder(parent, qsListCtrl, classLoader)
-                                            if (holder != null) return@intercept holder
-                                        } else if (vt == 2283) {
-                                            val holder = ControlCenterGrouping.createGroupedMixedExpCircViewHolder(parent, qsListCtrl, classLoader)
-                                            if (holder != null) return@intercept holder
-                                        } else if (vt == 2284) {
-                                            val holder = ControlCenterGrouping.createGroupedMixedVertCircViewHolder(parent, qsListCtrl, classLoader)
+                                        if (vt in 2274..2276 || vt in 2281..2284) {
+                                            val rowCount = if (vt == 2275) 1 else 2
+                                            val holder = ControlCenterGrouping.createDynamicGroupViewHolder(parent, qsListCtrl, classLoader, rowCount)
                                             if (holder != null) return@intercept holder
                                         } else if (vt in 2285..2290) {
                                             val holder = ControlCenterGrouping.createDynamicGroupViewHolder(parent, qsListCtrl, classLoader, vt - 2284)
@@ -2011,19 +1975,8 @@ object ControlCenterHook {
                                     val g = ControlCenterConfigHolder.isGroupAnchor(spec)
                                     if (g != null) {
                                         val h = g.getEffectiveRowCount()
-                                        when (g.getEffectiveLayoutType()) {
-                                            "2_EXPANDED" -> return@intercept 2281
-                                            "2_VERTICAL" -> return@intercept 2282
-                                            "1_EXP_2_CIRC" -> return@intercept 2283
-                                            "1_VERT_2_CIRC" -> return@intercept 2284
-                                            "4_CIRCULAR" -> return@intercept 2274
-                                            "2_CIRCULAR_VERT" -> return@intercept 2276
-                                            "2_CIRCULAR_HORIZ" -> return@intercept 2275
-                                            else -> {
-                                                val clampedH = Math.max(1, Math.min(6, h))
-                                                return@intercept (2284 + clampedH)
-                                            }
-                                        }
+                                        val clampedH = Math.max(1, Math.min(6, h))
+                                        return@intercept (2284 + clampedH)
                                     }
                                     if (ControlCenterConfigHolder.sCircularCardSpecs.contains(spec)) {
                                         return@intercept 8453
@@ -2953,12 +2906,16 @@ object ControlCenterHook {
                                 null
                             } else if (itemView != null && isChildOfContainer(itemView)) {
                                 if (m.name == "updateBlurBlendBackground" || m.name == "updateBackground") {
-                                    val state = try {
-                                        val f = itemView.javaClass.getDeclaredField("state").apply { isAccessible = true }
-                                        f.get(itemView)
-                                    } catch (t: Throwable) { null }
-                                    ControlCenterGrouping.applyNonAdvancedStyleToChildTile(itemView, state, classLoader)
-                                    null
+                                    if (ControlCenterGrouping.isAdvancedTexturesEnabled(itemView.context, classLoader)) {
+                                        chain.proceed()
+                                    } else {
+                                        val state = try {
+                                            val f = itemView.javaClass.getDeclaredField("state").apply { isAccessible = true }
+                                            f.get(itemView)
+                                        } catch (t: Throwable) { null }
+                                        ControlCenterGrouping.applyNonAdvancedStyleToChildTile(itemView, state, classLoader)
+                                        null
+                                    }
                                 } else {
                                     chain.proceed()
                                 }
@@ -3021,6 +2978,9 @@ object ControlCenterHook {
                         module.hook(m).intercept { chain ->
                             val iconView = chain.thisObject as? View
                             if (iconView != null && isChildOfContainer(iconView)) {
+                                if (ControlCenterGrouping.isAdvancedTexturesEnabled(iconView.context, classLoader)) {
+                                    return@intercept chain.proceed()
+                                }
                                 val state = chain.args.getOrNull(0) ?: try {
                                     val f = iconView.javaClass.getDeclaredField("state").apply { isAccessible = true }
                                     f.get(iconView)
@@ -3043,7 +3003,7 @@ object ControlCenterHook {
                         m.isAccessible = true
                         module.hook(m).intercept { chain ->
                             val itemView = chain.thisObject as? View
-                            if (itemView != null && ControlCenterGrouping.isChildOfIosCluster(itemView)) {
+                            if (itemView != null && (isChildOfContainer(itemView) || ControlCenterGrouping.isChildOfIosCluster(itemView))) {
                                 itemView.background = null
                                 itemView.clipToOutline = false
                                 null
@@ -3058,13 +3018,13 @@ object ControlCenterHook {
                             val result = chain.proceed()
                             val itemView = chain.thisObject as? View
                             if (itemView != null && isChildOfContainer(itemView)) {
-                                val state = chain.args.getOrNull(0) ?: try {
-                                    val f = itemView.javaClass.getDeclaredField("state").apply { isAccessible = true }
-                                    f.get(itemView)
-                                } catch (t: Throwable) { null }
-                                ControlCenterGrouping.applyNonAdvancedStyleToChildTile(itemView, state, classLoader)
-                            }
-                            if (itemView != null && ControlCenterGrouping.isChildOfIosCluster(itemView)) {
+                                if (!ControlCenterGrouping.isAdvancedTexturesEnabled(itemView.context, classLoader)) {
+                                    val state = chain.args.getOrNull(0) ?: try {
+                                        val f = itemView.javaClass.getDeclaredField("state").apply { isAccessible = true }
+                                        f.get(itemView)
+                                    } catch (t: Throwable) { null }
+                                    ControlCenterGrouping.applyNonAdvancedStyleToChildTile(itemView, state, classLoader)
+                                }
                                 itemView.background = null
                                 itemView.clipToOutline = false
                             }
@@ -3083,11 +3043,13 @@ object ControlCenterHook {
                             val result = chain.proceed()
                             val itemView = chain.thisObject as? View
                             if (itemView != null && isChildOfContainer(itemView)) {
-                                val state = chain.args.getOrNull(0) ?: try {
-                                    val f = itemView.javaClass.getDeclaredField("state").apply { isAccessible = true }
-                                    f.get(itemView)
-                                } catch (t: Throwable) { null }
-                                ControlCenterGrouping.applyNonAdvancedStyleToChildTile(itemView, state, classLoader)
+                                if (!ControlCenterGrouping.isAdvancedTexturesEnabled(itemView.context, classLoader)) {
+                                    val state = chain.args.getOrNull(0) ?: try {
+                                        val f = itemView.javaClass.getDeclaredField("state").apply { isAccessible = true }
+                                        f.get(itemView)
+                                    } catch (t: Throwable) { null }
+                                    ControlCenterGrouping.applyNonAdvancedStyleToChildTile(itemView, state, classLoader)
+                                }
                             }
                             result
                         }
