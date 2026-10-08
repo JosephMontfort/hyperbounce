@@ -557,7 +557,7 @@ object IosTileGroupFolder {
     ) : FrameLayout(context) {
 
         private val scrimView = View(context)
-        private val cardContainer = FrameLayout(context)
+        private val cardContainer = FrameLayout(ControlCenterGrouping.GroupNonAdvContextWrapper.wrap(context))
         private var macroGrid: LinearLayout? = null
         private var cardCurrentRadius = 0f
         private var isClosing = false
@@ -668,10 +668,12 @@ object IosTileGroupFolder {
         }
 
         private fun buildExpandedCardContent() {
-            val group = sourceContainer.group ?: return
-            val classLoader = sourceContainer.classLoader ?: context.classLoader
-            val qsListCtrl = sourceContainer.qsListCtrl
-            val density = resources.displayMetrics.density
+            ControlCenterGrouping.sForceNonAdvTile.set(true)
+            try {
+                val group = sourceContainer.group ?: return
+                val classLoader = sourceContainer.classLoader ?: context.classLoader
+                val qsListCtrl = sourceContainer.qsListCtrl
+                val density = resources.displayMetrics.density
 
             val mainPanelController = ControlCenterGrouping.getMainPanelController(qsListCtrl)
                 ?: ControlCenterGrouping.getMainPanelController(ControlCenterConfigHolder.sQSListController)
@@ -708,7 +710,7 @@ object IosTileGroupFolder {
             val isLandscape = context.resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
             val res2RowsId = context.resources.getIdentifier("control_center_universal_2_rows_size", "dimen", context.packageName)
             val quadHeight = if (isLandscape) {
-                (142 * density).toInt()
+                (160 * density).toInt()
             } else {
                 if (res2RowsId != 0) context.resources.getDimensionPixelSize(res2RowsId) else (158 * density).toInt()
             }
@@ -719,6 +721,10 @@ object IosTileGroupFolder {
                     marginEnd = (5 * density).toInt()
                 }
             }
+
+            mg.addView(macroRow1)
+            mg.addView(macroRow2)
+            cardContainer.addView(mg)
 
             // Quadrant (0,0): Tile 1
             if (group.specs.isNotEmpty()) {
@@ -839,10 +845,9 @@ object IosTileGroupFolder {
             miniSubGrid.addView(subRow1)
             miniSubGrid.addView(subRow2)
             macroRow2.addView(miniSubGrid)
-
-            mg.addView(macroRow1)
-            mg.addView(macroRow2)
-            cardContainer.addView(mg)
+            } finally {
+                ControlCenterGrouping.sForceNonAdvTile.set(false)
+            }
         }
 
         private fun bindTileDirectly(
@@ -939,6 +944,38 @@ object IosTileGroupFolder {
                 view.isClickable = true
                 view.isLongClickable = true
                 view.isFocusable = true
+                view.setOnClickListener { v ->
+                    var handled = false
+                    try {
+                        val f = childRecord.javaClass.getDeclaredField("clickAction")
+                        f.isAccessible = true
+                        val action = f.get(childRecord)
+                        if (action != null) {
+                            handled = invokeRecordAction(action, v)
+                        }
+                    } catch (t: Throwable) {}
+
+                    if (!handled) {
+                        try {
+                            val tObj = childRecord.javaClass.getMethod("getTile").invoke(childRecord)
+                            if (tObj != null) {
+                                try {
+                                    val clickM = tObj.javaClass.getMethod("click", View::class.java)
+                                    clickM.invoke(tObj, v)
+                                    handled = true
+                                } catch (t: Throwable) {
+                                    try {
+                                        val clickM = tObj.javaClass.getMethod("click")
+                                        clickM.invoke(tObj)
+                                        handled = true
+                                    } catch (t2: Throwable) {}
+                                }
+                            }
+                        } catch (t: Throwable) {
+                            Log.e(TAG, "Tile onClick error: $spec", t)
+                        }
+                    }
+                }
                 view.setOnLongClickListener { clickedView ->
                     var handled = false
                     try {
@@ -1194,9 +1231,14 @@ object IosTileGroupFolder {
         }
 
         fun refreshOverlayTiles(classLoader: ClassLoader) {
-            ControlCenterGrouping.applyGroupContainerStyle(cardContainer, classLoader, sourceContainer.group)
-            val mg = macroGrid ?: return
-            refreshTileTree(mg, classLoader)
+            ControlCenterGrouping.sForceNonAdvTile.set(true)
+            try {
+                ControlCenterGrouping.applyGroupContainerStyle(cardContainer, classLoader, sourceContainer.group)
+                val mg = macroGrid ?: return
+                refreshTileTree(mg, classLoader)
+            } finally {
+                ControlCenterGrouping.sForceNonAdvTile.set(false)
+            }
         }
 
         private fun refreshTileTree(view: View, classLoader: ClassLoader) {

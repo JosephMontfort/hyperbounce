@@ -208,6 +208,18 @@ object ControlCenterHook {
                                             ControlCenterConfigHolder.resetLayoutToStock(context)
                                         }
                                     }, filter, Context.RECEIVER_EXPORTED)
+
+                                    try {
+                                        val uri = android.provider.Settings.Secure.getUriFor("background_blur_enable")
+                                        app.contentResolver.registerContentObserver(uri, false, object : android.database.ContentObserver(Handler(Looper.getMainLooper())) {
+                                            override fun onChange(selfChange: Boolean) {
+                                                super.onChange(selfChange)
+                                                Log.i(TAG, "background_blur_enable changed! Refreshing all group containers...")
+                                                val cl = hookedPluginLoaders.firstOrNull() ?: app.classLoader
+                                                ControlCenterGrouping.scheduleRefreshAllGroupContainers(cl)
+                                            }
+                                        })
+                                    } catch (_: Throwable) {}
                                 }
                             } catch (t: Throwable) {
                                 Log.e(TAG, "SystemUIApplication.onCreate hook error", t)
@@ -228,26 +240,15 @@ object ControlCenterHook {
 
     fun isChildOfContainer(view: View?): Boolean {
         if (view == null) return false
-        val cached = view.getTag(0x7f09999b)
-        if (cached is Boolean) return cached
-        if (view.getTag(0x7f09999c) == true) {
-            view.setTag(0x7f09999b, true)
-            return true
-        }
+        if (view.getTag(0x7f09999b) == true || view.getTag(0x7f09999c) == true) return true
+        if (ControlCenterGrouping.isGroupOrChildView(view)) return true
         var cur = view.parent
         while (cur != null) {
             if (cur is View && (cur.id == 0x7f099995 || cur.id == 0x7f099996 || cur.getTag(0x7f099995) != null || cur.getTag(0x7f099993) != null || cur is IosTileGroupFolder.IosClusterContainer || cur is IosTileGroupFolder.MiniClusterView || cur is IosTileGroupFolder.IosFolderExpandedOverlay)) {
                 view.setTag(0x7f09999b, true)
                 return true
             }
-            if (cur is View && cur.javaClass.name.contains("RecyclerView")) {
-                view.setTag(0x7f09999b, false)
-                return false
-            }
             cur = cur.parent
-        }
-        if (view.parent != null) {
-            view.setTag(0x7f09999b, false)
         }
         return false
     }
@@ -560,6 +561,125 @@ object ControlCenterHook {
                                 if (!isSubTile) {
                                     return@intercept false
                                 }
+                            }
+                            chain.proceed()
+                        }
+                    }
+                }
+            } catch (t: Throwable) {}
+
+            // 0c. Hook ControlCenterUtils, MiBlurCompat, MiuiBlurUtils, and MainPanelItemViewHolder to force non-advanced blur for group containers and child tiles
+            try {
+                val ccUtilsClass = Class.forName("miui.systemui.controlcenter.utils.ControlCenterUtils", false, classLoader)
+                for (m in ccUtilsClass.declaredMethods) {
+                    if (m.name == "getBackgroundBlurOpenedInDefaultTheme") {
+                        m.isAccessible = true
+                        module.hook(m).intercept { chain ->
+                            val ctx = chain.args.getOrNull(0) as? Context
+                            if (ControlCenterGrouping.sForceNonAdvTile.get() == true || ControlCenterGrouping.GroupNonAdvContextWrapper.isGroupContext(ctx)) {
+                                return@intercept false
+                            }
+                            chain.proceed()
+                        }
+                    }
+                }
+            } catch (t: Throwable) {}
+
+            try {
+                val miBlurClass = Class.forName("miui.systemui.util.MiBlurCompat", false, classLoader)
+                for (m in miBlurClass.declaredMethods) {
+                    if (m.name == "getBackgroundBlurOpenedInDefaultTheme") {
+                        m.isAccessible = true
+                        module.hook(m).intercept { chain ->
+                            val ctx = chain.args.getOrNull(0) as? Context
+                            if (ControlCenterGrouping.sForceNonAdvTile.get() == true || ControlCenterGrouping.GroupNonAdvContextWrapper.isGroupContext(ctx)) {
+                                return@intercept false
+                            }
+                            chain.proceed()
+                        }
+                    }
+                    if (m.name == "setMiViewBlurModeCompat" || m.name == "setMiBackgroundBlurModeCompat") {
+                        m.isAccessible = true
+                        module.hook(m).intercept { chain ->
+                            val v = chain.args.getOrNull(0) as? View
+                            if (v != null && ControlCenterGrouping.isGroupOrChildView(v)) {
+                                chain.args[1] = 0
+                            }
+                            chain.proceed()
+                        }
+                    }
+                    if (m.name == "setMiBackgroundBlendColors" || m.name == "setMiBackgroundBlendColorConfig") {
+                        m.isAccessible = true
+                        module.hook(m).intercept { chain ->
+                            val v = chain.args.getOrNull(0) as? View
+                            if (v != null && ControlCenterGrouping.isGroupOrChildView(v)) {
+                                try {
+                                    val miuiBlurClass = Class.forName("miuix.core.util.MiuiBlurUtils", false, classLoader)
+                                    val clearM = miuiBlurClass.getMethod("clearBackgroundBlendConfig", View::class.java)
+                                    clearM.invoke(null, v)
+                                } catch (_: Throwable) {}
+                                return@intercept if (m.returnType == Boolean::class.javaPrimitiveType) false else null
+                            }
+                            chain.proceed()
+                        }
+                    }
+                }
+            } catch (t: Throwable) {}
+
+            try {
+                val miuiBlurClass = Class.forName("miuix.core.util.MiuiBlurUtils", false, classLoader)
+                for (m in miuiBlurClass.declaredMethods) {
+                    if (m.name == "setViewBlurMode" || m.name == "setBackgroundBlurMode") {
+                        m.isAccessible = true
+                        module.hook(m).intercept { chain ->
+                            val v = chain.args.getOrNull(0) as? View
+                            if (v != null && ControlCenterGrouping.isGroupOrChildView(v)) {
+                                chain.args[1] = 0
+                            }
+                            chain.proceed()
+                        }
+                    }
+                    if (m.name == "setBackgroundBlendConfig" || m.name == "addBackgroundBlenderColor") {
+                        m.isAccessible = true
+                        module.hook(m).intercept { chain ->
+                            val v = chain.args.getOrNull(0) as? View
+                            if (v != null && ControlCenterGrouping.isGroupOrChildView(v)) {
+                                return@intercept false
+                            }
+                            chain.proceed()
+                        }
+                    }
+                }
+            } catch (t: Throwable) {}
+
+            try {
+                val mpiViewHolderClass = Class.forName("miui.systemui.controlcenter.panel.main.recyclerview.MainPanelItemViewHolder", false, classLoader)
+                for (m in mpiViewHolderClass.declaredMethods) {
+                    if (m.name == "updateBlendBlur") {
+                        m.isAccessible = true
+                        module.hook(m).intercept { chain ->
+                            val holder = chain.thisObject
+                            val itemViewField = try {
+                                holder.javaClass.getField("itemView")
+                            } catch (_: Throwable) {
+                                holder.javaClass.getDeclaredField("itemView").apply { isAccessible = true }
+                            }
+                            val itemView = itemViewField.get(holder) as? View
+                            if (itemView != null && ControlCenterGrouping.isGroupOrChildView(itemView)) {
+                                try {
+                                    val miBlurClass = Class.forName("miui.systemui.util.MiBlurCompat", false, classLoader)
+                                    val setMode = miBlurClass.getMethod("setMiViewBlurModeCompat", View::class.java, Int::class.javaPrimitiveType)
+                                    setMode.invoke(null, itemView, 0)
+                                    val clearBlend = miBlurClass.getMethod("clearMiBackgroundBlendColorCompat", View::class.java)
+                                    clearBlend.invoke(null, itemView)
+                                } catch (_: Throwable) {}
+                                try {
+                                    val cuClass = Class.forName("miui.systemui.util.CommonUtils", false, classLoader)
+                                    val cuInst = cuClass.getDeclaredField("INSTANCE").get(null)
+                                    val clearEffect = cuClass.getMethod("clearMiBlurBlendEffect", View::class.java)
+                                    clearEffect.invoke(cuInst, itemView)
+                                } catch (_: Throwable) {}
+                                return@intercept null
                             }
                             chain.proceed()
                         }
@@ -2356,7 +2476,7 @@ object ControlCenterHook {
                                         }
                                     }
 
-                                    val isSubTile = ControlCenterConfigHolder.isGroupChild(spec) || isChildOfContainer(itemView) || (itemView.getTag(0x7f09999c) == true)
+                                    val isSubTile = ControlCenterConfigHolder.isGroupChild(spec) || isChildOfContainer(itemView) || (itemView.getTag(0x7f09999c) == true) || (itemView.getTag(0x7f09999b) == true) || ControlCenterGrouping.isGroupOrChildView(itemView)
                                     if (isSubTile) {
                                         hideAllCustomBadges(itemView)
                                         if (isEdit) {
@@ -2933,6 +3053,22 @@ object ControlCenterHook {
             try {
                 val cardViewClass = Class.forName("miui.systemui.controlcenter.qs.tileview.QSCardItemView", false, classLoader)
                 for (m in cardViewClass.declaredMethods) {
+                    if (m.name == "getBackgroundBlendEnabled") {
+                        m.isAccessible = true
+                        module.hook(m).intercept { chain ->
+                            val cardView = chain.thisObject as? View
+                            if (cardView != null && (ControlCenterGrouping.sForceNonAdvTile.get() == true ||
+                                    ControlCenterGrouping.GroupNonAdvContextWrapper.isGroupContext(cardView.context) ||
+                                    isChildOfContainer(cardView) ||
+                                    ControlCenterGrouping.isGroupOrChildView(cardView) ||
+                                    cardView.findViewById<View>(0x7f099995) != null ||
+                                    cardView.getTag(0x7f099995) != null ||
+                                    cardView.getTag(0x7f099994) != null)) {
+                                return@intercept false
+                            }
+                            chain.proceed()
+                        }
+                    }
                     if (m.name == "updateBlurBlendBackground" || m.name == "updateDrawableBackground" || m.name == "updateBackground" || m.name == "updateBackgroundBlendModeAndColors") {
                         m.isAccessible = true
                         module.hook(m).intercept { chain ->
@@ -2940,9 +3076,14 @@ object ControlCenterHook {
                             if (itemView != null && (itemView.findViewById<View>(0x7f099995) != null || itemView.getTag(0x7f099994) != null)) {
                                 ControlCenterGrouping.applyGroupContainerStyle(itemView, classLoader)
                                 null
-                            } else if (itemView != null && (isChildOfContainer(itemView) || itemView.getTag(0x7f09999c) == true)) {
+                            } else if (itemView != null && (isChildOfContainer(itemView) || itemView.getTag(0x7f09999c) == true || ControlCenterGrouping.GroupNonAdvContextWrapper.isGroupContext(itemView.context) || ControlCenterGrouping.isGroupOrChildView(itemView))) {
                                 if (m.name == "updateDrawableBackground") {
-                                    val result = chain.proceed()
+                                    ControlCenterGrouping.sForceNonAdvTile.set(true)
+                                    val result = try {
+                                        chain.proceed()
+                                    } finally {
+                                        ControlCenterGrouping.sForceNonAdvTile.set(false)
+                                    }
                                     if (itemView.getTag(0x7f09998a) != true) {
                                         val state = try {
                                             val f = itemView.javaClass.getDeclaredField("state").apply { isAccessible = true }
@@ -2952,6 +3093,16 @@ object ControlCenterHook {
                                     }
                                     result
                                 } else {
+                                    ControlCenterGrouping.sForceNonAdvTile.set(true)
+                                    try {
+                                        val mDraw = itemView.javaClass.getDeclaredMethod("updateDrawableBackground", Boolean::class.javaPrimitiveType)
+                                        mDraw.isAccessible = true
+                                        mDraw.invoke(itemView, chain.args.getOrNull(0) ?: false)
+                                    } catch (_: Throwable) {
+                                        chain.proceed()
+                                    } finally {
+                                        ControlCenterGrouping.sForceNonAdvTile.set(false)
+                                    }
                                     val state = try {
                                         val f = itemView.javaClass.getDeclaredField("state").apply { isAccessible = true }
                                         f.get(itemView)
@@ -2962,6 +3113,21 @@ object ControlCenterHook {
                             } else {
                                 chain.proceed()
                             }
+                        }
+                    }
+                    if (m.name == "updateState") {
+                        m.isAccessible = true
+                        module.hook(m).intercept { chain ->
+                            val result = chain.proceed()
+                            val itemView = chain.thisObject as? View
+                            if (itemView != null && (isChildOfContainer(itemView) || itemView.getTag(0x7f09999c) == true || ControlCenterGrouping.isGroupOrChildView(itemView))) {
+                                val state = chain.args.getOrNull(0) ?: try {
+                                    val f = itemView.javaClass.getDeclaredField("state").apply { isAccessible = true }
+                                    f.get(itemView)
+                                } catch (t: Throwable) { null }
+                                ControlCenterGrouping.applyNonAdvancedStyleToChildTile(itemView, state, classLoader)
+                            }
+                            result
                         }
                     }
                     if (m.name == "onConfigurationChanged") {
@@ -3022,20 +3188,40 @@ object ControlCenterHook {
             try {
                 val iconViewClass = Class.forName("miui.systemui.controlcenter.qs.tileview.QSTileItemIconView", false, classLoader)
                 for (m in iconViewClass.declaredMethods) {
-                    if (m.name == "applyBlendColor" || m.name == "setIconProgress") {
+                    if (m.name == "applyBlendColor") {
                         m.isAccessible = true
                         module.hook(m).intercept { chain ->
                             val iconView = chain.thisObject as? View
-                            if (iconView != null && (isChildOfContainer(iconView) || ControlCenterGrouping.isChildOfIosCluster(iconView) || iconView.getTag(0x7f09999c) == true)) {
-                                val state = chain.args.getOrNull(0) ?: try {
-                                    val f = iconView.javaClass.getDeclaredField("state").apply { isAccessible = true }
-                                    f.get(iconView)
-                                } catch (t: Throwable) { null }
-                                ControlCenterGrouping.applyNonAdvancedStyleToChildTile(iconView, state, classLoader)
-                                null
-                            } else {
-                                chain.proceed()
+                            if (iconView != null && (isChildOfContainer(iconView) || ControlCenterGrouping.isChildOfIosCluster(iconView) || iconView.getTag(0x7f09999c) == true || ControlCenterGrouping.isGroupOrChildView(iconView))) {
+                                try {
+                                    val cuClass = Class.forName("miui.systemui.util.CommonUtils", false, classLoader)
+                                    val cuInst = cuClass.getDeclaredField("INSTANCE").get(null)
+                                    val clearEffect = cuClass.getMethod("clearMiBlurBlendEffect", View::class.java)
+                                    val iconField = iconView.javaClass.getDeclaredField("icon").apply { isAccessible = true }
+                                    val innerIcon = iconField.get(iconView) as? View
+                                    if (innerIcon != null) clearEffect.invoke(cuInst, innerIcon)
+                                    clearEffect.invoke(cuInst, iconView)
+                                } catch (_: Throwable) {}
+                                val state = chain.args.getOrNull(0)
+                                val parentTile = iconView.parent as? View ?: iconView
+                                ControlCenterGrouping.applyNonAdvancedStyleToChildTile(parentTile, state, classLoader)
+                                return@intercept null
                             }
+                            chain.proceed()
+                        }
+                    }
+                    if (m.name == "setIconProgress") {
+                        m.isAccessible = true
+                        module.hook(m).intercept { chain ->
+                            val iconView = chain.thisObject as? View
+                            if (iconView != null && (isChildOfContainer(iconView) || ControlCenterGrouping.isChildOfIosCluster(iconView) || iconView.getTag(0x7f09999c) == true || ControlCenterGrouping.isGroupOrChildView(iconView))) {
+                                try {
+                                    val progField = iconView.javaClass.getDeclaredField("iconProgress").apply { isAccessible = true }
+                                    progField.setFloat(iconView, (chain.args.getOrNull(0) as? Number)?.toFloat() ?: 0f)
+                                } catch (_: Throwable) {}
+                                return@intercept null
+                            }
+                            chain.proceed()
                         }
                     }
                 }

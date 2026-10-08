@@ -1,6 +1,8 @@
 package dev.joseph.hyperbounce.controlcenter
 
 import android.content.Context
+import android.content.ContextWrapper
+import android.content.res.Resources
 import android.graphics.Color
 import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
@@ -130,6 +132,56 @@ class DynamicGroupContainer(context: Context) : ViewGroup(context) {
 
 object ControlCenterGrouping {
     private const val TAG = "HyperBounce_CC_Group"
+
+    val sForceNonAdvTile = ThreadLocal<Boolean>()
+
+    class GroupNonAdvContextWrapper(base: Context) : ContextWrapper(base) {
+        private var resTheme: Resources.Theme? = null
+
+        override fun getTheme(): Resources.Theme {
+            if (resTheme == null) {
+                val superTheme = super.getTheme()
+                val newTheme = resources.newTheme()
+                newTheme.setTo(superTheme)
+                val ccStyleId = resources.getIdentifier("ControlCenter", "style", packageName)
+                if (ccStyleId != 0) {
+                    newTheme.applyStyle(ccStyleId, true)
+                }
+                resTheme = newTheme
+            }
+            return resTheme!!
+        }
+
+        override fun getSystemService(name: String): Any? {
+            if (Context.LAYOUT_INFLATER_SERVICE == name) {
+                val inflater = super.getSystemService(name) as? LayoutInflater
+                return inflater?.cloneInContext(this)
+            }
+            return super.getSystemService(name)
+        }
+
+        companion object {
+            fun wrap(context: Context): Context {
+                if (context is GroupNonAdvContextWrapper) return context
+                return GroupNonAdvContextWrapper(context)
+            }
+
+            fun isGroupContext(ctx: Context?): Boolean {
+                var c = ctx
+                var depth = 0
+                while (c != null && depth < 6) {
+                    if (c is GroupNonAdvContextWrapper) return true
+                    if (c is ContextWrapper) {
+                        c = c.baseContext
+                        depth++
+                    } else {
+                        break
+                    }
+                }
+                return false
+            }
+        }
+    }
 
     val sGroupChildHolders: MutableSet<Any> = java.util.Collections.newSetFromMap(java.util.WeakHashMap<Any, Boolean>())
     val sIosClusterHolders: MutableSet<Any> get() = sGroupChildHolders
@@ -496,13 +548,16 @@ object ControlCenterGrouping {
     }
 
     fun createDynamicGroupViewHolder(parent: ViewGroup, qsListCtrl: Any?, classLoader: ClassLoader, rowCount: Int): Any? {
+        sForceNonAdvTile.set(true)
         try {
-            val ctx = parent.context
+            val rawCtx = parent.context
+            val ctx = GroupNonAdvContextWrapper.wrap(rawCtx)
             val density = ctx.resources.displayMetrics.density
 
             val sysUIContextField = qsListCtrl?.javaClass?.getDeclaredField("sysUIContext")
             sysUIContextField?.isAccessible = true
-            val sysUIContext = (sysUIContextField?.get(qsListCtrl) as? Context) ?: ctx
+            val rawSysUI = (sysUIContextField?.get(qsListCtrl) as? Context) ?: rawCtx
+            val sysUIContext = GroupNonAdvContextWrapper.wrap(rawSysUI)
 
             val cardBindingClass = Class.forName("miui.systemui.controlcenter.databinding.QsCardItemViewBinding", false, classLoader)
             val inflateMethod = cardBindingClass.getMethod("inflate", LayoutInflater::class.java, ViewGroup::class.java, Boolean::class.javaPrimitiveType)
@@ -608,38 +663,47 @@ object ControlCenterGrouping {
             return wrapInCardViewHolder(root, classLoader)
         } catch (t: Throwable) {
             Log.e(TAG, "createDynamicGroupViewHolder error", t)
+        } finally {
+            sForceNonAdvTile.set(false)
         }
         return null
     }
 
     fun inflateTileForType(type: String, parent: ViewGroup, qsListCtrl: Any?, classLoader: ClassLoader): View {
-        val ctx = parent.context
-        val density = ctx.resources.displayMetrics.density
-        val activeCtrl = qsListCtrl ?: ControlCenterConfigHolder.sQSListController
-        val sysUIContextField = activeCtrl?.javaClass?.getDeclaredField("sysUIContext")
-        sysUIContextField?.isAccessible = true
-        val sysUIContext = (sysUIContextField?.get(activeCtrl) as? Context) ?: ctx
+        sForceNonAdvTile.set(true)
+        try {
+            val rawCtx = parent.context
+            val ctx = GroupNonAdvContextWrapper.wrap(rawCtx)
+            val density = ctx.resources.displayMetrics.density
+            val activeCtrl = qsListCtrl ?: ControlCenterConfigHolder.sQSListController
+            val sysUIContextField = activeCtrl?.javaClass?.getDeclaredField("sysUIContext")
+            sysUIContextField?.isAccessible = true
+            val rawSysUI = (sysUIContextField?.get(activeCtrl) as? Context) ?: rawCtx
+            val sysUIContext = GroupNonAdvContextWrapper.wrap(rawSysUI)
 
-        val view = when (type) {
-            "E" -> inflateChildCardView(ctx, sysUIContext, classLoader)
-            "V" -> {
-                val v = inflateChildCardView(ctx, sysUIContext, classLoader)
-                adjustCardToVertical(v, density, ctx)
-                v
+            val view = when (type) {
+                "E" -> inflateChildCardView(ctx, sysUIContext, classLoader)
+                "V" -> {
+                    val v = inflateChildCardView(ctx, sysUIContext, classLoader)
+                    adjustCardToVertical(v, density, ctx)
+                    v
+                }
+                else -> {
+                    var blurEnabled = false
+                    try {
+                        val ccUtils = Class.forName("miui.systemui.controlcenter.utils.ControlCenterUtils", false, classLoader)
+                        val getBlurM = ccUtils.getMethod("getBackgroundBlurOpenedInDefaultTheme", Context::class.java)
+                        blurEnabled = getBlurM.invoke(null, ctx) as Boolean
+                    } catch (t: Throwable) {}
+                    inflateChildTileView(ctx, sysUIContext, classLoader, blurEnabled, density, parent)
+                }
             }
-            else -> {
-                var blurEnabled = false
-                try {
-                    val ccUtils = Class.forName("miui.systemui.controlcenter.utils.ControlCenterUtils", false, classLoader)
-                    val getBlurM = ccUtils.getMethod("getBackgroundBlurOpenedInDefaultTheme", Context::class.java)
-                    blurEnabled = getBlurM.invoke(null, ctx) as Boolean
-                } catch (t: Throwable) {}
-                inflateChildTileView(ctx, sysUIContext, classLoader, blurEnabled, density, parent)
-            }
+            view.setTag(0x7f09999c, true)
+            view.setTag(0x7f09999b, true)
+            return view
+        } finally {
+            sForceNonAdvTile.set(false)
         }
-        view.setTag(0x7f09999c, true)
-        view.setTag(0x7f09999b, true)
-        return view
     }
 
     fun getViewHolderItemView(holder: Any?): View? {
@@ -743,7 +807,7 @@ object ControlCenterGrouping {
     fun attachSubHolder(holder: Any?) {
         if (holder == null) return
         val childView = getViewHolderItemView(holder)
-        val isGroupChild = childView != null && isChildOfGroup(childView)
+        val isGroupChild = childView != null && (isChildOfGroup(childView) || isGroupOrChildView(childView))
         if (isGroupChild) {
             sGroupChildHolders.add(holder)
             try {
@@ -1048,21 +1112,31 @@ object ControlCenterGrouping {
             val isTransparent = g?.isTransparent == true
             val isEdit = ControlCenterConfigHolder.sIsEditMode
 
-            if (isTransparent) {
-                try {
-                    val miBlurClass = Class.forName("miui.systemui.util.MiBlurCompat", false, classLoader)
-                    val setModeMethod = miBlurClass.getMethod("setMiViewBlurModeCompat", View::class.java, Int::class.javaPrimitiveType)
-                    setModeMethod.invoke(null, view, 0)
-                    val clearBlendMethod = miBlurClass.getMethod("clearMiBackgroundBlendColorCompat", View::class.java)
-                    clearBlendMethod.invoke(null, view)
-                } catch (t: Throwable) {}
+            val innerContainer = view.findViewById<View>(0x7f099995)
+            val targetView = if (innerContainer != null && innerContainer !== view) {
+                view.background = null
+                view.outlineProvider = null
+                view.clipToOutline = false
+                innerContainer
+            } else view
 
-                try {
-                    val commonUtilsClass = Class.forName("miui.systemui.util.CommonUtils", false, classLoader)
-                    val commonUtils = commonUtilsClass.getDeclaredField("INSTANCE").get(null)
-                    val clearEffect = commonUtilsClass.getMethod("clearMiBlurBlendEffect", View::class.java)
-                    clearEffect.invoke(commonUtils, view)
-                } catch (t: Throwable) {}
+            if (isTransparent) {
+                for (v in listOf(view, targetView)) {
+                    try {
+                        val miBlurClass = Class.forName("miui.systemui.util.MiBlurCompat", false, classLoader)
+                        val setModeMethod = miBlurClass.getMethod("setMiViewBlurModeCompat", View::class.java, Int::class.javaPrimitiveType)
+                        setModeMethod.invoke(null, v, 0)
+                        val clearBlendMethod = miBlurClass.getMethod("clearMiBackgroundBlendColorCompat", View::class.java)
+                        clearBlendMethod.invoke(null, v)
+                    } catch (t: Throwable) {}
+
+                    try {
+                        val commonUtilsClass = Class.forName("miui.systemui.util.CommonUtils", false, classLoader)
+                        val commonUtils = commonUtilsClass.getDeclaredField("INSTANCE").get(null)
+                        val clearEffect = commonUtilsClass.getMethod("clearMiBlurBlendEffect", View::class.java)
+                        clearEffect.invoke(commonUtils, v)
+                    } catch (t: Throwable) {}
+                }
 
                 if (isEdit) {
                     val strokeW = Math.max(1, (1.5f * density).toInt())
@@ -1071,67 +1145,66 @@ object ControlCenterGrouping {
                         setColor(Color.TRANSPARENT)
                         setStroke(strokeW, Color.parseColor("#44FFFFFF"))
                     }
-                    view.background = outlineDrawable
-                    view.outlineProvider = object : android.view.ViewOutlineProvider() {
+                    targetView.background = outlineDrawable
+                    targetView.outlineProvider = object : android.view.ViewOutlineProvider() {
                         override fun getOutline(v: View, outline: android.graphics.Outline) {
                             outline.setRoundRect(0, 0, v.width, v.height, cornerRadius)
                         }
                     }
-                    view.clipToOutline = true
+                    targetView.clipToOutline = true
                 } else {
-                    view.background = null
-                    view.outlineProvider = null
-                    view.clipToOutline = false
+                    targetView.background = null
+                    targetView.outlineProvider = null
+                    targetView.clipToOutline = false
                 }
-                if (view is ViewGroup) {
-                    view.clipChildren = true
+                if (targetView is ViewGroup) {
+                    targetView.clipChildren = true
                 }
-                view.invalidateOutline()
+                targetView.invalidateOutline()
                 return
             }
 
             GroupContainerBlurCache.init(ctx, classLoader)
 
             try {
-                val crField = view.javaClass.getDeclaredField("_cornerRadius")
+                val crField = targetView.javaClass.getDeclaredField("_cornerRadius")
                 crField.isAccessible = true
-                crField.setFloat(view, cornerRadius)
+                crField.setFloat(targetView, cornerRadius)
             } catch (t: Throwable) {}
 
-            view.outlineProvider = object : android.view.ViewOutlineProvider() {
+            targetView.outlineProvider = object : android.view.ViewOutlineProvider() {
                 override fun getOutline(v: View, outline: android.graphics.Outline) {
                     outline.setRoundRect(0, 0, v.width, v.height, cornerRadius)
                 }
             }
-            view.clipToOutline = true
-            if (view is ViewGroup) {
-                view.clipChildren = true
+            targetView.clipToOutline = true
+            if (targetView is ViewGroup) {
+                targetView.clipChildren = true
             }
-            view.invalidateOutline()
+            targetView.invalidateOutline()
 
-            try {
-                GroupContainerBlurCache.setPassWindowBlur?.invoke(null, view, false)
-                GroupContainerBlurCache.setModeMethod?.invoke(null, view, 0)
-                GroupContainerBlurCache.clearBlendMethod?.invoke(null, view)
-            } catch (t: Throwable) {}
+            for (v in listOf(view, targetView)) {
+                try {
+                    GroupContainerBlurCache.setPassWindowBlur?.invoke(null, v, false)
+                    GroupContainerBlurCache.setModeMethod?.invoke(null, v, 0)
+                    GroupContainerBlurCache.clearBlendMethod?.invoke(null, v)
+                } catch (t: Throwable) {}
 
-            try {
-                val cu = GroupContainerBlurCache.commonUtilsInst
-                if (cu != null) {
-                    GroupContainerBlurCache.clearEffectMethod?.invoke(cu, view)
-                }
-            } catch (t: Throwable) {}
+                try {
+                    val cu = GroupContainerBlurCache.commonUtilsInst
+                    if (cu != null) {
+                        GroupContainerBlurCache.clearEffectMethod?.invoke(cu, v)
+                    }
+                } catch (t: Throwable) {}
+            }
 
-            val colorResId = GroupContainerBlurCache.resCardDisabledColor
-            val cardColor = if (colorResId > 0) {
-                try { ctx.resources.getColor(colorResId, null) } catch (t: Throwable) { Color.parseColor("#66000000") }
-            } else Color.parseColor("#66000000")
-
+            // Always synthesize authentic dark frosted card background (#66000000)
+            // Never rely on ctx.theme.getDrawable(resCardDisabledId) which returns transparent in ControlCenter.Blend
             val cardBg = GradientDrawable().apply {
                 this.cornerRadius = cornerRadius
-                setColor(cardColor)
+                setColor(Color.parseColor("#66000000"))
             }
-            view.background = cardBg
+            targetView.background = cardBg
         } catch (t: Throwable) {
             Log.e(TAG, "applyGroupContainerStyle error", t)
         }
@@ -1178,11 +1251,45 @@ object ControlCenterGrouping {
         return false
     }
 
+    fun isGroupOrChildView(view: View?): Boolean {
+        if (view == null) return false
+        if (sForceNonAdvTile.get() == true) return true
+        if (GroupNonAdvContextWrapper.isGroupContext(view.context)) return true
+        if (view.getTag(0x7f09999c) == true) return true
+        if (view.getTag(0x7f09999b) == true) return true
+        if (view.getTag(0x7f099994) != null) return true
+        if (view.getTag(0x7f099995) != null) return true
+        if (view.getTag(0x7f09999f) == true) return true
+        if (view.findViewById<View>(0x7f099995) != null) return true
+        var cur = view.parent
+        var depth = 0
+        while (cur != null && depth < 6) {
+            if (cur is View) {
+                if (cur.getTag(0x7f09999c) == true ||
+                    cur.getTag(0x7f09999b) == true ||
+                    cur.getTag(0x7f099994) != null ||
+                    cur.getTag(0x7f099995) != null ||
+                    cur.getTag(0x7f09999f) == true ||
+                    cur.id == 0x7f099995 ||
+                    cur.id == 0x7f099996 ||
+                    cur is IosTileGroupFolder.IosClusterContainer ||
+                    cur is IosTileGroupFolder.MiniClusterView ||
+                    cur is IosTileGroupFolder.IosFolderExpandedOverlay ||
+                    cur.findViewById<View>(0x7f099995) != null) {
+                    return true
+                }
+            }
+            cur = cur.parent
+            depth++
+        }
+        return false
+    }
+
     fun applyNonAdvancedStyleToChildTile(childView: View?, curState: Any?, classLoader: ClassLoader) {
         if (childView == null) return
-        if (childView.getTag(0x7f09998a) == true) return
+        if (childView.getTag(0x7f099988) == true) return
         try {
-            childView.setTag(0x7f09998a, true)
+            childView.setTag(0x7f099988, true)
             val ctx = childView.context
             val density = ctx.resources.displayMetrics.density
             val radiusResId = ctx.resources.getIdentifier("control_center_universal_corner_radius", "dimen", ctx.packageName)
@@ -1226,40 +1333,49 @@ object ControlCenterGrouping {
             } catch (t: Throwable) { false })
 
             if (isCard) {
+                // Ensure card icon view has mode 0 blur and no blend colors
                 try {
-                    val m = childView.javaClass.getDeclaredMethod("updateDrawableBackground", Boolean::class.javaPrimitiveType)
-                    m.isAccessible = true
-                    m.invoke(childView, false)
-                } catch (t: Throwable) {}
+                    val iconM = childView.javaClass.getMethod("getIcon")
+                    val cardIcon = iconM.invoke(childView) as? View
+                    if (cardIcon != null) {
+                        ChildTileStyleCache.setPassWindowBlur?.invoke(null, cardIcon, false)
+                        ChildTileStyleCache.setModeMethod?.invoke(null, cardIcon, 0)
+                        ChildTileStyleCache.clearBlendMethod?.invoke(null, cardIcon)
+                        val cu = ChildTileStyleCache.commonUtilsInst
+                        if (cu != null) ChildTileStyleCache.clearEffectMethod?.invoke(cu, cardIcon)
+                    }
+                } catch (_: Throwable) {}
 
-                val curBg = childView.background
                 if (stateInt == 2) {
-                    // Enabled card: ensure pure opaque white so the dark group container never bleeds through
-                    if (curBg is LayerDrawable) {
-                        if (curBg.numberOfLayers >= 2) {
-                            curBg.getDrawable(0).alpha = 0 // Hide disabledBg (black) underneath
-                            val enabledLayer = curBg.getDrawable(1)
-                            enabledLayer.mutate().setTint(Color.WHITE)
-                            enabledLayer.alpha = 255
-                        }
-                    } else if (curBg != null) {
-                        curBg.mutate().setTint(Color.WHITE)
-                        curBg.alpha = 255
-                    } else {
-                        childView.background = GradientDrawable().apply {
-                            this.cornerRadius = cornerRadius
-                            setColor(Color.WHITE)
-                        }
+                    // Enabled card: pure opaque white card with 0% layer bleed
+                    childView.background = GradientDrawable().apply {
+                        this.cornerRadius = cornerRadius
+                        setColor(Color.WHITE)
                     }
                 } else {
-                    // Disabled card: restore authentic disabled background with stock mode 0 blur
-                    if (curBg is LayerDrawable) {
-                        if (curBg.numberOfLayers >= 2) {
-                            curBg.getDrawable(0).alpha = 255
-                            curBg.getDrawable(1).alpha = 0
-                        }
+                    // Disabled card: authentic dark frosted background with #66000000
+                    childView.background = GradientDrawable().apply {
+                        this.cornerRadius = cornerRadius
+                        setColor(Color.parseColor("#66000000"))
                     }
                 }
+
+                // Update internal disabledBg / enabledBg fields if present
+                try {
+                    val dBgField = childView.javaClass.getDeclaredField("disabledBg").apply { isAccessible = true }
+                    dBgField.set(childView, GradientDrawable().apply {
+                        this.cornerRadius = cornerRadius
+                        setColor(Color.parseColor("#66000000"))
+                    })
+                } catch (_: Throwable) {}
+                try {
+                    val eBgField = childView.javaClass.getDeclaredField("enabledBg").apply { isAccessible = true }
+                    eBgField.set(childView, GradientDrawable().apply {
+                        this.cornerRadius = cornerRadius
+                        setColor(Color.WHITE)
+                    })
+                } catch (_: Throwable) {}
+
                 childView.outlineProvider = object : android.view.ViewOutlineProvider() {
                     override fun getOutline(v: View, outline: android.graphics.Outline) {
                         outline.setRoundRect(0, 0, v.width, v.height, cornerRadius)
@@ -1288,23 +1404,62 @@ object ControlCenterGrouping {
                     val iconId = ChildTileStyleCache.resIconId
                     val innerIcon = if (iconId > 0) iconView.findViewById<ImageView>(iconId) else null
 
+                    if (innerIcon != null) {
+                        try {
+                            ChildTileStyleCache.setPassWindowBlur?.invoke(null, innerIcon, false)
+                            ChildTileStyleCache.setModeMethod?.invoke(null, innerIcon, 0)
+                            ChildTileStyleCache.clearBlendMethod?.invoke(null, innerIcon)
+                            val cu = ChildTileStyleCache.commonUtilsInst
+                            if (cu != null) {
+                                ChildTileStyleCache.clearEffectMethod?.invoke(cu, innerIcon)
+                            }
+                        } catch (t: Throwable) {}
+                    }
+
                     innerIcon?.background = null
                     iconView.background = null
 
+                    val dBg = GradientDrawable().apply {
+                        shape = GradientDrawable.OVAL
+                        setColor(Color.parseColor("#66000000"))
+                    }
+                    val eBg = GradientDrawable().apply {
+                        shape = GradientDrawable.OVAL
+                        setColor(Color.WHITE)
+                    }
+
                     if (stateInt == 2) {
-                        // Enabled circular tile: ensure pure white so container black cannot bleed through
-                        try {
-                            val enabledBgField = iconView.javaClass.getDeclaredField("enabledBg").apply { isAccessible = true }
-                            val enabledBg = enabledBgField.get(iconView) as? Drawable
-                            enabledBg?.mutate()?.setTint(Color.WHITE)
-                            enabledBg?.alpha = 255
-                        } catch (_: Throwable) {}
-                        val innerDrawable = innerIcon?.drawable
-                        if (innerDrawable is LayerDrawable && innerDrawable.numberOfLayers > 0) {
-                            val bgLayer = innerDrawable.getDrawable(0)
-                            bgLayer?.mutate()?.setTint(Color.WHITE)
-                            bgLayer?.alpha = 255
+                        dBg.alpha = 0
+                        eBg.alpha = 255
+                    } else {
+                        dBg.alpha = 255
+                        eBg.alpha = 0
+                    }
+
+                    try {
+                        val enabledBgField = iconView.javaClass.getDeclaredField("enabledBg").apply { isAccessible = true }
+                        enabledBgField.set(iconView, eBg)
+                    } catch (_: Throwable) {}
+                    try {
+                        val disabledBgField = iconView.javaClass.getDeclaredField("disabledBg").apply { isAccessible = true }
+                        disabledBgField.set(iconView, dBg)
+                    } catch (_: Throwable) {}
+
+                    val innerDrawable = innerIcon?.drawable
+                    val glyph: Drawable? = when {
+                        innerDrawable is LayerDrawable && innerDrawable.numberOfLayers > 0 -> {
+                            innerDrawable.getDrawable(innerDrawable.numberOfLayers - 1)?.mutate()
                         }
+                        innerDrawable != null -> innerDrawable.mutate()
+                        else -> null
+                    }
+
+                    if (glyph != null) {
+                        val combined = LayerDrawable(arrayOf(dBg, eBg, glyph))
+                        combined.setLayerGravity(2, Gravity.CENTER)
+                        val iconSize = (38 * density).toInt()
+                        combined.setLayerSize(2, iconSize, iconSize)
+                        innerIcon?.setImageDrawable(combined)
                     }
                 }
 
@@ -1344,59 +1499,44 @@ object ControlCenterGrouping {
         } catch (t: Throwable) {
             Log.e(TAG, "applyNonAdvancedStyleToChildTile error", t)
         } finally {
-            childView.setTag(0x7f09998a, null)
+            childView.setTag(0x7f099988, null)
         }
     }
 
     fun isChildOfIosCluster(view: View): Boolean {
-        val cached = view.getTag(0x7f09999c)
-        if (cached is Boolean) return cached
+        if (view.getTag(0x7f09999c) == true) return true
         var p = view.parent
         while (p != null) {
             if (p is IosTileGroupFolder.IosClusterContainer || p is IosTileGroupFolder.MiniClusterView) {
-                view.setTag(0x7f09999c, true)
                 return true
             }
             if (p is View && p.getTag(0x7f09999c) == true) {
-                view.setTag(0x7f09999c, true)
                 return true
             }
             p = p.parent
-        }
-        if (view.parent != null) {
-            view.setTag(0x7f09999c, false)
         }
         return false
     }
 
     fun isChildOfGroup(view: View?): Boolean {
         if (view == null) return false
-        val cached = view.getTag(0x7f09999b)
-        if (cached is Boolean) return cached
+        if (view.getTag(0x7f09999c) == true) return true
+        if (view.getTag(0x7f09999b) == true) return true
         var cur: android.view.ViewParent? = view.parent
         while (cur != null) {
             if (cur is DynamicGroupContainer ||
                 cur is IosTileGroupFolder.IosClusterContainer ||
                 cur is IosTileGroupFolder.MiniClusterView ||
                 cur is IosTileGroupFolder.IosFolderExpandedOverlay) {
-                view.setTag(0x7f09999b, true)
                 return true
             }
             if (cur is View) {
                 val pid = cur.id
                 if (pid == 0x7f099995 || pid == 0x7f099996 || cur.getTag(0x7f099995) != null || cur.getTag(0x7f099993) != null || cur.getTag(0x7f09999c) == true) {
-                    view.setTag(0x7f09999b, true)
                     return true
-                }
-                if (cur.javaClass.name.contains("RecyclerView")) {
-                    view.setTag(0x7f09999b, false)
-                    return false
                 }
             }
             cur = cur.parent
-        }
-        if (view.parent != null) {
-            view.setTag(0x7f09999b, false)
         }
         return false
     }
@@ -2068,16 +2208,18 @@ object ControlCenterGrouping {
     }
 
     fun createLargeCardViewHolder(parent: ViewGroup, qsListCtrl: Any?, classLoader: ClassLoader): Any? {
+        sForceNonAdvTile.set(true)
         try {
-            val ctx = parent.context
+            val rawCtx = parent.context
+            val ctx = GroupNonAdvContextWrapper.wrap(rawCtx)
             val density = ctx.resources.displayMetrics.density
-            var sysUIContext = ctx
+            var sysUIContext: Context = ctx
             if (qsListCtrl != null) {
                 try {
                     val sysUIContextField = qsListCtrl.javaClass.getDeclaredField("sysUIContext")
                     sysUIContextField.isAccessible = true
                     val sc = sysUIContextField.get(qsListCtrl) as? Context
-                    if (sc != null) sysUIContext = sc
+                    if (sc != null) sysUIContext = GroupNonAdvContextWrapper.wrap(sc)
                 } catch (t: Throwable) {}
             }
 
@@ -2183,6 +2325,8 @@ object ControlCenterGrouping {
             }
         } catch (t: Throwable) {
             Log.e(TAG, "createLargeCardViewHolder error", t)
+        } finally {
+            sForceNonAdvTile.set(false)
         }
         return null
     }
