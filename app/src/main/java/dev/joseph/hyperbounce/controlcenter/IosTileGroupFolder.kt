@@ -67,6 +67,12 @@ object IosTileGroupFolder {
         return activeOverlayRef?.get()
     }
 
+    fun refreshActiveExpandedOverlay(classLoader: ClassLoader) {
+        val overlay = activeOverlayRef?.get() ?: return
+        if (!overlay.isAttachedToWindow) return
+        overlay.refreshOverlayTiles(classLoader)
+    }
+
     fun dismissActiveOverlay(rootView: View? = null, animated: Boolean = false) {
         val overlay = activeOverlayRef?.get()
         activeOverlayRef = null
@@ -552,6 +558,7 @@ object IosTileGroupFolder {
 
         private val scrimView = View(context)
         private val cardContainer = FrameLayout(context)
+        private var macroGrid: LinearLayout? = null
         private var cardCurrentRadius = 0f
         private var isClosing = false
         private var isDismissed = false
@@ -598,7 +605,7 @@ object IosTileGroupFolder {
             val density = resources.displayMetrics.density
             val isLandscape = resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
             val screenWidth = resources.displayMetrics.widthPixels
-            val cardPadding = (if (isLandscape) 10 * density else 14 * density).toInt()
+            val cardPadding = (if (isLandscape) 8 * density else 14 * density).toInt()
 
             val radiusResId = context.resources.getIdentifier("control_center_universal_corner_radius", "dimen", context.packageName)
             cardCurrentRadius = if (radiusResId != 0) context.resources.getDimension(radiusResId) else 20f * density
@@ -647,10 +654,16 @@ object IosTileGroupFolder {
             val qsListCtrl = sourceContainer.qsListCtrl
             val holder = ControlCenterGrouping.createLargeCardViewHolder(cardContainer, qsListCtrl, classLoader)
             val cardView = ControlCenterGrouping.getViewHolderItemView(holder) as? ViewGroup
-            if (cardView != null) return cardView
+            if (cardView != null) {
+                cardView.setTag(0x7f09999c, true)
+                cardView.setTag(0x7f09999b, true)
+                return cardView
+            }
 
             val fallback = ControlCenterGrouping.inflateTileForType("E", cardContainer, qsListCtrl, classLoader) as ViewGroup
             ControlCenterGrouping.adjustCardToVertical(fallback, density, context)
+            fallback.setTag(0x7f09999c, true)
+            fallback.setTag(0x7f09999b, true)
             return fallback
         }
 
@@ -668,10 +681,11 @@ object IosTileGroupFolder {
             } catch (t: Throwable) { false }
             val showLabels = !isWordless
 
-            val macroGrid = LinearLayout(context).apply {
+            val mg = LinearLayout(context).apply {
                 orientation = LinearLayout.VERTICAL
                 layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
             }
+            macroGrid = mg
 
             val macroRow1 = LinearLayout(context).apply {
                 orientation = LinearLayout.HORIZONTAL
@@ -694,7 +708,7 @@ object IosTileGroupFolder {
             val isLandscape = context.resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
             val res2RowsId = context.resources.getIdentifier("control_center_universal_2_rows_size", "dimen", context.packageName)
             val quadHeight = if (isLandscape) {
-                (118 * density).toInt()
+                (142 * density).toInt()
             } else {
                 if (res2RowsId != 0) context.resources.getDimensionPixelSize(res2RowsId) else (158 * density).toInt()
             }
@@ -709,6 +723,8 @@ object IosTileGroupFolder {
             // Quadrant (0,0): Tile 1
             if (group.specs.isNotEmpty()) {
                 val tile1 = createExpanded2x2CardView(classLoader)
+                tile1.setTag(0x7f09999c, true)
+                tile1.setTag(0x7f09999b, true)
                 macroRow1.addView(tile1, quadWeightLp())
                 bindTileDirectly(tile1, group.specs[0], mainPanelController, classLoader)
             }
@@ -716,6 +732,8 @@ object IosTileGroupFolder {
             // Quadrant (1,0): Tile 2
             if (group.specs.size > 1) {
                 val tile2 = createExpanded2x2CardView(classLoader)
+                tile2.setTag(0x7f09999c, true)
+                tile2.setTag(0x7f09999b, true)
                 macroRow1.addView(tile2, quadWeightLp())
                 bindTileDirectly(tile2, group.specs[1], mainPanelController, classLoader)
             }
@@ -723,6 +741,8 @@ object IosTileGroupFolder {
             // Quadrant (0,1): Tile 3
             if (group.specs.size > 2) {
                 val tile3 = createExpanded2x2CardView(classLoader)
+                tile3.setTag(0x7f09999c, true)
+                tile3.setTag(0x7f09999b, true)
                 macroRow2.addView(tile3, quadWeightLp())
                 bindTileDirectly(tile3, group.specs[2], mainPanelController, classLoader)
             }
@@ -767,6 +787,8 @@ object IosTileGroupFolder {
                 val spec = group.specs[i]
                 val targetSubRow = if (i < 5) subRow1 else subRow2
                 val circView = ControlCenterGrouping.inflateTileForType("C", targetSubRow, qsListCtrl, classLoader)
+                circView.setTag(0x7f09999c, true)
+                circView.setTag(0x7f09999b, true)
                 circView.setTag(0x7f09999e, showLabels)
 
                 val tileLabelId = context.resources.getIdentifier("tile_label", "id", context.packageName)
@@ -774,8 +796,8 @@ object IosTileGroupFolder {
                 val iconFrameId = context.resources.getIdentifier("icon_frame", "id", context.packageName)
                 val iconFrame = if (iconFrameId != 0) circView.findViewById<View>(iconFrameId) else null
 
-                circView.scaleX = if (isLandscape) 0.72f else 1.0f
-                circView.scaleY = if (isLandscape) 0.72f else 1.0f
+                circView.scaleX = 1.0f
+                circView.scaleY = 1.0f
 
                 if (showLabels) {
                     tileLabel?.visibility = View.VISIBLE
@@ -818,9 +840,9 @@ object IosTileGroupFolder {
             miniSubGrid.addView(subRow2)
             macroRow2.addView(miniSubGrid)
 
-            macroGrid.addView(macroRow1)
-            macroGrid.addView(macroRow2)
-            cardContainer.addView(macroGrid)
+            mg.addView(macroRow1)
+            mg.addView(macroRow2)
+            cardContainer.addView(mg)
         }
 
         private fun bindTileDirectly(
@@ -829,6 +851,8 @@ object IosTileGroupFolder {
             mainPanelController: Any?,
             classLoader: ClassLoader
         ) {
+            view.setTag(0x7f09999c, true)
+            view.setTag(0x7f09999b, true)
             try {
                 val recordMap = HashMap<String, Any>()
                 val activeCtrl = sourceContainer.qsListCtrl ?: ControlCenterConfigHolder.sQSListController
@@ -1167,6 +1191,24 @@ object IosTileGroupFolder {
                 }
             }
             return null
+        }
+
+        fun refreshOverlayTiles(classLoader: ClassLoader) {
+            ControlCenterGrouping.applyGroupContainerStyle(cardContainer, classLoader, sourceContainer.group)
+            val mg = macroGrid ?: return
+            refreshTileTree(mg, classLoader)
+        }
+
+        private fun refreshTileTree(view: View, classLoader: ClassLoader) {
+            if (view is ViewGroup) {
+                for (i in 0 until view.childCount) {
+                    val child = view.getChildAt(i) ?: continue
+                    if (child.getTag(0x7f09999c) == true) {
+                        ControlCenterGrouping.applyNonAdvancedStyleToChildTile(child, null, classLoader)
+                    }
+                    refreshTileTree(child, classLoader)
+                }
+            }
         }
 
         override fun dispatchKeyEvent(event: KeyEvent): Boolean {

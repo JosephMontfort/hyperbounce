@@ -932,6 +932,15 @@ object ControlCenterHook {
                         }
                     }
 
+                    if (m.name == "updateConfiguration") {
+                        m.isAccessible = true
+                        module.hook(m).intercept { chain ->
+                            val result = chain.proceed()
+                            ControlCenterGrouping.scheduleRefreshAllGroupContainers(classLoader)
+                            result
+                        }
+                    }
+
                     if (m.name == "changeVisible" && m.parameterTypes.size == 3) {
                         m.isAccessible = true
                         module.hook(m).intercept { chain ->
@@ -2347,7 +2356,7 @@ object ControlCenterHook {
                                         }
                                     }
 
-                                    val isSubTile = ControlCenterConfigHolder.isGroupChild(spec) || isChildOfContainer(itemView)
+                                    val isSubTile = ControlCenterConfigHolder.isGroupChild(spec) || isChildOfContainer(itemView) || (itemView.getTag(0x7f09999c) == true)
                                     if (isSubTile) {
                                         hideAllCustomBadges(itemView)
                                         if (isEdit) {
@@ -2363,7 +2372,8 @@ object ControlCenterHook {
                                     }
 
                                     // Grouped Card Binding (4-Tile & 2-Tile)
-                                    val group = ControlCenterConfigHolder.isGroupAnchor(spec)
+                                    val isActualAnchorContainer = (itemView.findViewById<View>(0x7f099995) != null || itemView.getTag(0x7f099994) != null) && itemView.getTag(0x7f09999c) != true
+                                    val group = if (isActualAnchorContainer) ControlCenterConfigHolder.isGroupAnchor(spec) else null
                                     if (group != null) {
                                         if (!isEdit) {
                                             val container = itemView.findViewById<ViewGroup>(0x7f099995)
@@ -2923,28 +2933,43 @@ object ControlCenterHook {
             try {
                 val cardViewClass = Class.forName("miui.systemui.controlcenter.qs.tileview.QSCardItemView", false, classLoader)
                 for (m in cardViewClass.declaredMethods) {
-                    if (m.name == "updateBlurBlendBackground" || m.name == "updateDrawableBackground" || m.name == "updateBackground") {
+                    if (m.name == "updateBlurBlendBackground" || m.name == "updateDrawableBackground" || m.name == "updateBackground" || m.name == "updateBackgroundBlendModeAndColors") {
                         m.isAccessible = true
                         module.hook(m).intercept { chain ->
                             val itemView = chain.thisObject as? View
                             if (itemView != null && (itemView.findViewById<View>(0x7f099995) != null || itemView.getTag(0x7f099994) != null)) {
                                 ControlCenterGrouping.applyGroupContainerStyle(itemView, classLoader)
                                 null
-                            } else if (itemView != null && isChildOfContainer(itemView)) {
-                                val isAdv = ControlCenterGrouping.isAdvancedTexturesEnabled(itemView.context, classLoader)
-                                if (m.name == "updateBlurBlendBackground" || (m.name == "updateBackground" && isAdv)) {
+                            } else if (itemView != null && (isChildOfContainer(itemView) || itemView.getTag(0x7f09999c) == true)) {
+                                if (m.name == "updateDrawableBackground") {
+                                    val result = chain.proceed()
+                                    if (itemView.getTag(0x7f09998a) != true) {
+                                        val state = try {
+                                            val f = itemView.javaClass.getDeclaredField("state").apply { isAccessible = true }
+                                            f.get(itemView)
+                                        } catch (t: Throwable) { null }
+                                        ControlCenterGrouping.applyNonAdvancedStyleToChildTile(itemView, state, classLoader)
+                                    }
+                                    result
+                                } else {
                                     val state = try {
                                         val f = itemView.javaClass.getDeclaredField("state").apply { isAccessible = true }
                                         f.get(itemView)
                                     } catch (t: Throwable) { null }
                                     ControlCenterGrouping.applyNonAdvancedStyleToChildTile(itemView, state, classLoader)
                                     null
-                                } else {
-                                    chain.proceed()
                                 }
                             } else {
                                 chain.proceed()
                             }
+                        }
+                    }
+                    if (m.name == "onConfigurationChanged") {
+                        m.isAccessible = true
+                        module.hook(m).intercept { chain ->
+                            val result = chain.proceed()
+                            ControlCenterGrouping.scheduleRefreshAllGroupContainers(classLoader)
+                            result
                         }
                     }
                     if (m.name == "updateClip") {
@@ -3001,7 +3026,7 @@ object ControlCenterHook {
                         m.isAccessible = true
                         module.hook(m).intercept { chain ->
                             val iconView = chain.thisObject as? View
-                            if (iconView != null && isChildOfContainer(iconView)) {
+                            if (iconView != null && (isChildOfContainer(iconView) || ControlCenterGrouping.isChildOfIosCluster(iconView) || iconView.getTag(0x7f09999c) == true)) {
                                 val state = chain.args.getOrNull(0) ?: try {
                                     val f = iconView.javaClass.getDeclaredField("state").apply { isAccessible = true }
                                     f.get(iconView)
@@ -3020,11 +3045,11 @@ object ControlCenterHook {
             try {
                 val tileViewClass = Class.forName("miui.systemui.controlcenter.qs.tileview.QSTileItemView", false, classLoader)
                 for (m in tileViewClass.declaredMethods) {
-                    if (m.name == "updateBlurBlendBackground" || m.name == "updateDrawableBackground" || m.name == "updateBackground") {
+                    if (m.name == "updateBlurBlendBackground" || m.name == "updateDrawableBackground" || m.name == "updateBackground" || m.name == "updateBackgroundBlendModeAndColors") {
                         m.isAccessible = true
                         module.hook(m).intercept { chain ->
                             val itemView = chain.thisObject as? View
-                            if (itemView != null && (isChildOfContainer(itemView) || ControlCenterGrouping.isChildOfIosCluster(itemView))) {
+                            if (itemView != null && (isChildOfContainer(itemView) || ControlCenterGrouping.isChildOfIosCluster(itemView) || itemView.getTag(0x7f09999c) == true)) {
                                 itemView.background = null
                                 itemView.clipToOutline = false
                                 null
@@ -3038,7 +3063,7 @@ object ControlCenterHook {
                         module.hook(m).intercept { chain ->
                             val result = chain.proceed()
                             val itemView = chain.thisObject as? View
-                            if (itemView != null && isChildOfContainer(itemView)) {
+                            if (itemView != null && (isChildOfContainer(itemView) || itemView.getTag(0x7f09999c) == true)) {
                                 val state = chain.args.getOrNull(0) ?: try {
                                     val f = itemView.javaClass.getDeclaredField("state").apply { isAccessible = true }
                                     f.get(itemView)
@@ -3047,6 +3072,14 @@ object ControlCenterHook {
                                 itemView.background = null
                                 itemView.clipToOutline = false
                             }
+                            result
+                        }
+                    }
+                    if (m.name == "onConfigurationChanged") {
+                        m.isAccessible = true
+                        module.hook(m).intercept { chain ->
+                            val result = chain.proceed()
+                            ControlCenterGrouping.scheduleRefreshAllGroupContainers(classLoader)
                             result
                         }
                     }
@@ -3061,7 +3094,7 @@ object ControlCenterHook {
                         module.hook(m).intercept { chain ->
                             val result = chain.proceed()
                             val itemView = chain.thisObject as? View
-                            if (itemView != null && isChildOfContainer(itemView)) {
+                            if (itemView != null && (isChildOfContainer(itemView) || itemView.getTag(0x7f09999c) == true)) {
                                 val state = chain.args.getOrNull(0) ?: try {
                                     val f = itemView.javaClass.getDeclaredField("state").apply { isAccessible = true }
                                     f.get(itemView)

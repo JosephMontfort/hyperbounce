@@ -182,6 +182,10 @@ object ControlCenterGrouping {
             } catch (_: Throwable) {}
             initialized = true
         }
+
+        fun invalidate() {
+            initialized = false
+        }
     }
 
     private object ChildTileStyleCache {
@@ -224,6 +228,10 @@ object ControlCenterGrouping {
                 resLabelId = ctx.resources.getIdentifier("tile_label", "id", ctx.packageName)
             } catch (t: Throwable) {}
             initialized = true
+        }
+
+        fun invalidate() {
+            initialized = false
         }
     }
 
@@ -611,7 +619,7 @@ object ControlCenterGrouping {
         sysUIContextField?.isAccessible = true
         val sysUIContext = (sysUIContextField?.get(activeCtrl) as? Context) ?: ctx
 
-        return when (type) {
+        val view = when (type) {
             "E" -> inflateChildCardView(ctx, sysUIContext, classLoader)
             "V" -> {
                 val v = inflateChildCardView(ctx, sysUIContext, classLoader)
@@ -628,6 +636,9 @@ object ControlCenterGrouping {
                 inflateChildTileView(ctx, sysUIContext, classLoader, blurEnabled, density, parent)
             }
         }
+        view.setTag(0x7f09999c, true)
+        view.setTag(0x7f09999b, true)
+        return view
     }
 
     fun getViewHolderItemView(holder: Any?): View? {
@@ -1168,15 +1179,15 @@ object ControlCenterGrouping {
 
     fun applyNonAdvancedStyleToChildTile(childView: View?, curState: Any?, classLoader: ClassLoader) {
         if (childView == null) return
+        if (childView.getTag(0x7f09998a) == true) return
         try {
+            childView.setTag(0x7f09998a, true)
             val ctx = childView.context
             val density = ctx.resources.displayMetrics.density
             val radiusResId = ctx.resources.getIdentifier("control_center_universal_corner_radius", "dimen", ctx.packageName)
             val cornerRadius = if (radiusResId != 0) ctx.resources.getDimension(radiusResId) else 20f * density
 
             ChildTileStyleCache.init(ctx, classLoader)
-
-            val isAdv = isAdvancedTexturesEnabled(ctx, classLoader)
 
             try {
                 ChildTileStyleCache.setPassWindowBlur?.invoke(null, childView, false)
@@ -1214,55 +1225,46 @@ object ControlCenterGrouping {
             } catch (t: Throwable) { false })
 
             if (isCard) {
-                if (isAdv) {
-                    val enabledColorResId = ChildTileStyleCache.resCardEnabledColor
-                    val disabledColorResId = ChildTileStyleCache.resCardDisabledColor
-                    val enabledColor = if (enabledColorResId > 0) {
-                        try { ctx.resources.getColor(enabledColorResId, null) } catch (t: Throwable) { Color.parseColor("#ebffffff") }
-                    } else Color.parseColor("#ebffffff")
-                    val disabledColor = if (disabledColorResId > 0) {
-                        try { ctx.resources.getColor(disabledColorResId, null) } catch (t: Throwable) { Color.parseColor("#66000000") }
-                    } else Color.parseColor("#66000000")
+                try {
+                    val m = childView.javaClass.getDeclaredMethod("updateDrawableBackground", Boolean::class.javaPrimitiveType)
+                    m.isAccessible = true
+                    m.invoke(childView, false)
+                } catch (t: Throwable) {}
 
-                    val cardBg = GradientDrawable().apply {
-                        this.cornerRadius = cornerRadius
-                        setColor(if (stateInt == 2) enabledColor else disabledColor)
-                    }
-                    childView.background = cardBg
-                    childView.outlineProvider = object : android.view.ViewOutlineProvider() {
-                        override fun getOutline(v: View, outline: android.graphics.Outline) {
-                            outline.setRoundRect(0, 0, v.width, v.height, cornerRadius)
+                val curBg = childView.background
+                if (stateInt == 2) {
+                    // Enabled card: ensure pure opaque white so the dark group container never bleeds through
+                    if (curBg is LayerDrawable) {
+                        if (curBg.numberOfLayers >= 2) {
+                            curBg.getDrawable(0).alpha = 0 // Hide disabledBg (black) underneath
+                            val enabledLayer = curBg.getDrawable(1)
+                            enabledLayer.mutate().setTint(Color.WHITE)
+                            enabledLayer.alpha = 255
                         }
-                    }
-                    childView.clipToOutline = true
-                } else {
-                    try {
-                        val m = childView.javaClass.getDeclaredMethod("updateDrawableBackground", Boolean::class.javaPrimitiveType)
-                        m.isAccessible = true
-                        m.invoke(childView, false)
-                    } catch (t: Throwable) {
-                        val enabledColorResId = ChildTileStyleCache.resCardEnabledColor
-                        val disabledColorResId = ChildTileStyleCache.resCardDisabledColor
-                        val enabledColor = if (enabledColorResId > 0) {
-                            try { ctx.resources.getColor(enabledColorResId, null) } catch (t: Throwable) { Color.parseColor("#ebffffff") }
-                        } else Color.parseColor("#ebffffff")
-                        val disabledColor = if (disabledColorResId > 0) {
-                            try { ctx.resources.getColor(disabledColorResId, null) } catch (t: Throwable) { Color.parseColor("#66000000") }
-                        } else Color.parseColor("#66000000")
-
-                        val cardBg = GradientDrawable().apply {
+                    } else if (curBg != null) {
+                        curBg.mutate().setTint(Color.WHITE)
+                        curBg.alpha = 255
+                    } else {
+                        childView.background = GradientDrawable().apply {
                             this.cornerRadius = cornerRadius
-                            setColor(if (stateInt == 2) enabledColor else disabledColor)
+                            setColor(Color.WHITE)
                         }
-                        childView.background = cardBg
-                        childView.outlineProvider = object : android.view.ViewOutlineProvider() {
-                            override fun getOutline(v: View, outline: android.graphics.Outline) {
-                                outline.setRoundRect(0, 0, v.width, v.height, cornerRadius)
-                            }
+                    }
+                } else {
+                    // Disabled card: restore authentic disabled background with stock mode 0 blur
+                    if (curBg is LayerDrawable) {
+                        if (curBg.numberOfLayers >= 2) {
+                            curBg.getDrawable(0).alpha = 255
+                            curBg.getDrawable(1).alpha = 0
                         }
-                        childView.clipToOutline = true
                     }
                 }
+                childView.outlineProvider = object : android.view.ViewOutlineProvider() {
+                    override fun getOutline(v: View, outline: android.graphics.Outline) {
+                        outline.setRoundRect(0, 0, v.width, v.height, cornerRadius)
+                    }
+                }
+                childView.clipToOutline = true
             } else {
                 val iconView = try {
                     val f = ChildTileStyleCache.iconFields.computeIfAbsent(childView.javaClass) { clazz ->
@@ -1285,28 +1287,23 @@ object ControlCenterGrouping {
                     val iconId = ChildTileStyleCache.resIconId
                     val innerIcon = if (iconId > 0) iconView.findViewById<ImageView>(iconId) else null
 
-                    if (isAdv) {
-                        val enabledColorResId = ChildTileStyleCache.resEnabledColor
-                        val disabledColorResId = ChildTileStyleCache.resDisabledColor
-                        val enabledColor = if (enabledColorResId > 0) {
-                            try { ctx.resources.getColor(enabledColorResId, null) } catch (t: Throwable) { Color.parseColor("#ebffffff") }
-                        } else Color.parseColor("#ebffffff")
-                        val disabledColor = if (disabledColorResId > 0) {
-                            try { ctx.resources.getColor(disabledColorResId, null) } catch (t: Throwable) { Color.parseColor("#66000000") }
-                        } else Color.parseColor("#66000000")
+                    innerIcon?.background = null
+                    iconView.background = null
 
-                        val tileBg = GradientDrawable().apply {
-                            shape = GradientDrawable.OVAL
-                            setColor(if (stateInt == 2) enabledColor else disabledColor)
+                    if (stateInt == 2) {
+                        // Enabled circular tile: ensure pure white so container black cannot bleed through
+                        try {
+                            val enabledBgField = iconView.javaClass.getDeclaredField("enabledBg").apply { isAccessible = true }
+                            val enabledBg = enabledBgField.get(iconView) as? Drawable
+                            enabledBg?.mutate()?.setTint(Color.WHITE)
+                            enabledBg?.alpha = 255
+                        } catch (_: Throwable) {}
+                        val innerDrawable = innerIcon?.drawable
+                        if (innerDrawable is LayerDrawable && innerDrawable.numberOfLayers > 0) {
+                            val bgLayer = innerDrawable.getDrawable(0)
+                            bgLayer?.mutate()?.setTint(Color.WHITE)
+                            bgLayer?.alpha = 255
                         }
-                        if (innerIcon != null) {
-                            innerIcon.background = tileBg
-                        } else {
-                            iconView.background = tileBg
-                        }
-                    } else {
-                        innerIcon?.background = null
-                        iconView.background = null
                     }
                 }
 
@@ -1345,6 +1342,8 @@ object ControlCenterGrouping {
             }
         } catch (t: Throwable) {
             Log.e(TAG, "applyNonAdvancedStyleToChildTile error", t)
+        } finally {
+            childView.setTag(0x7f09998a, null)
         }
     }
 
@@ -1401,6 +1400,64 @@ object ControlCenterGrouping {
         return false
     }
 
+    val sActiveAnchorViews: java.util.Set<View> = java.util.Collections.synchronizedSet(
+        java.util.Collections.newSetFromMap(java.util.WeakHashMap<View, Boolean>())
+    )
+
+    private var sLastConfigRefreshTime = 0L
+
+    fun scheduleRefreshAllGroupContainers(classLoader: ClassLoader) {
+        val now = android.os.SystemClock.uptimeMillis()
+        if (now - sLastConfigRefreshTime < 250) return
+        sLastConfigRefreshTime = now
+        refreshAllGroupContainers(classLoader)
+    }
+
+    fun refreshAllGroupContainers(classLoader: ClassLoader) {
+        ChildTileStyleCache.invalidate()
+        GroupContainerBlurCache.invalidate()
+        val viewsToRefresh = ArrayList<View>()
+        synchronized(sActiveAnchorViews) {
+            viewsToRefresh.addAll(sActiveAnchorViews)
+        }
+        for (anchorView in viewsToRefresh) {
+            if (!anchorView.isAttachedToWindow) continue
+            val group = anchorView.getTag(0x7f099994) as? TileGroup
+                ?: ControlCenterConfigHolder.isGroupAnchor(anchorView.getTag(0x7f099990) as? String)
+            if (group != null) {
+                applyGroupContainerStyle(anchorView, classLoader, group)
+                val container = anchorView.findViewById<ViewGroup>(0x7f099995)
+                if (container != null) {
+                    refreshContainerChildren(container, classLoader)
+                }
+            }
+        }
+        IosTileGroupFolder.refreshActiveExpandedOverlay(classLoader)
+    }
+
+    private fun refreshContainerChildren(container: ViewGroup, classLoader: ClassLoader) {
+        for (i in 0 until container.childCount) {
+            val child = container.getChildAt(i) ?: continue
+            if (child is IosTileGroupFolder.IosClusterContainer) {
+                for (j in 0 until child.childCount) {
+                    val c = child.getChildAt(j) ?: continue
+                    if (c is IosTileGroupFolder.MiniClusterView) {
+                        for (k in 0 until c.childCount) {
+                            val miniTile = c.getChildAt(k) ?: continue
+                            applyNonAdvancedStyleToChildTile(miniTile, null, classLoader)
+                        }
+                    } else {
+                        applyNonAdvancedStyleToChildTile(c, null, classLoader)
+                    }
+                }
+            } else if (child is DynamicGroupContainer) {
+                refreshContainerChildren(child, classLoader)
+            } else if (child.getTag(0x7f09999c) == true || isChildOfGroup(child)) {
+                applyNonAdvancedStyleToChildTile(child, null, classLoader)
+            }
+        }
+    }
+
     fun rebindGroupContainer(
         anchorView: View,
         group: TileGroup?,
@@ -1409,6 +1466,7 @@ object ControlCenterGrouping {
         forceRebuild: Boolean = false
     ) {
         try {
+            sActiveAnchorViews.add(anchorView)
             val container = anchorView.findViewById<ViewGroup>(0x7f099995) ?: return
             val resolvedGroup = group 
                 ?: (anchorView.getTag(0x7f099994) as? TileGroup)
@@ -1544,6 +1602,7 @@ object ControlCenterGrouping {
                             for (i in resolvedGroup.specs.indices) {
                                 val pt = layoutRes.placedTiles[i]
                                 val child = inflateTileForType(pt.type, container, activeCtrl, classLoader)
+                                child.setTag(0x7f09999c, true)
                                 child.setTag(0x7f09999b, true)
                                 container.addView(child)
                                 val h = createSubHolderForView(child, mainPanelController, classLoader)
@@ -1567,6 +1626,7 @@ object ControlCenterGrouping {
                 for (i in 0 until count) {
                     val childTile = getChildTileAt(container, i)
                     if (childTile != null) {
+                        childTile.setTag(0x7f09999c, true)
                         childTile.setTag(0x7f09999b, true)
                         val h = createSubHolderForView(childTile, mainPanelController, classLoader)
                         attachSubHolder(h)
