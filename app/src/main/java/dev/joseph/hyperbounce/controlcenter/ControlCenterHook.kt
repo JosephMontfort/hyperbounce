@@ -225,13 +225,27 @@ object ControlCenterHook {
     }
 
     fun isChildOfContainer(view: View?): Boolean {
-        var cur = view?.parent
+        if (view == null) return false
+        val cached = view.getTag(0x7f09999b)
+        if (cached is Boolean) return cached
+        if (view.getTag(0x7f09999c) == true) {
+            view.setTag(0x7f09999b, true)
+            return true
+        }
+        var cur = view.parent
         while (cur != null) {
-            if (cur is View && (cur.id == 0x7f099995 || cur.getTag(0x7f099995) != null || cur.getTag(0x7f099993) != null || cur is IosTileGroupFolder.IosClusterContainer || cur is IosTileGroupFolder.MiniClusterView || cur is IosTileGroupFolder.IosFolderExpandedOverlay)) {
+            if (cur is View && (cur.id == 0x7f099995 || cur.id == 0x7f099996 || cur.getTag(0x7f099995) != null || cur.getTag(0x7f099993) != null || cur is IosTileGroupFolder.IosClusterContainer || cur is IosTileGroupFolder.MiniClusterView || cur is IosTileGroupFolder.IosFolderExpandedOverlay)) {
+                view.setTag(0x7f09999b, true)
                 return true
             }
-            if (cur is View && cur.javaClass.name.contains("RecyclerView")) return false
+            if (cur is View && cur.javaClass.name.contains("RecyclerView")) {
+                view.setTag(0x7f09999b, false)
+                return false
+            }
             cur = cur.parent
+        }
+        if (view.parent != null) {
+            view.setTag(0x7f09999b, false)
         }
         return false
     }
@@ -755,7 +769,7 @@ object ControlCenterHook {
                         module.hook(m).intercept { chain ->
                             try {
                                 val exp = chain.args.getOrNull(0) as? Float
-                                if (exp != null && exp < 0.95f) {
+                                if (exp != null && exp < 0.95f && IosTileGroupFolder.isExpandedOverlayActive()) {
                                     val v = (chain.thisObject.javaClass.getMethod("getView").invoke(chain.thisObject) as? View)
                                     IosTileGroupFolder.dismissActiveOverlay(v, animated = false)
                                 }
@@ -3088,22 +3102,7 @@ object ControlCenterHook {
                     if (m.name == "onFrameCallback") {
                         m.isAccessible = true
                         module.hook(m).intercept { chain ->
-                            val result = chain.proceed()
-                            try {
-                                val cardHolder = chain.thisObject
-                                val itemView = ControlCenterGrouping.getViewHolderItemView(cardHolder)
-                                if (itemView != null) {
-                                    val subHolders = itemView.getTag(0x7f099993) as? Array<*>
-                                    if (subHolders != null) {
-                                        for (subHolder in subHolders) {
-                                            if (subHolder != null) {
-                                                ControlCenterGrouping.updateChildHolderFrame(cardHolder, subHolder)
-                                            }
-                                        }
-                                    }
-                                }
-                            } catch (t: Throwable) {}
-                            result
+                            chain.proceed()
                         }
                     }
                     if (m.name == "onViewAttachedToWindow") {

@@ -180,6 +180,61 @@ object ControlCenterGrouping {
         }
     }
 
+    private object ChildTileStyleCache {
+        var initialized = false
+        var setModeMethod: Method? = null
+        var clearBlendMethod: Method? = null
+        var commonUtilsInst: Any? = null
+        var clearEffectMethod: Method? = null
+        var resCardEnabledColor: Int = -1
+        var resCardDisabledColor: Int = -1
+        var resEnabledColor: Int = -1
+        var resDisabledColor: Int = -1
+        var resIconId: Int = -1
+        var resIconFrameId: Int = -1
+        val iconFields = java.util.concurrent.ConcurrentHashMap<Class<*>, Field?>()
+        val cardFields = java.util.concurrent.ConcurrentHashMap<Class<*>, Field?>()
+
+        fun init(ctx: Context, classLoader: ClassLoader) {
+            if (initialized) return
+            try {
+                val miBlurClass = Class.forName("miui.systemui.util.MiBlurCompat", false, classLoader)
+                setModeMethod = miBlurClass.getMethod("setMiViewBlurModeCompat", View::class.java, Int::class.javaPrimitiveType)
+                clearBlendMethod = miBlurClass.getMethod("clearMiBackgroundBlendColorCompat", View::class.java)
+                val commonUtilsClass = Class.forName("miui.systemui.util.CommonUtils", false, classLoader)
+                commonUtilsInst = commonUtilsClass.getDeclaredField("INSTANCE").get(null)
+                clearEffectMethod = commonUtilsClass.getMethod("clearMiBlurBlendEffect", View::class.java)
+            } catch (t: Throwable) {}
+            try {
+                resCardEnabledColor = ctx.resources.getIdentifier("qs_card_enabled_color", "color", ctx.packageName)
+                resCardDisabledColor = ctx.resources.getIdentifier("qs_card_disabled_color", "color", ctx.packageName)
+                resEnabledColor = ctx.resources.getIdentifier("qs_enabled_color", "color", ctx.packageName)
+                resDisabledColor = ctx.resources.getIdentifier("qs_disabled_color", "color", ctx.packageName)
+                resIconId = ctx.resources.getIdentifier("icon", "id", ctx.packageName)
+                resIconFrameId = ctx.resources.getIdentifier("icon_frame", "id", ctx.packageName)
+            } catch (t: Throwable) {}
+            initialized = true
+        }
+    }
+
+    private object GroupRebindReflectionCache {
+        var mainPanelItemViewHolderClass: Class<*>? = null
+        var modeClass: Class<*>? = null
+        var modeValueOfMethod: Method? = null
+        var setHolderMethod: Method? = null
+        var onBindMethod: Method? = null
+        var updateModeMethod: Method? = null
+        var addCallbackMethod: Method? = null
+        var getTileMethod: Method? = null
+        var setListeningMethod: Method? = null
+        var refreshStateMethod: Method? = null
+        var getStateMethod: Method? = null
+        val setItemMethods = java.util.concurrent.ConcurrentHashMap<Class<*>, Method?>()
+        val updateState3Methods = java.util.concurrent.ConcurrentHashMap<Class<*>, Method?>()
+        val updateState1Methods = java.util.concurrent.ConcurrentHashMap<Class<*>, Method?>()
+        val attachedFields = java.util.concurrent.ConcurrentHashMap<Class<*>, Field?>()
+    }
+
     fun computeGroupLayout(specs: List<String>, tileSizesList: List<String>, targetCols: Int = 2): GroupLayoutResult? {
         if (specs.size < 2 || specs.size != tileSizesList.size) return null
 
@@ -1320,17 +1375,24 @@ object ControlCenterGrouping {
                 f?.getInt(resolvedState) ?: 1
             } catch (t: Throwable) { 1 }
 
+            if (childView.getTag(0x7f09999a) == stateInt) return
+            childView.setTag(0x7f09999a, stateInt)
+
+            ChildTileStyleCache.init(ctx, classLoader)
+
             val isCard = childView.javaClass.name.contains("QSCardItemView") || (try {
-                val f = childView.javaClass.getDeclaredField("card").apply { isAccessible = true }
-                f.getBoolean(childView)
+                val f = ChildTileStyleCache.cardFields.computeIfAbsent(childView.javaClass) { clazz ->
+                    try { clazz.getDeclaredField("card").apply { isAccessible = true } } catch (_: Throwable) { null }
+                }
+                f?.getBoolean(childView) ?: false
             } catch (t: Throwable) { false })
             if (isCard) {
-                val enabledColorResId = ctx.resources.getIdentifier("qs_card_enabled_color", "color", ctx.packageName)
-                val disabledColorResId = ctx.resources.getIdentifier("qs_card_disabled_color", "color", ctx.packageName)
-                val enabledColor = if (enabledColorResId != 0) {
+                val enabledColorResId = ChildTileStyleCache.resCardEnabledColor
+                val disabledColorResId = ChildTileStyleCache.resCardDisabledColor
+                val enabledColor = if (enabledColorResId > 0) {
                     try { ctx.resources.getColor(enabledColorResId, null) } catch (t: Throwable) { Color.parseColor("#ebffffff") }
                 } else Color.parseColor("#ebffffff")
-                val disabledColor = if (disabledColorResId != 0) {
+                val disabledColor = if (disabledColorResId > 0) {
                     try { ctx.resources.getColor(disabledColorResId, null) } catch (t: Throwable) { Color.parseColor("#66000000") }
                 } else Color.parseColor("#66000000")
 
@@ -1347,30 +1409,28 @@ object ControlCenterGrouping {
                 childView.clipToOutline = true
             } else {
                 val iconView = try {
-                    val f = childView.javaClass.getDeclaredField("icon")
-                    f.isAccessible = true
-                    f.get(childView) as? View
+                    val f = ChildTileStyleCache.iconFields.computeIfAbsent(childView.javaClass) { clazz ->
+                        try { clazz.getDeclaredField("icon").apply { isAccessible = true } } catch (_: Throwable) { null }
+                    }
+                    (f?.get(childView) as? View) ?: childView
                 } catch (t: Throwable) { childView }
 
                 if (iconView != null) {
                     try {
-                        val miBlurClass = Class.forName("miui.systemui.util.MiBlurCompat", false, classLoader)
-                        val setModeMethod = miBlurClass.getMethod("setMiViewBlurModeCompat", View::class.java, Int::class.javaPrimitiveType)
-                        setModeMethod.invoke(null, iconView, 0)
-                        val clearBlendMethod = miBlurClass.getMethod("clearMiBackgroundBlendColorCompat", View::class.java)
-                        clearBlendMethod.invoke(null, iconView)
-                        val commonUtilsClass = Class.forName("miui.systemui.util.CommonUtils", false, classLoader)
-                        val commonUtils = commonUtilsClass.getDeclaredField("INSTANCE").get(null)
-                        val clearEffect = commonUtilsClass.getMethod("clearMiBlurBlendEffect", View::class.java)
-                        clearEffect.invoke(commonUtils, iconView)
+                        ChildTileStyleCache.setModeMethod?.invoke(null, iconView, 0)
+                        ChildTileStyleCache.clearBlendMethod?.invoke(null, iconView)
+                        val cu = ChildTileStyleCache.commonUtilsInst
+                        if (cu != null) {
+                            ChildTileStyleCache.clearEffectMethod?.invoke(cu, iconView)
+                        }
                     } catch (t: Throwable) {}
 
-                    val enabledColorResId = ctx.resources.getIdentifier("qs_enabled_color", "color", ctx.packageName)
-                    val disabledColorResId = ctx.resources.getIdentifier("qs_disabled_color", "color", ctx.packageName)
-                    val enabledColor = if (enabledColorResId != 0) {
+                    val enabledColorResId = ChildTileStyleCache.resEnabledColor
+                    val disabledColorResId = ChildTileStyleCache.resDisabledColor
+                    val enabledColor = if (enabledColorResId > 0) {
                         try { ctx.resources.getColor(enabledColorResId, null) } catch (t: Throwable) { Color.parseColor("#ebffffff") }
                     } else Color.parseColor("#ebffffff")
-                    val disabledColor = if (disabledColorResId != 0) {
+                    val disabledColor = if (disabledColorResId > 0) {
                         try { ctx.resources.getColor(disabledColorResId, null) } catch (t: Throwable) { Color.parseColor("#66000000") }
                     } else Color.parseColor("#66000000")
 
@@ -1378,7 +1438,8 @@ object ControlCenterGrouping {
                         shape = GradientDrawable.OVAL
                         setColor(if (stateInt == 2) enabledColor else disabledColor)
                     }
-                    val innerIcon = iconView.findViewById<ImageView>(ctx.resources.getIdentifier("icon", "id", ctx.packageName))
+                    val iconId = ChildTileStyleCache.resIconId
+                    val innerIcon = if (iconId > 0) iconView.findViewById<ImageView>(iconId) else null
                     if (innerIcon != null) {
                         innerIcon.background = tileBg
                     } else {
@@ -1386,8 +1447,8 @@ object ControlCenterGrouping {
                     }
                 }
 
-                val iconFrameId = ctx.resources.getIdentifier("icon_frame", "id", ctx.packageName)
-                if (iconFrameId != 0) {
+                val iconFrameId = ChildTileStyleCache.resIconFrameId
+                if (iconFrameId > 0) {
                     val iconFrame = childView.findViewById<View>(iconFrameId)
                     iconFrame?.background = null
                 }
@@ -1642,65 +1703,94 @@ object ControlCenterGrouping {
 
                 if (childRecord != null && subHolder != null && childView != null) {
                     try {
-                        for (shM in subHolder.javaClass.methods) {
-                            if (shM.name.startsWith("setItem")) {
-                                shM.invoke(subHolder, childRecord)
-                                break
+                        val shM = GroupRebindReflectionCache.setItemMethods.computeIfAbsent(subHolder.javaClass) { clazz ->
+                            clazz.methods.firstOrNull { it.name.startsWith("setItem") }
+                        }
+                        shM?.invoke(subHolder, childRecord)
+
+                        if (GroupRebindReflectionCache.mainPanelItemViewHolderClass == null) {
+                            GroupRebindReflectionCache.mainPanelItemViewHolderClass = Class.forName("miui.systemui.controlcenter.panel.main.recyclerview.MainPanelItemViewHolder", false, classLoader)
+                        }
+                        if (GroupRebindReflectionCache.setHolderMethod == null && GroupRebindReflectionCache.mainPanelItemViewHolderClass != null) {
+                            GroupRebindReflectionCache.setHolderMethod = childRecord.javaClass.getMethod("setHolder", GroupRebindReflectionCache.mainPanelItemViewHolderClass)
+                        }
+                        GroupRebindReflectionCache.setHolderMethod?.invoke(childRecord, subHolder)
+
+                        if (GroupRebindReflectionCache.onBindMethod == null) {
+                            GroupRebindReflectionCache.onBindMethod = childRecord.javaClass.getMethod("onBindViewHolder")
+                        }
+                        GroupRebindReflectionCache.onBindMethod?.invoke(childRecord)
+
+                        val af = GroupRebindReflectionCache.attachedFields.computeIfAbsent(subHolder.javaClass) { clazz ->
+                            var c: Class<*>? = clazz
+                            var found: Field? = null
+                            while (c != null && found == null) {
+                                try {
+                                    found = c.getDeclaredField("attached").apply { isAccessible = true }
+                                } catch (_: Throwable) { c = c.superclass }
                             }
+                            found
                         }
-                        val setHolderMethod = childRecord.javaClass.getMethod("setHolder", Class.forName("miui.systemui.controlcenter.panel.main.recyclerview.MainPanelItemViewHolder", false, classLoader))
-                        setHolderMethod.invoke(childRecord, subHolder)
-
-                        val onBindMethod = childRecord.javaClass.getMethod("onBindViewHolder")
-                        onBindMethod.invoke(childRecord)
-
-                        var vhCls: Class<*>? = subHolder.javaClass
-                        while (vhCls != null) {
-                            try {
-                                val af = vhCls.getDeclaredField("attached")
-                                af.isAccessible = true
-                                af.setBoolean(subHolder, true)
-                                break
-                            } catch (t: Throwable) { vhCls = vhCls.superclass }
-                        }
+                        af?.setBoolean(subHolder, true)
 
                         try {
-                            val modeClass = Class.forName("miui.systemui.controlcenter.panel.main.MainPanelController\$Mode", false, classLoader)
-                            val currentMode = modeClass.getMethod("valueOf", String::class.java).invoke(null, if (isEdit) "EDIT" else "NORMAL")
-                            val updateModeMethod = childRecord.javaClass.getMethod("updateMode", modeClass, Boolean::class.javaPrimitiveType)
-                            updateModeMethod.invoke(childRecord, currentMode, false)
+                            if (GroupRebindReflectionCache.modeClass == null) {
+                                GroupRebindReflectionCache.modeClass = Class.forName("miui.systemui.controlcenter.panel.main.MainPanelController\$Mode", false, classLoader)
+                                GroupRebindReflectionCache.modeValueOfMethod = GroupRebindReflectionCache.modeClass?.getMethod("valueOf", String::class.java)
+                            }
+                            val currentMode = GroupRebindReflectionCache.modeValueOfMethod?.invoke(null, if (isEdit) "EDIT" else "NORMAL")
+                            if (GroupRebindReflectionCache.updateModeMethod == null && GroupRebindReflectionCache.modeClass != null) {
+                                GroupRebindReflectionCache.updateModeMethod = childRecord.javaClass.getMethod("updateMode", GroupRebindReflectionCache.modeClass, Boolean::class.javaPrimitiveType)
+                            }
+                            GroupRebindReflectionCache.updateModeMethod?.invoke(childRecord, currentMode, false)
                         } catch (t: Throwable) {}
 
                         try {
-                            val addCb = childRecord.javaClass.getMethod("addCallback")
-                            addCb.invoke(childRecord)
+                            if (GroupRebindReflectionCache.addCallbackMethod == null) {
+                                GroupRebindReflectionCache.addCallbackMethod = childRecord.javaClass.getMethod("addCallback")
+                            }
+                            GroupRebindReflectionCache.addCallbackMethod?.invoke(childRecord)
                         } catch (t: Throwable) {}
 
                         try {
-                            val getTileM = childRecord.javaClass.getMethod("getTile")
-                            val tileObj = getTileM.invoke(childRecord)
+                            if (GroupRebindReflectionCache.getTileMethod == null) {
+                                GroupRebindReflectionCache.getTileMethod = childRecord.javaClass.getMethod("getTile")
+                            }
+                            val tileObj = GroupRebindReflectionCache.getTileMethod?.invoke(childRecord)
                             if (tileObj != null) {
-                                val setLisM = tileObj.javaClass.getMethod("setListening", Any::class.java, Boolean::class.javaPrimitiveType)
-                                setLisM.invoke(tileObj, childRecord, true)
-                                val refM = tileObj.javaClass.getMethod("refreshState")
-                                refM.invoke(tileObj)
+                                if (GroupRebindReflectionCache.setListeningMethod == null) {
+                                    GroupRebindReflectionCache.setListeningMethod = tileObj.javaClass.getMethod("setListening", Any::class.java, Boolean::class.javaPrimitiveType)
+                                }
+                                GroupRebindReflectionCache.setListeningMethod?.invoke(tileObj, childRecord, true)
 
-                                val getStateM = tileObj.javaClass.getMethod("getState")
-                                val curState = getStateM.invoke(tileObj)
+                                val needsRefresh = childView.getTag(0x7f099998) != childSpec
+                                if (needsRefresh) {
+                                    if (GroupRebindReflectionCache.refreshStateMethod == null) {
+                                        GroupRebindReflectionCache.refreshStateMethod = tileObj.javaClass.getMethod("refreshState")
+                                    }
+                                    GroupRebindReflectionCache.refreshStateMethod?.invoke(tileObj)
+                                    childView.setTag(0x7f099998, childSpec)
+                                }
+
+                                if (GroupRebindReflectionCache.getStateMethod == null) {
+                                    GroupRebindReflectionCache.getStateMethod = tileObj.javaClass.getMethod("getState")
+                                }
+                                val curState = GroupRebindReflectionCache.getStateMethod?.invoke(tileObj)
                                 if (curState != null) {
-                                    for (vm in childView.javaClass.methods) {
-                                        if (vm.name == "updateState") {
-                                            vm.isAccessible = true
-                                            if (vm.parameterTypes.size == 3) {
-                                                val isConnected = (childSpec == "wifi" || childSpec == "cell")
-                                                vm.invoke(childView, curState, isConnected, false)
-                                                applyNonAdvancedStyleToChildTile(childView, curState, classLoader)
-                                                break
-                                            } else if (vm.parameterTypes.size == 1) {
-                                                vm.invoke(childView, curState)
-                                                applyNonAdvancedStyleToChildTile(childView, curState, classLoader)
-                                                break
-                                            }
+                                    val vm3 = GroupRebindReflectionCache.updateState3Methods.computeIfAbsent(childView.javaClass) { clazz ->
+                                        clazz.methods.firstOrNull { it.name == "updateState" && it.parameterTypes.size == 3 }
+                                    }
+                                    if (vm3 != null) {
+                                        val isConnected = (childSpec == "wifi" || childSpec == "cell")
+                                        vm3.invoke(childView, curState, isConnected, false)
+                                        applyNonAdvancedStyleToChildTile(childView, curState, classLoader)
+                                    } else {
+                                        val vm1 = GroupRebindReflectionCache.updateState1Methods.computeIfAbsent(childView.javaClass) { clazz ->
+                                            clazz.methods.firstOrNull { it.name == "updateState" && it.parameterTypes.size == 1 }
+                                        }
+                                        if (vm1 != null) {
+                                            vm1.invoke(childView, curState)
+                                            applyNonAdvancedStyleToChildTile(childView, curState, classLoader)
                                         }
                                     }
                                 }

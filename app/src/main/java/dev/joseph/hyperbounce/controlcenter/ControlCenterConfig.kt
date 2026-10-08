@@ -148,6 +148,7 @@ data class TileGroup(
 }
 
 object GroupedTileReflectionCache {
+    val sWokenRecords: MutableSet<Any> = java.util.Collections.newSetFromMap(java.util.WeakHashMap<Any, Boolean>())
     var startListeningMethod: java.lang.reflect.Method? = null
     var getTileMethod: java.lang.reflect.Method? = null
     var setListeningMethod: java.lang.reflect.Method? = null
@@ -899,6 +900,10 @@ object ControlCenterConfigHolder {
         }
         sLastWakeTimestamp = now
 
+        if (sPendingOrientationRebind) {
+            GroupedTileReflectionCache.sWokenRecords.clear()
+        }
+
         try {
             val rv = sRecyclerView?.get() as? ViewGroup
             if (rv != null) {
@@ -941,10 +946,14 @@ object ControlCenterConfigHolder {
                                 }
                                 GroupedTileReflectionCache.setListeningMethod?.invoke(tileObj, r, true)
 
-                                if (GroupedTileReflectionCache.refreshStateMethod == null) {
-                                    GroupedTileReflectionCache.refreshStateMethod = tileObj.javaClass.getMethod("refreshState")
+                                val needsRefresh = !GroupedTileReflectionCache.sWokenRecords.contains(r)
+                                if (needsRefresh) {
+                                    if (GroupedTileReflectionCache.refreshStateMethod == null) {
+                                        GroupedTileReflectionCache.refreshStateMethod = tileObj.javaClass.getMethod("refreshState")
+                                    }
+                                    GroupedTileReflectionCache.refreshStateMethod?.invoke(tileObj)
+                                    GroupedTileReflectionCache.sWokenRecords.add(r)
                                 }
-                                GroupedTileReflectionCache.refreshStateMethod?.invoke(tileObj)
 
                                 if (GroupedTileReflectionCache.getStateMethod == null) {
                                     GroupedTileReflectionCache.getStateMethod = tileObj.javaClass.getMethod("getState")
@@ -1878,6 +1887,9 @@ object ControlCenterConfigHolder {
 
     fun refreshAdapter(root: View?, ctx: Context?, isStructuralChange: Boolean = false) {
         try {
+            if (isStructuralChange) {
+                GroupedTileReflectionCache.sWokenRecords.clear()
+            }
             val targetCtx = ctx ?: root?.context ?: sLastKnownContext ?: return
             if (!sHasLoadedPriorities) loadSavedPriorities(targetCtx)
             val rvsToProcess = mutableListOf<View>()
