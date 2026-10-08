@@ -2238,8 +2238,10 @@ object ControlCenterGrouping {
 
             for (i in 0 until 2) {
                 val childTile = LayoutInflater.from(ctx).inflate(tileLayoutId, container, false)
-                childTile.clipChildren = false
-                childTile.clipToPadding = false
+                if (childTile is ViewGroup) {
+                    childTile.clipChildren = false
+                    childTile.clipToPadding = false
+                }
 
                 val iconView = if (iconCtor.parameterTypes.size == 5) {
                     iconCtor.newInstance(ctx, sysUIContext, false, 4, null)
