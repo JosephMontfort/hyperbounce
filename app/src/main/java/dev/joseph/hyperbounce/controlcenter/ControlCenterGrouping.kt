@@ -4,6 +4,7 @@ import android.content.Context
 import android.graphics.Color
 import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
+import android.graphics.drawable.LayerDrawable
 import android.util.Log
 import android.view.Gravity
 import android.view.LayoutInflater
@@ -1400,7 +1401,7 @@ object ControlCenterGrouping {
         return false
     }
 
-    val sActiveAnchorViews: java.util.Set<View> = java.util.Collections.synchronizedSet(
+    val sActiveAnchorViews: MutableSet<View> = java.util.Collections.synchronizedSet(
         java.util.Collections.newSetFromMap(java.util.WeakHashMap<View, Boolean>())
     )
 
