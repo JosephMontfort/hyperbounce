@@ -2927,7 +2927,7 @@ object ControlCenterHook {
                         m.isAccessible = true
                         module.hook(m).intercept { chain ->
                             val itemView = chain.thisObject as? View
-                            if (itemView != null && itemView.findViewById<View>(0x7f099995) != null) {
+                            if (itemView != null && (itemView.findViewById<View>(0x7f099995) != null || itemView.getTag(0x7f099994) != null)) {
                                 ControlCenterGrouping.applyGroupContainerStyle(itemView, classLoader)
                                 null
                             } else if (itemView != null && isChildOfContainer(itemView)) {
@@ -2950,9 +2950,10 @@ object ControlCenterHook {
                         m.isAccessible = true
                         module.hook(m).intercept { chain ->
                             val itemView = chain.thisObject as? ViewGroup
-                            if (itemView != null && itemView.findViewById<View>(0x7f099995) != null) {
-                                itemView.clipChildren = false
-                                itemView.clipToOutline = false
+                            if (itemView != null && (itemView.findViewById<View>(0x7f099995) != null || itemView.getTag(0x7f099994) != null)) {
+                                itemView.clipChildren = true
+                                itemView.clipToOutline = true
+                                itemView.invalidateOutline()
                                 null
                             } else {
                                 chain.proceed()
@@ -2995,7 +2996,7 @@ object ControlCenterHook {
             try {
                 val iconViewClass = Class.forName("miui.systemui.controlcenter.qs.tileview.QSTileItemIconView", false, classLoader)
                 for (m in iconViewClass.declaredMethods) {
-                    if (m.name == "applyBlendColor") {
+                    if (m.name == "applyBlendColor" || m.name == "setIconProgress") {
                         m.isAccessible = true
                         module.hook(m).intercept { chain ->
                             val iconView = chain.thisObject as? View
