@@ -773,8 +773,8 @@ object IosTileGroupFolder {
                 val iconFrameId = context.resources.getIdentifier("icon_frame", "id", context.packageName)
                 val iconFrame = if (iconFrameId != 0) circView.findViewById<View>(iconFrameId) else null
 
-                circView.scaleX = 1.0f
-                circView.scaleY = 1.0f
+                circView.scaleX = if (isLandscape) 0.72f else 1.0f
+                circView.scaleY = if (isLandscape) 0.72f else 1.0f
 
                 if (showLabels) {
                     tileLabel?.visibility = View.VISIBLE

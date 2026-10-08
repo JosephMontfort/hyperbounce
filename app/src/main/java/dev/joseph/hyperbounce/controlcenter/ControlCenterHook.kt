@@ -1711,9 +1711,16 @@ object ControlCenterHook {
                                             if (holder != null) return@intercept holder
                                         }
                                         if (viewType in 2274..2276 || viewType in 2281..2284) {
-                                            val rowCount = if (viewType == 2275) 1 else 2
-                                            val holder = ControlCenterGrouping.createDynamicGroupViewHolder(parent, qsListCtrl, classLoader, rowCount)
-                                            if (holder != null) return@intercept holder
+                                            if (viewType == 2275) {
+                                                val holder = ControlCenterGrouping.createGrouped2TileViewHolder(parent, qsListCtrl, classLoader, false)
+                                                if (holder != null) return@intercept holder
+                                            } else if (viewType == 2276) {
+                                                val holder = ControlCenterGrouping.createGrouped2TileViewHolder(parent, qsListCtrl, classLoader, true)
+                                                if (holder != null) return@intercept holder
+                                            } else {
+                                                val holder = ControlCenterGrouping.createGroupedCardViewHolder(parent, qsListCtrl, classLoader)
+                                                if (holder != null) return@intercept holder
+                                            }
                                         }
                                         if (viewType in 2285..2290) {
                                             val holder = ControlCenterGrouping.createDynamicGroupViewHolder(parent, qsListCtrl, classLoader, viewType - 2284)
@@ -1802,9 +1809,16 @@ object ControlCenterHook {
                                         if (qsListCtrl == null) qsListCtrl = ControlCenterConfigHolder.sQSListController
 
                                         if (vt in 2274..2276 || vt in 2281..2284) {
-                                            val rowCount = if (vt == 2275) 1 else 2
-                                            val holder = ControlCenterGrouping.createDynamicGroupViewHolder(parent, qsListCtrl, classLoader, rowCount)
-                                            if (holder != null) return@intercept holder
+                                            if (vt == 2275) {
+                                                val holder = ControlCenterGrouping.createGrouped2TileViewHolder(parent, qsListCtrl, classLoader, false)
+                                                if (holder != null) return@intercept holder
+                                            } else if (vt == 2276) {
+                                                val holder = ControlCenterGrouping.createGrouped2TileViewHolder(parent, qsListCtrl, classLoader, true)
+                                                if (holder != null) return@intercept holder
+                                            } else {
+                                                val holder = ControlCenterGrouping.createGroupedCardViewHolder(parent, qsListCtrl, classLoader)
+                                                if (holder != null) return@intercept holder
+                                            }
                                         } else if (vt in 2285..2290) {
                                             val holder = ControlCenterGrouping.createDynamicGroupViewHolder(parent, qsListCtrl, classLoader, vt - 2284)
                                             if (holder != null) return@intercept holder
@@ -1976,8 +1990,19 @@ object ControlCenterHook {
                                     val g = ControlCenterConfigHolder.isGroupAnchor(spec)
                                     if (g != null) {
                                         val h = g.getEffectiveRowCount()
-                                        val clampedH = Math.max(1, Math.min(6, h))
-                                        return@intercept (2284 + clampedH)
+                                        when (g.getEffectiveLayoutType()) {
+                                            "2_EXPANDED" -> return@intercept 2281
+                                            "2_VERTICAL" -> return@intercept 2282
+                                            "1_EXP_2_CIRC" -> return@intercept 2283
+                                            "1_VERT_2_CIRC" -> return@intercept 2284
+                                            "4_CIRCULAR" -> return@intercept 2274
+                                            "2_CIRCULAR_VERT" -> return@intercept 2276
+                                            "2_CIRCULAR_HORIZ" -> return@intercept 2275
+                                            else -> {
+                                                val clampedH = Math.max(1, Math.min(6, h))
+                                                return@intercept (2284 + clampedH)
+                                            }
+                                        }
                                     }
                                     if (ControlCenterConfigHolder.sCircularCardSpecs.contains(spec)) {
                                         return@intercept 8453
@@ -2907,16 +2932,12 @@ object ControlCenterHook {
                                 null
                             } else if (itemView != null && isChildOfContainer(itemView)) {
                                 if (m.name == "updateBlurBlendBackground" || m.name == "updateBackground") {
-                                    if (ControlCenterGrouping.isAdvancedTexturesEnabled(itemView.context, classLoader)) {
-                                        chain.proceed()
-                                    } else {
-                                        val state = try {
-                                            val f = itemView.javaClass.getDeclaredField("state").apply { isAccessible = true }
-                                            f.get(itemView)
-                                        } catch (t: Throwable) { null }
-                                        ControlCenterGrouping.applyNonAdvancedStyleToChildTile(itemView, state, classLoader)
-                                        null
-                                    }
+                                    val state = try {
+                                        val f = itemView.javaClass.getDeclaredField("state").apply { isAccessible = true }
+                                        f.get(itemView)
+                                    } catch (t: Throwable) { null }
+                                    ControlCenterGrouping.applyNonAdvancedStyleToChildTile(itemView, state, classLoader)
+                                    null
                                 } else {
                                     chain.proceed()
                                 }
@@ -2979,9 +3000,6 @@ object ControlCenterHook {
                         module.hook(m).intercept { chain ->
                             val iconView = chain.thisObject as? View
                             if (iconView != null && isChildOfContainer(iconView)) {
-                                if (ControlCenterGrouping.isAdvancedTexturesEnabled(iconView.context, classLoader)) {
-                                    return@intercept chain.proceed()
-                                }
                                 val state = chain.args.getOrNull(0) ?: try {
                                     val f = iconView.javaClass.getDeclaredField("state").apply { isAccessible = true }
                                     f.get(iconView)
@@ -3019,13 +3037,11 @@ object ControlCenterHook {
                             val result = chain.proceed()
                             val itemView = chain.thisObject as? View
                             if (itemView != null && isChildOfContainer(itemView)) {
-                                if (!ControlCenterGrouping.isAdvancedTexturesEnabled(itemView.context, classLoader)) {
-                                    val state = chain.args.getOrNull(0) ?: try {
-                                        val f = itemView.javaClass.getDeclaredField("state").apply { isAccessible = true }
-                                        f.get(itemView)
-                                    } catch (t: Throwable) { null }
-                                    ControlCenterGrouping.applyNonAdvancedStyleToChildTile(itemView, state, classLoader)
-                                }
+                                val state = chain.args.getOrNull(0) ?: try {
+                                    val f = itemView.javaClass.getDeclaredField("state").apply { isAccessible = true }
+                                    f.get(itemView)
+                                } catch (t: Throwable) { null }
+                                ControlCenterGrouping.applyNonAdvancedStyleToChildTile(itemView, state, classLoader)
                                 itemView.background = null
                                 itemView.clipToOutline = false
                             }
@@ -3044,13 +3060,11 @@ object ControlCenterHook {
                             val result = chain.proceed()
                             val itemView = chain.thisObject as? View
                             if (itemView != null && isChildOfContainer(itemView)) {
-                                if (!ControlCenterGrouping.isAdvancedTexturesEnabled(itemView.context, classLoader)) {
-                                    val state = chain.args.getOrNull(0) ?: try {
-                                        val f = itemView.javaClass.getDeclaredField("state").apply { isAccessible = true }
-                                        f.get(itemView)
-                                    } catch (t: Throwable) { null }
-                                    ControlCenterGrouping.applyNonAdvancedStyleToChildTile(itemView, state, classLoader)
-                                }
+                                val state = chain.args.getOrNull(0) ?: try {
+                                    val f = itemView.javaClass.getDeclaredField("state").apply { isAccessible = true }
+                                    f.get(itemView)
+                                } catch (t: Throwable) { null }
+                                ControlCenterGrouping.applyNonAdvancedStyleToChildTile(itemView, state, classLoader)
                             }
                             result
                         }
