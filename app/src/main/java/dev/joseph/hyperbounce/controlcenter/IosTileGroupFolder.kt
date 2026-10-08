@@ -767,6 +767,7 @@ object IosTileGroupFolder {
                 val spec = group.specs[i]
                 val targetSubRow = if (i < 5) subRow1 else subRow2
                 val circView = ControlCenterGrouping.inflateTileForType("C", targetSubRow, qsListCtrl, classLoader)
+                circView.setTag(0x7f09999e, showLabels)
 
                 val tileLabelId = context.resources.getIdentifier("tile_label", "id", context.packageName)
                 val tileLabel = if (tileLabelId != 0) circView.findViewById<TextView>(tileLabelId) else null

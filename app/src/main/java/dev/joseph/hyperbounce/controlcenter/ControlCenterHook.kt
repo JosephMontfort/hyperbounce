@@ -2931,7 +2931,8 @@ object ControlCenterHook {
                                 ControlCenterGrouping.applyGroupContainerStyle(itemView, classLoader)
                                 null
                             } else if (itemView != null && isChildOfContainer(itemView)) {
-                                if (m.name == "updateBlurBlendBackground" || m.name == "updateBackground") {
+                                val isAdv = ControlCenterGrouping.isAdvancedTexturesEnabled(itemView.context, classLoader)
+                                if (m.name == "updateBlurBlendBackground" || (m.name == "updateBackground" && isAdv)) {
                                     val state = try {
                                         val f = itemView.javaClass.getDeclaredField("state").apply { isAccessible = true }
                                         f.get(itemView)

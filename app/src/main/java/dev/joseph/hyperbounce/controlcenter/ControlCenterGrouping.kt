@@ -147,8 +147,9 @@ object ControlCenterGrouping {
         var clearBlendMethod: Method? = null
         var commonUtilsInst: Any? = null
         var clearEffectMethod: Method? = null
+        var resCardDisabledColor: Int = -1
 
-        fun init(classLoader: ClassLoader) {
+        fun init(ctx: Context, classLoader: ClassLoader) {
             if (initialized) return
             try {
                 val ccUtils = Class.forName("miui.systemui.controlcenter.utils.ControlCenterUtils", false, classLoader)
@@ -176,6 +177,9 @@ object ControlCenterGrouping {
             } catch (t: Throwable) {
                 Log.e(TAG, "GroupContainerBlurCache init error", t)
             }
+            try {
+                resCardDisabledColor = ctx.resources.getIdentifier("qs_card_disabled_color", "color", ctx.packageName)
+            } catch (_: Throwable) {}
             initialized = true
         }
     }
@@ -1074,7 +1078,7 @@ object ControlCenterGrouping {
                 return
             }
 
-            GroupContainerBlurCache.init(classLoader)
+            GroupContainerBlurCache.init(ctx, classLoader)
 
             try {
                 val crField = view.javaClass.getDeclaredField("_cornerRadius")
@@ -1106,35 +1110,43 @@ object ControlCenterGrouping {
                 }
             } catch (t: Throwable) {}
 
-            var cardBg: android.graphics.drawable.Drawable? = null
-            var bgResId = ctx.resources.getIdentifier("qs_card_background_disabled", "drawable", ctx.packageName)
-            if (bgResId == 0) {
-                bgResId = ctx.resources.getIdentifier("qs_background_disabled", "drawable", ctx.packageName)
+            val colorResId = GroupContainerBlurCache.resCardDisabledColor
+            val cardColor = if (colorResId > 0) {
+                try { ctx.resources.getColor(colorResId, null) } catch (t: Throwable) { Color.parseColor("#66000000") }
+            } else Color.parseColor("#66000000")
+
+            val cardBg = GradientDrawable().apply {
+                this.cornerRadius = cornerRadius
+                setColor(cardColor)
             }
-            if (bgResId != 0) {
-                try {
-                    cardBg = ctx.theme.getDrawable(bgResId).mutate()
-                } catch (t: Throwable) {}
-            }
-            if (cardBg != null) {
-                view.background = cardBg
-            } else {
-                val fallbackBg = GradientDrawable().apply {
-                    this.cornerRadius = cornerRadius
-                    setColor(Color.parseColor("#26808080"))
-                }
-                view.background = fallbackBg
-            }
+            view.background = cardBg
         } catch (t: Throwable) {
             Log.e(TAG, "applyGroupContainerStyle error", t)
         }
     }
 
     fun isAdvancedTexturesEnabled(context: Context, classLoader: ClassLoader? = null): Boolean {
+        val m = GroupContainerBlurCache.getBlurM
+        if (m != null) {
+            try {
+                val res = m.invoke(null, context) as? Boolean
+                if (res != null) return res
+            } catch (_: Throwable) {}
+        }
         try {
-            if (android.provider.Settings.Secure.getInt(context.contentResolver, "background_blur_enable", 0) == 1) {
-                return true
-            }
+            val cl = classLoader ?: context.classLoader
+            val ccUtils = Class.forName("miui.systemui.controlcenter.utils.ControlCenterUtils", false, cl)
+            val getBlurM = ccUtils.getMethod("getBackgroundBlurOpenedInDefaultTheme", Context::class.java)
+            val res = getBlurM.invoke(null, context) as? Boolean
+            if (res != null) return res
+        } catch (t: Throwable) {}
+
+        try {
+            val cl = classLoader ?: context.classLoader
+            val miBlurClass = Class.forName("miui.systemui.util.MiBlurCompat", false, cl)
+            val getBlurM = miBlurClass.getMethod("getBackgroundBlurOpenedInDefaultTheme", Context::class.java)
+            val res = getBlurM.invoke(null, context) as? Boolean
+            if (res != null) return res
         } catch (t: Throwable) {}
 
         try {
@@ -1142,15 +1154,13 @@ object ControlCenterGrouping {
             val hmuClass = Class.forName("miuix.core.util.HyperMaterialUtils", false, cl)
             val isFeatureEnableM = hmuClass.getMethod("isFeatureEnable", Context::class.java)
             val res = isFeatureEnableM.invoke(null, context) as? Boolean
-            if (res == true) return true
+            if (res != null) return res
         } catch (t: Throwable) {}
 
         try {
-            val cl = classLoader ?: context.classLoader
-            val ccUtils = Class.forName("miui.systemui.controlcenter.utils.ControlCenterUtils", false, cl)
-            val getBlurM = ccUtils.getMethod("getBackgroundBlurOpenedInDefaultTheme", Context::class.java)
-            val res = getBlurM.invoke(null, context) as? Boolean
-            if (res == true) return true
+            if (android.provider.Settings.Secure.getInt(context.contentResolver, "background_blur_enable", 0) == 1) {
+                return true
+            }
         } catch (t: Throwable) {}
 
         return false
@@ -1165,6 +1175,8 @@ object ControlCenterGrouping {
             val cornerRadius = if (radiusResId != 0) ctx.resources.getDimension(radiusResId) else 20f * density
 
             ChildTileStyleCache.init(ctx, classLoader)
+
+            val isAdv = isAdvancedTexturesEnabled(ctx, classLoader)
 
             try {
                 ChildTileStyleCache.setPassWindowBlur?.invoke(null, childView, false)
@@ -1202,26 +1214,55 @@ object ControlCenterGrouping {
             } catch (t: Throwable) { false })
 
             if (isCard) {
-                val enabledColorResId = ChildTileStyleCache.resCardEnabledColor
-                val disabledColorResId = ChildTileStyleCache.resCardDisabledColor
-                val enabledColor = if (enabledColorResId > 0) {
-                    try { ctx.resources.getColor(enabledColorResId, null) } catch (t: Throwable) { Color.parseColor("#ebffffff") }
-                } else Color.parseColor("#ebffffff")
-                val disabledColor = if (disabledColorResId > 0) {
-                    try { ctx.resources.getColor(disabledColorResId, null) } catch (t: Throwable) { Color.parseColor("#66000000") }
-                } else Color.parseColor("#66000000")
+                if (isAdv) {
+                    val enabledColorResId = ChildTileStyleCache.resCardEnabledColor
+                    val disabledColorResId = ChildTileStyleCache.resCardDisabledColor
+                    val enabledColor = if (enabledColorResId > 0) {
+                        try { ctx.resources.getColor(enabledColorResId, null) } catch (t: Throwable) { Color.parseColor("#ebffffff") }
+                    } else Color.parseColor("#ebffffff")
+                    val disabledColor = if (disabledColorResId > 0) {
+                        try { ctx.resources.getColor(disabledColorResId, null) } catch (t: Throwable) { Color.parseColor("#66000000") }
+                    } else Color.parseColor("#66000000")
 
-                val cardBg = GradientDrawable().apply {
-                    this.cornerRadius = cornerRadius
-                    setColor(if (stateInt == 2) enabledColor else disabledColor)
-                }
-                childView.background = cardBg
-                childView.outlineProvider = object : android.view.ViewOutlineProvider() {
-                    override fun getOutline(v: View, outline: android.graphics.Outline) {
-                        outline.setRoundRect(0, 0, v.width, v.height, cornerRadius)
+                    val cardBg = GradientDrawable().apply {
+                        this.cornerRadius = cornerRadius
+                        setColor(if (stateInt == 2) enabledColor else disabledColor)
+                    }
+                    childView.background = cardBg
+                    childView.outlineProvider = object : android.view.ViewOutlineProvider() {
+                        override fun getOutline(v: View, outline: android.graphics.Outline) {
+                            outline.setRoundRect(0, 0, v.width, v.height, cornerRadius)
+                        }
+                    }
+                    childView.clipToOutline = true
+                } else {
+                    try {
+                        val m = childView.javaClass.getDeclaredMethod("updateDrawableBackground", Boolean::class.javaPrimitiveType)
+                        m.isAccessible = true
+                        m.invoke(childView, false)
+                    } catch (t: Throwable) {
+                        val enabledColorResId = ChildTileStyleCache.resCardEnabledColor
+                        val disabledColorResId = ChildTileStyleCache.resCardDisabledColor
+                        val enabledColor = if (enabledColorResId > 0) {
+                            try { ctx.resources.getColor(enabledColorResId, null) } catch (t: Throwable) { Color.parseColor("#ebffffff") }
+                        } else Color.parseColor("#ebffffff")
+                        val disabledColor = if (disabledColorResId > 0) {
+                            try { ctx.resources.getColor(disabledColorResId, null) } catch (t: Throwable) { Color.parseColor("#66000000") }
+                        } else Color.parseColor("#66000000")
+
+                        val cardBg = GradientDrawable().apply {
+                            this.cornerRadius = cornerRadius
+                            setColor(if (stateInt == 2) enabledColor else disabledColor)
+                        }
+                        childView.background = cardBg
+                        childView.outlineProvider = object : android.view.ViewOutlineProvider() {
+                            override fun getOutline(v: View, outline: android.graphics.Outline) {
+                                outline.setRoundRect(0, 0, v.width, v.height, cornerRadius)
+                            }
+                        }
+                        childView.clipToOutline = true
                     }
                 }
-                childView.clipToOutline = true
             } else {
                 val iconView = try {
                     val f = ChildTileStyleCache.iconFields.computeIfAbsent(childView.javaClass) { clazz ->
@@ -1241,59 +1282,66 @@ object ControlCenterGrouping {
                         }
                     } catch (t: Throwable) {}
 
-                    val enabledColorResId = ChildTileStyleCache.resEnabledColor
-                    val disabledColorResId = ChildTileStyleCache.resDisabledColor
-                    val enabledColor = if (enabledColorResId > 0) {
-                        try { ctx.resources.getColor(enabledColorResId, null) } catch (t: Throwable) { Color.parseColor("#ebffffff") }
-                    } else Color.parseColor("#ebffffff")
-                    val disabledColor = if (disabledColorResId > 0) {
-                        try { ctx.resources.getColor(disabledColorResId, null) } catch (t: Throwable) { Color.parseColor("#66000000") }
-                    } else Color.parseColor("#66000000")
-
-                    val tileBg = GradientDrawable().apply {
-                        shape = GradientDrawable.OVAL
-                        setColor(if (stateInt == 2) enabledColor else disabledColor)
-                    }
                     val iconId = ChildTileStyleCache.resIconId
                     val innerIcon = if (iconId > 0) iconView.findViewById<ImageView>(iconId) else null
-                    if (innerIcon != null) {
-                        innerIcon.background = tileBg
-                    } else {
-                        iconView.background = tileBg
-                    }
-                }
 
-                val iconFrameId = ChildTileStyleCache.resIconFrameId
-                if (iconFrameId > 0) {
-                    val iconFrame = childView.findViewById<View>(iconFrameId)
-                    if (iconFrame != null) {
-                        val iflp = iconFrame.layoutParams
-                        if (iflp is FrameLayout.LayoutParams) {
-                            if (iflp.gravity != Gravity.CENTER || iflp.topMargin != 0 || iflp.bottomMargin != 0 || iflp.leftMargin != 0 || iflp.rightMargin != 0) {
-                                iflp.gravity = Gravity.CENTER
-                                iflp.topMargin = 0
-                                iflp.bottomMargin = 0
-                                iflp.leftMargin = 0
-                                iflp.rightMargin = 0
-                                iconFrame.layoutParams = iflp
-                            }
+                    if (isAdv) {
+                        val enabledColorResId = ChildTileStyleCache.resEnabledColor
+                        val disabledColorResId = ChildTileStyleCache.resDisabledColor
+                        val enabledColor = if (enabledColorResId > 0) {
+                            try { ctx.resources.getColor(enabledColorResId, null) } catch (t: Throwable) { Color.parseColor("#ebffffff") }
+                        } else Color.parseColor("#ebffffff")
+                        val disabledColor = if (disabledColorResId > 0) {
+                            try { ctx.resources.getColor(disabledColorResId, null) } catch (t: Throwable) { Color.parseColor("#66000000") }
+                        } else Color.parseColor("#66000000")
+
+                        val tileBg = GradientDrawable().apply {
+                            shape = GradientDrawable.OVAL
+                            setColor(if (stateInt == 2) enabledColor else disabledColor)
                         }
-                        iconFrame.background = null
+                        if (innerIcon != null) {
+                            innerIcon.background = tileBg
+                        } else {
+                            iconView.background = tileBg
+                        }
+                    } else {
+                        innerIcon?.background = null
+                        iconView.background = null
                     }
                 }
 
-                val labelId = ChildTileStyleCache.resLabelId
-                if (labelId > 0) {
-                    val label = childView.findViewById<View>(labelId)
-                    if (label != null && label.visibility != View.GONE) {
-                        label.visibility = View.GONE
+                val isExpandedFolderTile = (childView.getTag(0x7f09999e) != null)
+                if (!isExpandedFolderTile) {
+                    val iconFrameId = ChildTileStyleCache.resIconFrameId
+                    if (iconFrameId > 0) {
+                        val iconFrame = childView.findViewById<View>(iconFrameId)
+                        if (iconFrame != null) {
+                            val iflp = iconFrame.layoutParams
+                            if (iflp is FrameLayout.LayoutParams) {
+                                if (iflp.gravity != Gravity.CENTER || iflp.topMargin != 0 || iflp.bottomMargin != 0 || iflp.leftMargin != 0 || iflp.rightMargin != 0) {
+                                    iflp.gravity = Gravity.CENTER
+                                    iflp.topMargin = 0
+                                    iflp.bottomMargin = 0
+                                    iflp.leftMargin = 0
+                                    iflp.rightMargin = 0
+                                    iconFrame.layoutParams = iflp
+                                }
+                            }
+                            iconFrame.background = null
+                        }
+                    }
+
+                    val labelId = ChildTileStyleCache.resLabelId
+                    if (labelId > 0) {
+                        val label = childView.findViewById<View>(labelId)
+                        if (label != null && label.visibility != View.GONE) {
+                            label.visibility = View.GONE
+                        }
                     }
                 }
 
-                if (isChildOfIosCluster(childView) || isChildOfGroup(childView)) {
-                    childView.background = null
-                    childView.clipToOutline = false
-                }
+                childView.background = null
+                childView.clipToOutline = false
             }
         } catch (t: Throwable) {
             Log.e(TAG, "applyNonAdvancedStyleToChildTile error", t)
