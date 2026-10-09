@@ -2,6 +2,7 @@ package dev.joseph.hyperbounce
 
 import android.content.ContentProvider
 import android.content.ContentValues
+import android.content.Context
 import android.content.Intent
 import android.database.Cursor
 import android.net.Uri
