@@ -1154,6 +1154,10 @@ object ControlCenterHook {
                             val result = chain.proceed()
                             if (ControlCenterConfigHolder.config.isJellyActive) {
                                 try {
+                                    if (holder != null && holder.javaClass.name.contains("MultipleAnimViewHolder")) {
+                                        return@intercept result
+                                    }
+
                                     val targetView = itemView ?: (sItemViewField ?: holderClass.getField("itemView").apply {
                                         sItemViewField = this
                                     }).get(holder) as? View ?: return@intercept result
@@ -1177,6 +1181,47 @@ object ControlCenterHook {
                                     val row = spreadRowField.getInt(holder)
 
                                     JellyPhysicsEngine.onFrame(targetView, holder, progress, expandTransY, row)
+                                } catch (t: Throwable) {}
+                            }
+                            result
+                        }
+                    }
+                }
+            } catch (t: Throwable) {}
+
+            // 7b. Hook MultipleAnimViewHolder (Sliders) so JellyPhysicsEngine runs after MultipleAnimViewHolder's scale logic
+            try {
+                val multiAnimClass = Class.forName("miui.systemui.controlcenter.panel.main.recyclerview.MultipleAnimViewHolder", false, classLoader)
+                val mHolderClass = Class.forName("miui.systemui.controlcenter.panel.main.recyclerview.MainPanelItemViewHolder", false, classLoader)
+                for (m in multiAnimClass.declaredMethods) {
+                    if (m.name == "onFrameCallback") {
+                        m.isAccessible = true
+                        module.hook(m).intercept { chain ->
+                            val result = chain.proceed()
+                            if (ControlCenterConfigHolder.config.isJellyActive) {
+                                try {
+                                    val holder = chain.thisObject ?: return@intercept result
+                                    val itemView = ControlCenterGrouping.getViewHolderItemView(holder) ?: return@intercept result
+
+                                    val expandScaleRatioField = sExpandScaleRatioField ?: mHolderClass.getDeclaredField("expandScaleRatio").apply {
+                                        isAccessible = true
+                                        sExpandScaleRatioField = this
+                                    }
+                                    val progress = expandScaleRatioField.getFloat(holder)
+
+                                    val expandTransYField = sExpandTransYField ?: mHolderClass.getDeclaredField("expandTransY").apply {
+                                        isAccessible = true
+                                        sExpandTransYField = this
+                                    }
+                                    val expandTransY = expandTransYField.getFloat(holder)
+
+                                    val spreadRowField = sSpreadRowField ?: mHolderClass.getDeclaredField("spreadRow").apply {
+                                        isAccessible = true
+                                        sSpreadRowField = this
+                                    }
+                                    val row = spreadRowField.getInt(holder)
+
+                                    JellyPhysicsEngine.onFrame(itemView, holder, progress, expandTransY, row)
                                 } catch (t: Throwable) {}
                             }
                             result
