@@ -3665,7 +3665,9 @@ object ControlCenterHook {
                         module.hook(m).intercept { chain ->
                             val res = chain.proceed()
                             try {
-                                applyExpandedBrightnessLayout(chain.thisObject)
+                                if (ControlCenterConfigHolder.sBrightnessSliderHorizontal) {
+                                    applyExpandedBrightnessLayout(chain.thisObject)
+                                }
                             } catch (t: Throwable) {}
                             res
                         }
@@ -3804,7 +3806,10 @@ object ControlCenterHook {
                     val injector = getInjectorM.invoke(slider)
                     if (injector != null) {
                         val setVertM = injector.javaClass.getMethod("setVertical", Boolean::class.javaPrimitiveType)
-                        setVertM.invoke(injector, !isHorizontal)
+                        // Both horizontal (rotation 0) and vertical (rotation 270) sliders track progress along
+                        // the SeekBar's local X-axis. Keeping vertical = false ensures RelativeSeekBarInjector computes
+                        // relative offset on X, preventing progress from jumping on touch.
+                        setVertM.invoke(injector, false)
                     }
                 } catch (t: Throwable) {}
 
@@ -3843,7 +3848,8 @@ object ControlCenterHook {
             val cardH = if (cardHId != 0) ctx.resources.getDimensionPixelSize(cardHId) else (71.5f * density).toInt()
             val res2RowsId = ctx.resources.getIdentifier("control_center_universal_2_rows_size", "dimen", ctx.packageName)
             val tallH = if (res2RowsId != 0) ctx.resources.getDimensionPixelSize(res2RowsId) else (157 * density).toInt()
-            val progressRadius = 16f * density
+            val clipRoundId = ctx.resources.getIdentifier("toggle_slider_clip_round_corner_radius", "dimen", ctx.packageName)
+            val stockProgressRadius = if (clipRoundId != 0) ctx.resources.getDimension(clipRoundId) else 0f
 
             try {
                 val progressField = binding.javaClass.getField("progress")
@@ -3856,10 +3862,10 @@ object ControlCenterHook {
                             val frac = curVal.toFloat() / maxVal
                             if (isHorizontal) {
                                 val w = (view.width * frac).toInt()
-                                outline.setRoundRect(0, 0, w, view.height, progressRadius)
+                                outline.setRoundRect(0, 0, w, view.height, stockProgressRadius)
                             } else {
                                 val top = (view.height * (1f - frac)).toInt()
-                                outline.setRoundRect(0, top, view.width, view.height, progressRadius)
+                                outline.setRoundRect(0, top, view.width, view.height, stockProgressRadius)
                             }
                         }
                     }
@@ -6475,7 +6481,10 @@ object ControlCenterHook {
             val cardH = if (cardHId != 0) ctx.resources.getDimensionPixelSize(cardHId) else (71.5f * density).toInt()
             val stockHId = ctx.resources.getIdentifier("brightness_panel_slider_height_large", "dimen", ctx.packageName)
             val stockH = if (stockHId != 0) ctx.resources.getDimensionPixelSize(stockHId) else (195 * density).toInt()
-            val progressRadius = 16f * density
+            val stockMarginTopId = ctx.resources.getIdentifier("brightness_panel_toggle_slider_margin_top_large", "dimen", ctx.packageName)
+            val stockMarginTop = if (stockMarginTopId != 0) ctx.resources.getDimensionPixelSize(stockMarginTopId) else (134 * density).toInt()
+            val clipRoundId = ctx.resources.getIdentifier("toggle_slider_clip_round_corner_radius", "dimen", ctx.packageName)
+            val stockProgressRadius = if (clipRoundId != 0) ctx.resources.getDimension(clipRoundId) else 0f
 
             if (isHorizontal) {
                 val lp = toggleSliderView.layoutParams
@@ -6483,9 +6492,10 @@ object ControlCenterHook {
                     lp.width = ViewGroup.LayoutParams.MATCH_PARENT
                     lp.height = cardH
                     if (lp is ViewGroup.MarginLayoutParams) {
-                        lp.topMargin = (72 * density).toInt()
-                        lp.marginStart = 0
-                        lp.marginEnd = 0
+                        lp.topMargin = stockMarginTop
+                        val horizMargin = (16 * density).toInt()
+                        lp.marginStart = horizMargin
+                        lp.marginEnd = horizMargin
                     }
                     if (lp is LinearLayout.LayoutParams) {
                         lp.gravity = Gravity.CENTER_HORIZONTAL
@@ -6555,7 +6565,7 @@ object ControlCenterHook {
                             val curVal = slider.progress.coerceIn(0, maxVal)
                             val frac = curVal.toFloat() / maxVal
                             val w = (view.width * frac).toInt()
-                            outline.setRoundRect(0, 0, w, view.height, progressRadius)
+                            outline.setRoundRect(0, 0, w, view.height, stockProgressRadius)
                         }
                     }
                     progress.invalidateOutline()
@@ -6588,7 +6598,9 @@ object ControlCenterHook {
                     lp.width = stockW
                     lp.height = stockH
                     if (lp is ViewGroup.MarginLayoutParams) {
-                        lp.topMargin = 0
+                        lp.topMargin = stockMarginTop
+                        lp.marginStart = 0
+                        lp.marginEnd = 0
                     }
                     toggleSliderView.layoutParams = lp
                 }
@@ -6637,6 +6649,26 @@ object ControlCenterHook {
                             }
                         }
                     } catch (t: Throwable) {}
+                }
+
+                if (progress != null && slider != null) {
+                    val pLp = progress.layoutParams
+                    if (pLp != null) {
+                        pLp.width = ViewGroup.LayoutParams.MATCH_PARENT
+                        pLp.height = ViewGroup.LayoutParams.MATCH_PARENT
+                        progress.layoutParams = pLp
+                    }
+                    progress.clipToOutline = true
+                    progress.outlineProvider = object : ViewOutlineProvider() {
+                        override fun getOutline(view: View, outline: Outline) {
+                            val maxVal = slider.max.coerceAtLeast(1)
+                            val curVal = slider.progress.coerceIn(0, maxVal)
+                            val frac = curVal.toFloat() / maxVal
+                            val top = (view.height * (1f - frac)).toInt()
+                            outline.setRoundRect(0, top, view.width, view.height, stockProgressRadius)
+                        }
+                    }
+                    progress.invalidateOutline()
                 }
 
                 if (icon != null) {
