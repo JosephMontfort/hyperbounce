@@ -771,7 +771,7 @@ object True2DGridEngine {
                 if (sTileLabelResId == -1 && context != null) {
                     sTileLabelResId = context.resources.getIdentifier("tile_label", "id", context.packageName)
                 }
-                val tileLabelId = if (sTileLabelResId > 0) sTileLabelResId else 0
+                val tileLabelId = if (sTileLabelResId != -1) sTileLabelResId else 0
                 val isCircularTile = spanW == 1 && spanH == 1 && !isHeader && (
                     view.javaClass.name.contains("QSTileItemView") ||
                     (tileLabelId != 0 && view.findViewById<View?>(tileLabelId) != null)

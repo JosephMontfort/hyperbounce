@@ -148,7 +148,6 @@ data class TileGroup(
 }
 
 object GroupedTileReflectionCache {
-    val sWokenRecords: MutableSet<Any> = java.util.Collections.newSetFromMap(java.util.WeakHashMap<Any, Boolean>())
     var startListeningMethod: java.lang.reflect.Method? = null
     var getTileMethod: java.lang.reflect.Method? = null
     var setListeningMethod: java.lang.reflect.Method? = null
@@ -200,9 +199,6 @@ object ControlCenterConfigHolder {
     @Volatile var sIsGroupSelectMode: Boolean = false
     @Volatile var sIsDisassembleMode: Boolean = false
     @Volatile var sIsDraggingResizeHandle: Boolean = false
-    @Volatile var sHasStructuralEditChanges: Boolean = false
-    val sIoExecutor = java.util.concurrent.Executors.newSingleThreadExecutor()
-    @Volatile var sCachedIconFrameId: Int = 0
     val sSelectedTileSpecs = LinkedHashSet<String>()
     val sSelectedDisassembleGroups = HashSet<String>()
 
@@ -221,6 +217,8 @@ object ControlCenterConfigHolder {
     @Volatile var sExplicitReset: Boolean = false
     @Volatile private var sCachedSafeMode: Boolean? = null
     @Volatile var sShadeLowEndAnimFlow: Any? = null
+    @Volatile var sHasStructuralEditChanges: Boolean = false
+    private val sIoExecutor = java.util.concurrent.Executors.newSingleThreadExecutor()
 
     val sAllQSRecords = CopyOnWriteArrayList<Any>()
     val sBindingRecords = object : ThreadLocal<HashSet<Any>>() {
@@ -596,7 +594,6 @@ object ControlCenterConfigHolder {
     fun savePriorities(ctx: Context?) {
         val targetCtx = ctx ?: sLastKnownContext ?: return
         sHasLoadedPriorities = true
-        sHasStructuralEditChanges = true
         try {
             val json = JSONObject()
             val prioObj = JSONObject()
@@ -896,28 +893,34 @@ object ControlCenterConfigHolder {
     fun wakeAndRefreshAllGroupedTiles() {
         val now = android.os.SystemClock.uptimeMillis()
         if (now - sLastWakeTimestamp < 250L) {
-            ensureVisibleContainersAndTiles()
             return
         }
         sLastWakeTimestamp = now
 
-        ensureVisibleContainersAndTiles()
-
-        val needsWake = sPendingOrientationRebind || sAllQSRecords.any { r ->
-            r != null && isGroupMember(getRecordSpec(r)) && !GroupedTileReflectionCache.sWokenRecords.contains(r)
-        }
-        if (sPendingOrientationRebind) {
-            GroupedTileReflectionCache.sWokenRecords.clear()
-            sPendingOrientationRebind = false
-        }
-
-        if (!needsWake) return
-
         try {
+            val rv = sRecyclerView?.get() as? ViewGroup
+            if (rv != null) {
+                for (i in 0 until rv.childCount) {
+                    val container = rv.getChildAt(i)?.findViewById<ViewGroup>(0x7f099995)
+                    if (container != null) {
+                        container.visibility = View.VISIBLE
+                        for (cIdx in 0 until container.childCount) {
+                            val cv = container.getChildAt(cIdx)
+                            if (cv != null) {
+                                cv.visibility = View.VISIBLE
+                                if (!sIsEditMode) {
+                                    cv.alpha = 1.0f
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
             for (r in sAllQSRecords) {
                 if (r != null) {
                     val spec = getRecordSpec(r)
-                    if (isGroupMember(spec) && !GroupedTileReflectionCache.sWokenRecords.contains(r)) {
+                    if (isGroupMember(spec)) {
                         try {
                             if (GroupedTileReflectionCache.startListeningMethod == null) {
                                 GroupedTileReflectionCache.startListeningMethod = r.javaClass.getMethod("startListening")
@@ -935,7 +938,83 @@ object ControlCenterConfigHolder {
                                     GroupedTileReflectionCache.setListeningMethod = tileObj.javaClass.getMethod("setListening", Any::class.java, Boolean::class.javaPrimitiveType)
                                 }
                                 GroupedTileReflectionCache.setListeningMethod?.invoke(tileObj, r, true)
-                                GroupedTileReflectionCache.sWokenRecords.add(r)
+
+                                if (GroupedTileReflectionCache.refreshStateMethod == null) {
+                                    GroupedTileReflectionCache.refreshStateMethod = tileObj.javaClass.getMethod("refreshState")
+                                }
+                                GroupedTileReflectionCache.refreshStateMethod?.invoke(tileObj)
+
+                                if (GroupedTileReflectionCache.getStateMethod == null) {
+                                    GroupedTileReflectionCache.getStateMethod = tileObj.javaClass.getMethod("getState")
+                                }
+                                val curState = GroupedTileReflectionCache.getStateMethod?.invoke(tileObj)
+
+                                if (GroupedTileReflectionCache.getHolderMethod == null) {
+                                    GroupedTileReflectionCache.getHolderMethod = r.javaClass.getMethod("getHolder")
+                                }
+                                var holder = GroupedTileReflectionCache.getHolderMethod?.invoke(r)
+
+                                if (holder == null && rv != null && spec != null) {
+                                    val group = findGroupForSpec(spec)
+                                    if (group != null) {
+                                        val anchorSpec = group.specs.firstOrNull()
+                                        for (i in 0 until rv.childCount) {
+                                            val child = rv.getChildAt(i)
+                                            if (child != null && (child.getTag(0x7f099990) == anchorSpec || child.getTag(0x7f099994) == group)) {
+                                                val subHolders = child.getTag(0x7f099993) as? Array<*>
+                                                val idx = group.specs.indexOf(spec)
+                                                if (subHolders != null && idx in subHolders.indices && subHolders[idx] != null) {
+                                                    holder = subHolders[idx]
+                                                    if (GroupedTileReflectionCache.setHolderMethod == null) {
+                                                        for (m in r.javaClass.methods) {
+                                                            if (m.name == "setHolder" && m.parameterTypes.size == 1) {
+                                                                GroupedTileReflectionCache.setHolderMethod = m
+                                                                break
+                                                            }
+                                                        }
+                                                    }
+                                                    GroupedTileReflectionCache.setHolderMethod?.invoke(r, holder)
+                                                }
+                                                break
+                                            }
+                                        }
+                                    }
+                                }
+
+                                if (holder != null && curState != null) {
+                                    if (GroupedTileReflectionCache.itemViewField == null) {
+                                        var c: Class<*>? = holder.javaClass
+                                        while (c != null) {
+                                            try {
+                                                val f = c.getDeclaredField("itemView")
+                                                f.isAccessible = true
+                                                GroupedTileReflectionCache.itemViewField = f
+                                                break
+                                            } catch (t: Throwable) { c = c.superclass }
+                                        }
+                                    }
+                                    val childView = GroupedTileReflectionCache.itemViewField?.get(holder) as? View
+                                    if (childView != null) {
+                                        childView.visibility = View.VISIBLE
+                                        if (!sIsEditMode) {
+                                            childView.alpha = 1.0f
+                                        }
+                                        val vClass = childView.javaClass
+                                        if (GroupedTileReflectionCache.lastChildViewClass != vClass) {
+                                            GroupedTileReflectionCache.lastChildViewClass = vClass
+                                            GroupedTileReflectionCache.updateStateMethod = null
+                                            for (vm in vClass.methods) {
+                                                if (vm.name == "updateState" && vm.parameterTypes.size == 3) {
+                                                    vm.isAccessible = true
+                                                    GroupedTileReflectionCache.updateStateMethod = vm
+                                                    break
+                                                }
+                                            }
+                                        }
+                                        val isConnected = (spec == "wifi" || spec == "cell")
+                                        GroupedTileReflectionCache.updateStateMethod?.invoke(childView, curState, isConnected, false)
+                                    }
+                                }
                             }
                         } catch (t: Throwable) {}
                     }
@@ -944,27 +1023,6 @@ object ControlCenterConfigHolder {
         } catch (t: Throwable) {
             Log.e(TAG, "wakeAndRefreshAllGroupedTiles error", t)
         }
-    }
-
-    private fun ensureVisibleContainersAndTiles() {
-        try {
-            val rv = sRecyclerView?.get() as? ViewGroup ?: return
-            for (i in 0 until rv.childCount) {
-                val container = rv.getChildAt(i)?.findViewById<ViewGroup>(0x7f099995) ?: continue
-                if (container.visibility != View.VISIBLE) {
-                    container.visibility = View.VISIBLE
-                }
-                for (cIdx in 0 until container.childCount) {
-                    val cv = container.getChildAt(cIdx) ?: continue
-                    if (cv.visibility != View.VISIBLE) {
-                        cv.visibility = View.VISIBLE
-                    }
-                    if (cv.alpha < 1.0f && !sIsEditMode) {
-                        cv.alpha = 1.0f
-                    }
-                }
-            }
-        } catch (t: Throwable) {}
     }
 
     fun getOrResolveTileSpec(itemView: View): String? {
@@ -1187,13 +1245,7 @@ object ControlCenterConfigHolder {
                     val isCircular = isCircCard || (!isCard && !isSlider && !isMedia && !isExpanded && !isVertical && !isLarge && !itemView.javaClass.name.contains("Card") && (itemView.javaClass.name.contains("Tile") || itemView.javaClass.name.contains("QSTileItemView")))
                     val density = itemView.resources.displayMetrics.density
 
-                    val iconFrameId = if (sCachedIconFrameId != 0) {
-                        sCachedIconFrameId
-                    } else {
-                        val id = itemView.resources.getIdentifier("icon_frame", "id", itemView.context.packageName)
-                        if (id != 0) sCachedIconFrameId = id
-                        id
-                    }
+                    val iconFrameId = itemView.resources.getIdentifier("icon_frame", "id", itemView.context.packageName)
                     val curIconFrame = if (iconFrameId != 0) itemView.findViewById<View>(iconFrameId) else null
 
                     val resizeTag = 0x7f099999
@@ -1654,7 +1706,6 @@ object ControlCenterConfigHolder {
     }
 }
 
-    @Volatile private var sWordlessResId: Int = -1
     @Volatile private var sLastExitEditTime: Long = 0L
 
     fun cleanupAllVisibleViews(rv: ViewGroup?) {
@@ -1663,18 +1714,6 @@ object ControlCenterConfigHolder {
             val childCount = rv.childCount
             for (i in 0 until childCount) {
                 val itemView = rv.getChildAt(i) ?: continue
-
-                if (sWordlessResId == -1) {
-                    sWordlessResId = itemView.context.resources.getIdentifier("qs_wordless_mode", "id", itemView.context.packageName)
-                }
-                val cName = itemView.javaClass.name
-                if (cName.contains("Wordless") || (sWordlessResId > 0 && itemView.findViewById<View?>(sWordlessResId) != null)) {
-                    itemView.visibility = View.GONE
-                    itemView.alpha = 0f
-                    itemView.translationY = 0f
-                    continue
-                }
-
                 ControlCenterHook.hideAllCustomBadges(itemView)
                 hideAllRotateButtons(itemView as? ViewGroup)
                 itemView.isClickable = true
@@ -1818,9 +1857,6 @@ object ControlCenterConfigHolder {
 
     fun refreshAdapter(root: View?, ctx: Context?, isStructuralChange: Boolean = false) {
         try {
-            if (isStructuralChange) {
-                GroupedTileReflectionCache.sWokenRecords.clear()
-            }
             val targetCtx = ctx ?: root?.context ?: sLastKnownContext ?: return
             if (!sHasLoadedPriorities) loadSavedPriorities(targetCtx)
             val rvsToProcess = mutableListOf<View>()
