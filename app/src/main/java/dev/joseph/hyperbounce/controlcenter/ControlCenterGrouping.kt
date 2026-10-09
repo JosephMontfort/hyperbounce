@@ -1684,7 +1684,7 @@ object ControlCenterGrouping {
                                         if (vm.name == "updateState") {
                                             vm.isAccessible = true
                                             if (vm.parameterTypes.size == 3) {
-                                                val isConnected = (childSpec == "wifi" || childSpec == "cell")
+                                                val isConnected = ControlCenterConfigHolder.isTileConnected(tileObj)
                                                 vm.invoke(childView, curState, isConnected, false)
                                                 applyNonAdvancedStyleToChildTile(childView, curState, classLoader)
                                                 break
@@ -2367,15 +2367,9 @@ object ControlCenterGrouping {
                                 mpaField.set(subHolders[i], ControlCenterConfigHolder.sMainPanelAdapter)
                             }
                         } catch (t: Throwable) {}
-                        try {
-                            val fcField = sc.getDeclaredField("frameCallback")
-                            fcField.isAccessible = true
-                            if (ControlCenterConfigHolder.sFrameCallback != null) {
-                                fcField.set(subHolders[i], ControlCenterConfigHolder.sFrameCallback)
-                            }
-                        } catch (t: Throwable) {}
                         sc = sc.superclass
                     }
+                    attachSubHolder(subHolders[i])
                 }
 
                 val tlp = if (isVertical) {
@@ -2654,15 +2648,9 @@ object ControlCenterGrouping {
                                 mpaField.set(subHolders[i], ControlCenterConfigHolder.sMainPanelAdapter)
                             }
                         } catch (t: Throwable) {}
-                        try {
-                            val fcField = sc.getDeclaredField("frameCallback")
-                            fcField.isAccessible = true
-                            if (ControlCenterConfigHolder.sFrameCallback != null) {
-                                fcField.set(subHolders[i], ControlCenterConfigHolder.sFrameCallback)
-                            }
-                        } catch (t: Throwable) {}
                         sc = sc.superclass
                     }
+                    attachSubHolder(subHolders[i])
                 }
 
                 val tlp = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1.0f)

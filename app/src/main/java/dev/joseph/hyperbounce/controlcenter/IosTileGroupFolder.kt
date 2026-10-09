@@ -261,12 +261,14 @@ object IosTileGroupFolder {
                 if (iconFrame != null) {
                     val iflp = iconFrame.layoutParams
                     if (iflp is FrameLayout.LayoutParams) {
-                        iflp.gravity = Gravity.CENTER
-                        iflp.topMargin = 0
-                        iflp.bottomMargin = 0
-                        iflp.leftMargin = 0
-                        iflp.rightMargin = 0
-                        iconFrame.layoutParams = iflp
+                        if (iflp.gravity != Gravity.CENTER || iflp.topMargin != 0 || iflp.bottomMargin != 0 || iflp.leftMargin != 0 || iflp.rightMargin != 0) {
+                            iflp.gravity = Gravity.CENTER
+                            iflp.topMargin = 0
+                            iflp.bottomMargin = 0
+                            iflp.leftMargin = 0
+                            iflp.rightMargin = 0
+                            iconFrame.layoutParams = iflp
+                        }
                     }
                     iconFrame.background = null
                 }
@@ -313,22 +315,31 @@ object IosTileGroupFolder {
             child.setTag(0x7f09999c, true)
             child.background = null
             child.clipToOutline = false
+            resolveMiniIds(context)
+            try {
+                if (miniTileLabelId > 0) child.findViewById<View>(miniTileLabelId)?.visibility = View.GONE
+                if (miniMarkId > 0) child.findViewById<View>(miniMarkId)?.visibility = View.GONE
+                if (miniIconFrameId > 0) {
+                    val iconFrame = child.findViewById<View>(miniIconFrameId)
+                    if (iconFrame != null) {
+                        val lp = iconFrame.layoutParams
+                        if (lp is FrameLayout.LayoutParams) {
+                            if (lp.gravity != Gravity.CENTER || lp.topMargin != 0 || lp.bottomMargin != 0 || lp.leftMargin != 0 || lp.rightMargin != 0) {
+                                lp.gravity = Gravity.CENTER
+                                lp.topMargin = 0
+                                lp.bottomMargin = 0
+                                lp.leftMargin = 0
+                                lp.rightMargin = 0
+                                iconFrame.layoutParams = lp
+                            }
+                        }
+                        iconFrame.background = null
+                    }
+                }
+            } catch (t: Throwable) {}
         }
 
         override fun dispatchDraw(canvas: android.graphics.Canvas) {
-            val scale = cachedTargetScale
-            val halfBase = cachedHalfBase
-            for (i in 0 until childCount) {
-                val child = getChildAt(i) ?: continue
-                if (child.translationX != 0f) child.translationX = 0f
-                if (child.translationY != 0f) child.translationY = 0f
-                if (halfBase > 0f) {
-                    if (child.pivotX != halfBase) child.pivotX = halfBase
-                    if (child.pivotY != halfBase) child.pivotY = halfBase
-                }
-                if (child.scaleX != scale) child.scaleX = scale
-                if (child.scaleY != scale) child.scaleY = scale
-            }
             super.dispatchDraw(canvas)
         }
 
@@ -379,33 +390,8 @@ object IosTileGroupFolder {
             val baseSize = cachedBaseSize
             val childSpec = MeasureSpec.makeMeasureSpec(baseSize, MeasureSpec.EXACTLY)
 
-            resolveMiniIds(context)
             for (i in 0 until childCount) {
                 val child = getChildAt(i) ?: continue
-                try {
-                    if (miniTileLabelId > 0) {
-                        child.findViewById<View>(miniTileLabelId)?.visibility = View.GONE
-                    }
-                    if (miniMarkId > 0) {
-                        child.findViewById<View>(miniMarkId)?.visibility = View.GONE
-                    }
-                    if (miniIconFrameId > 0) {
-                        val iconFrame = child.findViewById<View>(miniIconFrameId)
-                        if (iconFrame != null) {
-                            val lp = iconFrame.layoutParams
-                            if (lp is FrameLayout.LayoutParams) {
-                                lp.gravity = Gravity.CENTER
-                                lp.topMargin = 0
-                                lp.bottomMargin = 0
-                                lp.leftMargin = 0
-                                lp.rightMargin = 0
-                                iconFrame.layoutParams = lp
-                            }
-                            iconFrame.background = null
-                        }
-                    }
-                } catch (t: Throwable) {}
-
                 child.measure(childSpec, childSpec)
             }
         }
@@ -637,7 +623,7 @@ object IosTileGroupFolder {
             val isLandscape = context.resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
             val res2RowsId = context.resources.getIdentifier("control_center_universal_2_rows_size", "dimen", context.packageName)
             val quadHeight = if (isLandscape) {
-                (118 * density).toInt()
+                if (res2RowsId != 0) Math.max(context.resources.getDimensionPixelSize(res2RowsId), (158 * density).toInt()) else (158 * density).toInt()
             } else {
                 if (res2RowsId != 0) context.resources.getDimensionPixelSize(res2RowsId) else (158 * density).toInt()
             }
@@ -650,25 +636,31 @@ object IosTileGroupFolder {
             }
 
             // Quadrant (0,0): Tile 1
-            if (group.specs.isNotEmpty()) {
-                val tile1 = createExpanded2x2CardView(classLoader)
-                macroRow1.addView(tile1, quadWeightLp())
-                bindTileDirectly(tile1, group.specs[0], mainPanelController, classLoader)
-            }
+            val tile1 = if (group.specs.isNotEmpty()) {
+                val t = createExpanded2x2CardView(classLoader)
+                t.setTag(0x7f09999c, true)
+                t.setTag(0x7f09999b, true)
+                macroRow1.addView(t, quadWeightLp())
+                t
+            } else null
 
             // Quadrant (1,0): Tile 2
-            if (group.specs.size > 1) {
-                val tile2 = createExpanded2x2CardView(classLoader)
-                macroRow1.addView(tile2, quadWeightLp())
-                bindTileDirectly(tile2, group.specs[1], mainPanelController, classLoader)
-            }
+            val tile2 = if (group.specs.size > 1) {
+                val t = createExpanded2x2CardView(classLoader)
+                t.setTag(0x7f09999c, true)
+                t.setTag(0x7f09999b, true)
+                macroRow1.addView(t, quadWeightLp())
+                t
+            } else null
 
             // Quadrant (0,1): Tile 3
-            if (group.specs.size > 2) {
-                val tile3 = createExpanded2x2CardView(classLoader)
-                macroRow2.addView(tile3, quadWeightLp())
-                bindTileDirectly(tile3, group.specs[2], mainPanelController, classLoader)
-            }
+            val tile3 = if (group.specs.size > 2) {
+                val t = createExpanded2x2CardView(classLoader)
+                t.setTag(0x7f09999c, true)
+                t.setTag(0x7f09999b, true)
+                macroRow2.addView(t, quadWeightLp())
+                t
+            } else null
 
             // Quadrant (1,1): 2x2 Sub-grid of remaining 4 circular tiles
             val miniSubGrid = LinearLayout(context).apply {
@@ -706,10 +698,13 @@ object IosTileGroupFolder {
                 }
             }
 
+            val circViews = ArrayList<Pair<View, String>>()
             for (i in 3 until Math.min(7, group.specs.size)) {
                 val spec = group.specs[i]
                 val targetSubRow = if (i < 5) subRow1 else subRow2
                 val circView = ControlCenterGrouping.inflateTileForType("C", targetSubRow, qsListCtrl, classLoader)
+                circView.setTag(0x7f09999c, true)
+                circView.setTag(0x7f09999b, true)
 
                 val tileLabelId = context.resources.getIdentifier("tile_label", "id", context.packageName)
                 val tileLabel = if (tileLabelId != 0) circView.findViewById<TextView>(tileLabelId) else null
@@ -753,7 +748,7 @@ object IosTileGroupFolder {
                 iconFrame?.background = null
 
                 targetSubRow.addView(circView, circLp())
-                bindTileDirectly(circView, spec, mainPanelController, classLoader)
+                circViews.add(Pair(circView, spec))
             }
 
             miniSubGrid.addView(subRow1)
@@ -763,6 +758,19 @@ object IosTileGroupFolder {
             macroGrid.addView(macroRow1)
             macroGrid.addView(macroRow2)
             cardContainer.addView(macroGrid)
+
+            if (tile1 != null && group.specs.isNotEmpty()) {
+                bindTileDirectly(tile1, group.specs[0], mainPanelController, classLoader)
+            }
+            if (tile2 != null && group.specs.size > 1) {
+                bindTileDirectly(tile2, group.specs[1], mainPanelController, classLoader)
+            }
+            if (tile3 != null && group.specs.size > 2) {
+                bindTileDirectly(tile3, group.specs[2], mainPanelController, classLoader)
+            }
+            for ((cView, spec) in circViews) {
+                bindTileDirectly(cView, spec, mainPanelController, classLoader)
+            }
         }
 
         private fun bindTileDirectly(
@@ -808,6 +816,18 @@ object IosTileGroupFolder {
                 val subHolder = ControlCenterGrouping.createSubHolderForView(view, mainPanelController, classLoader) ?: return
                 ControlCenterGrouping.attachSubHolder(subHolder)
 
+                var vhCls: Class<*>? = subHolder.javaClass
+                while (vhCls != null) {
+                    try {
+                        val af = vhCls.getDeclaredField("attached")
+                        af.isAccessible = true
+                        af.setBoolean(subHolder, true)
+                        break
+                    } catch (t: Throwable) {
+                        vhCls = vhCls.superclass
+                    }
+                }
+
                 for (shM in subHolder.javaClass.methods) {
                     if (shM.name.startsWith("setItem")) {
                         shM.invoke(subHolder, childRecord)
@@ -823,6 +843,25 @@ object IosTileGroupFolder {
                 val onBindMethod = childRecord.javaClass.getMethod("onBindViewHolder")
                 onBindMethod.invoke(childRecord)
 
+                try {
+                    val clickActionF = childRecord.javaClass.getDeclaredField("clickAction").apply { isAccessible = true }
+                    val clickAction = clickActionF.get(childRecord)
+                    val secActionF = childRecord.javaClass.getDeclaredField("secondaryClickAction").apply { isAccessible = true }
+                    val secAction = secActionF.get(childRecord)
+                    val markActionF = childRecord.javaClass.getDeclaredField("markClickAction").apply { isAccessible = true }
+                    val markAction = markActionF.get(childRecord)
+                    val longActionF = childRecord.javaClass.getDeclaredField("longClickAction").apply { isAccessible = true }
+                    val longAction = longActionF.get(childRecord)
+
+                    for (m in view.javaClass.methods) {
+                        if (m.name == "attachListeners" && m.parameterTypes.size == 4) {
+                            m.isAccessible = true
+                            m.invoke(view, clickAction, secAction, markAction, longAction)
+                            break
+                        }
+                    }
+                } catch (t: Throwable) {}
+
                 val modeClass = Class.forName("miui.systemui.controlcenter.panel.main.MainPanelController\$Mode", false, classLoader)
                 val currentMode = modeClass.getMethod("valueOf", String::class.java).invoke(null, "NORMAL")
                 val updateModeMethod = childRecord.javaClass.getMethod("updateMode", modeClass, Boolean::class.javaPrimitiveType)
@@ -832,10 +871,10 @@ object IosTileGroupFolder {
                     onModeChangedM.invoke(view, currentMode, false)
                 } catch (t: Throwable) {}
 
-                val isConnected = (spec == "wifi" || spec == "cell")
-
                 val getTileM = childRecord.javaClass.getMethod("getTile")
                 val tileObj = getTileM.invoke(childRecord)
+                val isConnected = ControlCenterConfigHolder.isTileConnected(tileObj)
+
                 if (tileObj != null) {
                     val setLisM = tileObj.javaClass.getMethod("setListening", Any::class.java, Boolean::class.javaPrimitiveType)
                     setLisM.invoke(tileObj, childRecord, true)

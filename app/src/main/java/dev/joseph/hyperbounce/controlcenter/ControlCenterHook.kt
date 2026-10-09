@@ -47,6 +47,15 @@ object ControlCenterHook {
     @Volatile private var sExpandTransYField: Field? = null
     @Volatile private var sSpreadRowField: Field? = null
     @Volatile private var sShrinkXEaseField: Field? = null
+    @Volatile private var sShrinkCenterXField: Field? = null
+    @Volatile private var sShrinkCenterYField: Field? = null
+    @Volatile private var sDelayPerField: Field? = null
+    @Volatile private var sReleaseTransYEaseField: Field? = null
+    @Volatile private var sShowEaseField: Field? = null
+    @Volatile private var sHideEaseField: Field? = null
+    @Volatile private var sShrinkYEaseField: Field? = null
+    @Volatile private var sSetFactorsMethod: Method? = null
+    @Volatile private var sGetContextMethod: Method? = null
 
     fun initSystemUIHooks(module: XposedModule, classLoader: ClassLoader?) {
         if (classLoader == null || sysuiHooked) return
@@ -214,7 +223,9 @@ object ControlCenterHook {
     }
 
     fun isChildOfContainer(view: View?): Boolean {
-        var cur = view?.parent
+        if (view == null) return false
+        if (view.getTag(0x7f09999c) == true || view.getTag(0x7f09999b) == true) return true
+        var cur = view.parent
         while (cur != null) {
             if (cur is View && (cur.id == 0x7f099995 || cur.getTag(0x7f099995) != null || cur.getTag(0x7f099993) != null || cur is IosTileGroupFolder.IosClusterContainer || cur is IosTileGroupFolder.MiniClusterView || cur is IosTileGroupFolder.IosFolderExpandedOverlay)) {
                 return true
@@ -967,11 +978,11 @@ object ControlCenterHook {
                             try {
                                 var ctx: Context? = null
                                 try {
-                                    val getCtxMethod = holder.javaClass.getMethod("getContext")
+                                    val getCtxMethod = sGetContextMethod ?: holder.javaClass.getMethod("getContext").apply { sGetContextMethod = this }
                                     ctx = getCtxMethod.invoke(holder) as? Context
                                 } catch (t: Throwable) {
                                     try {
-                                        val ivField = holder.javaClass.getField("itemView")
+                                        val ivField = sItemViewField ?: holder.javaClass.getField("itemView").apply { sItemViewField = this }
                                         val iv = ivField.get(holder) as? View
                                         if (iv != null) ctx = iv.context
                                     } catch (t2: Throwable) {}
@@ -981,16 +992,22 @@ object ControlCenterHook {
                                 val screenW = ctx.resources.displayMetrics.widthPixels.toFloat()
                                 val screenH = ctx.resources.displayMetrics.heightPixels.toFloat()
 
-                                val shrinkCenterXField = holderClass.getDeclaredField("shrinkCenterX")
-                                shrinkCenterXField.isAccessible = true
+                                val shrinkCenterXField = sShrinkCenterXField ?: holderClass.getDeclaredField("shrinkCenterX").apply {
+                                    isAccessible = true
+                                    sShrinkCenterXField = this
+                                }
                                 shrinkCenterXField.setFloat(holder, screenW / 2.0f)
 
-                                val shrinkCenterYField = holderClass.getDeclaredField("shrinkCenterY")
-                                shrinkCenterYField.isAccessible = true
+                                val shrinkCenterYField = sShrinkCenterYField ?: holderClass.getDeclaredField("shrinkCenterY").apply {
+                                    isAccessible = true
+                                    sShrinkCenterYField = this
+                                }
                                 shrinkCenterYField.setFloat(holder, screenH / 2.0f)
 
-                                val delayPerField = holderClass.getDeclaredField("delayPer")
-                                delayPerField.isAccessible = true
+                                val delayPerField = sDelayPerField ?: holderClass.getDeclaredField("delayPer").apply {
+                                    isAccessible = true
+                                    sDelayPerField = this
+                                }
                                 delayPerField.setFloat(holder, 0.0f)
                             } catch (t: Throwable) {
                                 Log.e(TAG, "prepareLocation hook error", t)
@@ -1016,49 +1033,69 @@ object ControlCenterHook {
                             try {
                                 val holder = chain.thisObject
 
-                                val delayPerField = holderClass.getDeclaredField("delayPer")
-                                delayPerField.isAccessible = true
+                                val delayPerField = sDelayPerField ?: holderClass.getDeclaredField("delayPer").apply {
+                                    isAccessible = true
+                                    sDelayPerField = this
+                                }
                                 delayPerField.setFloat(holder, 0.0f)
 
                                 val bounceEase = getStyleMethod.invoke(null, -2, floatArrayOf(0.88f, 0.38f))
-                                val releaseTransYEaseField = holderClass.getDeclaredField("releaseTransYEase")
-                                releaseTransYEaseField.isAccessible = true
+                                val releaseTransYEaseField = sReleaseTransYEaseField ?: holderClass.getDeclaredField("releaseTransYEase").apply {
+                                    isAccessible = true
+                                    sReleaseTransYEaseField = this
+                                }
                                 releaseTransYEaseField.set(holder, bounceEase)
 
                                 if (!ControlCenterConfigHolder.config.isLowEndAnim() && ControlCenterConfigHolder.config.isAnimActive) {
-                                    val showEaseField = holderClass.getDeclaredField("showEase")
-                                    showEaseField.isAccessible = true
+                                    val showEaseField = sShowEaseField ?: holderClass.getDeclaredField("showEase").apply {
+                                        isAccessible = true
+                                        sShowEaseField = this
+                                    }
                                     val showEase = showEaseField.get(holder)
                                     if (showEase != null) {
-                                        val setFactorsMethod = showEase.javaClass.getMethod("setFactors", Float::class.javaPrimitiveType, Float::class.javaPrimitiveType)
-                                        setFactorsMethod.isAccessible = true
+                                        val setFactorsMethod = sSetFactorsMethod ?: showEase.javaClass.getMethod("setFactors", Float::class.javaPrimitiveType, Float::class.javaPrimitiveType).apply {
+                                            isAccessible = true
+                                            sSetFactorsMethod = this
+                                        }
                                         setFactorsMethod.invoke(showEase, ControlCenterConfigHolder.config.tileShowDamping, ControlCenterConfigHolder.config.tileShowResponse)
                                     }
 
-                                    val hideEaseField = holderClass.getDeclaredField("hideEase")
-                                    hideEaseField.isAccessible = true
+                                    val hideEaseField = sHideEaseField ?: holderClass.getDeclaredField("hideEase").apply {
+                                        isAccessible = true
+                                        sHideEaseField = this
+                                    }
                                     val hideEase = hideEaseField.get(holder)
                                     if (hideEase != null) {
-                                        val setFactorsMethod = hideEase.javaClass.getMethod("setFactors", Float::class.javaPrimitiveType, Float::class.javaPrimitiveType)
-                                        setFactorsMethod.isAccessible = true
+                                        val setFactorsMethod = sSetFactorsMethod ?: hideEase.javaClass.getMethod("setFactors", Float::class.javaPrimitiveType, Float::class.javaPrimitiveType).apply {
+                                            isAccessible = true
+                                            sSetFactorsMethod = this
+                                        }
                                         setFactorsMethod.invoke(hideEase, ControlCenterConfigHolder.config.tileHideDamping, ControlCenterConfigHolder.config.tileHideResponse)
                                     }
 
-                                    val shrinkXEaseField = holderClass.getDeclaredField("shrinkXEase")
-                                    shrinkXEaseField.isAccessible = true
+                                    val shrinkXEaseField = sShrinkXEaseField ?: holderClass.getDeclaredField("shrinkXEase").apply {
+                                        isAccessible = true
+                                        sShrinkXEaseField = this
+                                    }
                                     val shrinkXEase = shrinkXEaseField.get(holder)
                                     if (shrinkXEase != null) {
-                                        val setFactorsMethod = shrinkXEase.javaClass.getMethod("setFactors", Float::class.javaPrimitiveType, Float::class.javaPrimitiveType)
-                                        setFactorsMethod.isAccessible = true
+                                        val setFactorsMethod = sSetFactorsMethod ?: shrinkXEase.javaClass.getMethod("setFactors", Float::class.javaPrimitiveType, Float::class.javaPrimitiveType).apply {
+                                            isAccessible = true
+                                            sSetFactorsMethod = this
+                                        }
                                         setFactorsMethod.invoke(shrinkXEase, ControlCenterConfigHolder.config.tileShrinkDamping, ControlCenterConfigHolder.config.tileShrinkResponse)
                                     }
 
-                                    val shrinkYEaseField = holderClass.getDeclaredField("shrinkYEase")
-                                    shrinkYEaseField.isAccessible = true
+                                    val shrinkYEaseField = sShrinkYEaseField ?: holderClass.getDeclaredField("shrinkYEase").apply {
+                                        isAccessible = true
+                                        sShrinkYEaseField = this
+                                    }
                                     val shrinkYEase = shrinkYEaseField.get(holder)
                                     if (shrinkYEase != null) {
-                                        val setFactorsMethod = shrinkYEase.javaClass.getMethod("setFactors", Float::class.javaPrimitiveType, Float::class.javaPrimitiveType)
-                                        setFactorsMethod.isAccessible = true
+                                        val setFactorsMethod = sSetFactorsMethod ?: shrinkYEase.javaClass.getMethod("setFactors", Float::class.javaPrimitiveType, Float::class.javaPrimitiveType).apply {
+                                            isAccessible = true
+                                            sSetFactorsMethod = this
+                                        }
                                         setFactorsMethod.invoke(shrinkYEase, ControlCenterConfigHolder.config.tileShrinkDamping, ControlCenterConfigHolder.config.tileShrinkResponse)
                                     }
                                 }
@@ -2223,7 +2260,9 @@ object ControlCenterHook {
 
                                 val getTileViewMethod = qsRecordClass.getMethod("getTileView")
                                 val tileViewObj = getTileViewMethod.invoke(record)
-                                val holderObj = chain.args.getOrNull(0)
+                                val holderObj = try {
+                                    record.javaClass.getMethod("getHolder").invoke(record)
+                                } catch (t: Throwable) { null } ?: chain.args.getOrNull(0)
                                 val holderView = if (holderObj != null) {
                                     try {
                                         val f = holderObj.javaClass.getField("itemView")
@@ -2281,7 +2320,7 @@ object ControlCenterHook {
                                         }
                                     }
 
-                                    val isSubTile = ControlCenterConfigHolder.isGroupChild(spec) || isChildOfContainer(itemView)
+                                    val isSubTile = ControlCenterConfigHolder.isGroupChild(spec) || isChildOfContainer(itemView) || itemView.getTag(0x7f09999c) == true || itemView.getTag(0x7f09999b) == true
                                     if (isSubTile) {
                                         hideAllCustomBadges(itemView)
                                         if (isEdit) {
@@ -2297,7 +2336,8 @@ object ControlCenterHook {
                                     }
 
                                     // Grouped Card Binding (4-Tile & 2-Tile)
-                                    val group = ControlCenterConfigHolder.isGroupAnchor(spec)
+                                    val isActualAnchorContainer = (itemView.findViewById<View>(0x7f099995) != null || itemView.getTag(0x7f099994) != null) && itemView.getTag(0x7f09999c) != true
+                                    val group = if (isActualAnchorContainer) ControlCenterConfigHolder.isGroupAnchor(spec) else null
                                     if (group != null) {
                                         if (!isEdit) {
                                             val container = itemView.findViewById<ViewGroup>(0x7f099995)

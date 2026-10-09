@@ -1011,7 +1011,7 @@ object ControlCenterConfigHolder {
                                                 }
                                             }
                                         }
-                                        val isConnected = (spec == "wifi" || spec == "cell")
+                                        val isConnected = isTileConnected(tileObj)
                                         GroupedTileReflectionCache.updateStateMethod?.invoke(childView, curState, isConnected, false)
                                     }
                                 }
@@ -1022,6 +1022,16 @@ object ControlCenterConfigHolder {
             }
         } catch (t: Throwable) {
             Log.e(TAG, "wakeAndRefreshAllGroupedTiles error", t)
+        }
+    }
+
+    fun isTileConnected(tile: Any?): Boolean {
+        if (tile == null) return false
+        return try {
+            val m = tile.javaClass.getMethod("isConnected")
+            m.invoke(tile) as? Boolean ?: false
+        } catch (t: Throwable) {
+            false
         }
     }
 
