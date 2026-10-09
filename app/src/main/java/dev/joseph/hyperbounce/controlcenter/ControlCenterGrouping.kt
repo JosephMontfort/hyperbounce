@@ -2710,6 +2710,18 @@ object ControlCenterGrouping {
             var groupButton: ImageView? = customizeHeader.findViewById(groupTag)
             var disassembleButton: ImageView? = customizeHeader.findViewById(disassembleTag)
 
+            if (!ControlCenterConfigHolder.config.isModularEditActive) {
+                groupButton?.let {
+                    it.visibility = View.GONE
+                    customizeHeader.removeView(it)
+                }
+                disassembleButton?.let {
+                    it.visibility = View.GONE
+                    customizeHeader.removeView(it)
+                }
+                return
+            }
+
             val btnSize = if (completeButton.layoutParams != null && completeButton.layoutParams.height > 0) {
                 completeButton.layoutParams.height
             } else {

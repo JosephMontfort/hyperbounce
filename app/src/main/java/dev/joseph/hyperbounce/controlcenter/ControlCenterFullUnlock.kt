@@ -2035,6 +2035,10 @@ object ControlCenterFullUnlock {
      * Initializes all hooks for 100% Full Unlock.
      */
     fun init(module: XposedModule, classLoader: ClassLoader) {
+        if (!ControlCenterConfigHolder.config.isModularEditActive) {
+            Log.i(TAG, "isModularEditActive is false, skipping ControlCenterFullUnlock hooks")
+            return
+        }
         try {
             Log.i(TAG, "Initializing ControlCenterFullUnlock hooks...")
 
@@ -2045,6 +2049,7 @@ object ControlCenterFullUnlock {
                     if (m.name == "distributeContent") {
                         m.isAccessible = true
                         module.hook(m).intercept { chain ->
+                            if (!ControlCenterConfigHolder.config.isModularEditActive) return@intercept chain.proceed()
                             val result = chain.proceed()
                             try {
                                 val adapter = chain.thisObject

@@ -63,6 +63,44 @@ object ControlCenterHook {
         try {
             Log.i(TAG, "Initializing Control Center SystemUI Hooks...")
 
+            // 1. Hook SystemUIApplication.onCreate to handle startup state and queued stock reset
+            try {
+                val sysuiAppClass = Class.forName("com.android.systemui.SystemUIApplication", false, classLoader)
+                for (m in sysuiAppClass.declaredMethods) {
+                    if (m.name == "onCreate") {
+                        m.isAccessible = true
+                        module.hook(m).intercept { chain ->
+                            val result = chain.proceed()
+                            try {
+                                val app = chain.thisObject as? Context
+                                if (app != null) {
+                                    ControlCenterConfigHolder.sLastKnownContext = app.applicationContext
+                                    ControlCenterConfigHolder.loadSavedPriorities(app.applicationContext)
+                                    val filter = IntentFilter("dev.joseph.hyperbounce.RESET_CC_LAYOUT")
+                                    app.registerReceiver(object : BroadcastReceiver() {
+                                        override fun onReceive(context: Context?, intent: Intent?) {
+                                            Log.i(TAG, "Broadcast received: dev.joseph.hyperbounce.RESET_CC_LAYOUT")
+                                            ControlCenterConfigHolder.resetLayoutToStock(context)
+                                        }
+                                    }, filter, Context.RECEIVER_EXPORTED)
+                                }
+                            } catch (t: Throwable) {
+                                Log.e(TAG, "SystemUIApplication.onCreate hook error", t)
+                            }
+                            result
+                        }
+                    }
+                }
+            } catch (t: Throwable) {
+                Log.e(TAG, "Failed to hook SystemUIApplication.onCreate", t)
+            }
+
+            if (!ControlCenterConfigHolder.config.masterEnabled) {
+                Log.i(TAG, "Control Center master toggle disabled. Skipping all other SystemUI CC hooks.")
+                sysuiHooked = true
+                return
+            }
+
             try {
                 val factoryClass = Class.forName("com.android.systemui.shared.plugins.PluginInstance\$PluginFactory", false, classLoader)
                 for (m in factoryClass.declaredMethods) {
@@ -70,7 +108,7 @@ object ControlCenterHook {
                         m.isAccessible = true
                         module.hook(m).intercept { chain ->
                             val plugin = chain.proceed()
-                            if (plugin != null) {
+                            if (ControlCenterConfigHolder.config.masterEnabled && plugin != null) {
                                 val pluginLoader = plugin.javaClass.classLoader
                                 if (pluginLoader != null) {
                                     if (Looper.myLooper() == Looper.getMainLooper()) {
@@ -97,16 +135,18 @@ object ControlCenterHook {
                         m.isAccessible = true
                         module.hook(m).intercept { chain ->
                             try {
-                                val rawArgs = chain.args
-                                val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as? Array<*>
-                                if (args != null && args.isNotEmpty() && args[0] != null) {
-                                    val pluginLoader = args[0]!!.javaClass.classLoader
-                                    if (pluginLoader != null) {
-                                        if (Looper.myLooper() == Looper.getMainLooper()) {
-                                            initPluginHooks(module, pluginLoader)
-                                        } else {
-                                            Handler(Looper.getMainLooper()).post {
+                                if (ControlCenterConfigHolder.config.masterEnabled) {
+                                    val rawArgs = chain.args
+                                    val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as? Array<*>
+                                    if (args != null && args.isNotEmpty() && args[0] != null) {
+                                        val pluginLoader = args[0]!!.javaClass.classLoader
+                                        if (pluginLoader != null) {
+                                            if (Looper.myLooper() == Looper.getMainLooper()) {
                                                 initPluginHooks(module, pluginLoader)
+                                            } else {
+                                                Handler(Looper.getMainLooper()).post {
+                                                    initPluginHooks(module, pluginLoader)
+                                                }
                                             }
                                         }
                                     }
@@ -130,16 +170,18 @@ object ControlCenterHook {
                         module.hook(m).intercept { chain ->
                             val result = chain.proceed()
                             try {
-                                val rawArgs = chain.args
-                                val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as? Array<*>
-                                if (args != null && args.isNotEmpty() && args[0] != null) {
-                                    val pluginLoader = args[0]!!.javaClass.classLoader
-                                    if (pluginLoader != null) {
-                                        if (Looper.myLooper() == Looper.getMainLooper()) {
-                                            initPluginHooks(module, pluginLoader)
-                                        } else {
-                                            Handler(Looper.getMainLooper()).post {
+                                if (ControlCenterConfigHolder.config.masterEnabled) {
+                                    val rawArgs = chain.args
+                                    val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as? Array<*>
+                                    if (args != null && args.isNotEmpty() && args[0] != null) {
+                                        val pluginLoader = args[0]!!.javaClass.classLoader
+                                        if (pluginLoader != null) {
+                                            if (Looper.myLooper() == Looper.getMainLooper()) {
                                                 initPluginHooks(module, pluginLoader)
+                                            } else {
+                                                Handler(Looper.getMainLooper()).post {
+                                                    initPluginHooks(module, pluginLoader)
+                                                }
                                             }
                                         }
                                     }
@@ -184,37 +226,6 @@ object ControlCenterHook {
                     }
                 }
             } catch (t: Throwable) {}
-
-            try {
-                val sysuiAppClass = Class.forName("com.android.systemui.SystemUIApplication", false, classLoader)
-                for (m in sysuiAppClass.declaredMethods) {
-                    if (m.name == "onCreate") {
-                        m.isAccessible = true
-                        module.hook(m).intercept { chain ->
-                            val result = chain.proceed()
-                            try {
-                                val app = chain.thisObject as? Context
-                                if (app != null) {
-                                    ControlCenterConfigHolder.sLastKnownContext = app.applicationContext
-                                    ControlCenterConfigHolder.loadSavedPriorities(app.applicationContext)
-                                    val filter = IntentFilter("dev.joseph.hyperbounce.RESET_CC_LAYOUT")
-                                    app.registerReceiver(object : BroadcastReceiver() {
-                                        override fun onReceive(context: Context?, intent: Intent?) {
-                                            Log.i(TAG, "Broadcast received: dev.joseph.hyperbounce.RESET_CC_LAYOUT")
-                                            ControlCenterConfigHolder.resetLayoutToStock(context)
-                                        }
-                                    }, filter, Context.RECEIVER_EXPORTED)
-                                }
-                            } catch (t: Throwable) {
-                                Log.e(TAG, "SystemUIApplication.onCreate hook error", t)
-                            }
-                            result
-                        }
-                    }
-                }
-            } catch (t: Throwable) {
-                Log.e(TAG, "Failed to hook SystemUIApplication.onCreate", t)
-            }
 
             sysuiHooked = true
         } catch (t: Throwable) {
@@ -286,7 +297,8 @@ object ControlCenterHook {
     }
 
     fun applyUniversalMarkButton(itemView: View, spec: String, isAdded: Boolean, record: Any? = null) {
-        if (isChildOfContainer(itemView) ||
+        if (!ControlCenterConfigHolder.config.isModularEditActive ||
+            isChildOfContainer(itemView) ||
             itemView.findViewById<View>(0x7f099995) != null ||
             ControlCenterConfigHolder.isGroupAnchor(spec) != null ||
             ControlCenterConfigHolder.isGroupMember(spec)) {
@@ -504,6 +516,10 @@ object ControlCenterHook {
     @Synchronized
     fun initPluginHooks(module: XposedModule, classLoader: ClassLoader?) {
         if (classLoader == null || hookedPluginLoaders.contains(classLoader)) return
+        if (!ControlCenterConfigHolder.config.masterEnabled) {
+            Log.i(TAG, "Control Center master toggle disabled. Skipping initPluginHooks.")
+            return
+        }
 
         try {
             Log.i(TAG, "Initializing Control Center Plugin hooks on ClassLoader: $classLoader")
@@ -567,6 +583,7 @@ object ControlCenterHook {
                                         ControlCenterConfigHolder.sLastTouchTime = System.currentTimeMillis()
                                     } else if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
                                         ControlCenterConfigHolder.sLastTouchTime = System.currentTimeMillis()
+                                        ControlCenterConfigHolder.sIsUserFlicking = false
                                     }
                                 }
                             } catch (t: Throwable) {}
@@ -879,7 +896,7 @@ object ControlCenterHook {
                                                 }
                                             }
                                         }
-                                        val canRotate = isEdit && !ControlCenterConfigHolder.sIsGroupSelectMode && !ControlCenterConfigHolder.sIsDisassembleMode && !isIosCluster
+                                        val canRotate = ControlCenterConfigHolder.config.isModularEditActive && isEdit && !ControlCenterConfigHolder.sIsGroupSelectMode && !ControlCenterConfigHolder.sIsDisassembleMode && !isIosCluster
                                         rotateBtn.visibility = if (canRotate) View.VISIBLE else View.GONE
                                         if (canRotate) rotateBtn.bringToFront()
                                     }
@@ -1159,59 +1176,7 @@ object ControlCenterHook {
                                     }
                                     val row = spreadRowField.getInt(holder)
 
-                                    val viewWidth = targetView.width
-                                    val viewHeight = targetView.height
-                                    if (viewWidth <= 0 || viewHeight <= 0) return@intercept result
-
-                                    val isRecentGesture = (System.currentTimeMillis() - ControlCenterConfigHolder.sLastTouchTime) < 700
-                                    val isClosing = (progress < 0.99f && ControlCenterConfigHolder.sCurrentVelocityY < -100.0f)
-
-                                    if (!ControlCenterConfigHolder.sIsUserFlicking && !isRecentGesture && Math.abs(expandTransY) < 1.0f) {
-                                        targetView.scaleX = 1.0f
-                                        targetView.scaleY = 1.0f
-                                        return@intercept result
-                                    }
-
-                                    val absVel = Math.abs(ControlCenterConfigHolder.sCurrentVelocityY)
-                                    val velFactor = if (absVel > 0.1f) Math.max(0.35f, Math.min(1.20f, absVel / 3500.0f)) else 0.70f
-
-                                    val density = targetView.context.resources.displayMetrics.density
-                                    val standardCardHeight = 110.0f * density
-                                    val heightDampener = Math.max(0.42f, Math.min(1.0f, standardCardHeight / viewHeight))
-
-                                    var progressStretchY = 0.0f
-                                    var progressSquishX = 0.0f
-
-                                    if (!isClosing && progress in 0.01f..0.99f && (ControlCenterConfigHolder.sIsUserFlicking || isRecentGesture)) {
-                                        val momentum = Math.sin(progress * Math.PI).toFloat()
-                                        val rowStagger = 1.0f + (row * 0.040f)
-                                        progressStretchY = momentum * 0.090f * velFactor * heightDampener * rowStagger
-                                        progressSquishX = progressStretchY * 0.38f
-                                    } else if (isClosing && (ControlCenterConfigHolder.sIsUserFlicking || isRecentGesture)) {
-                                        val momentum = Math.sin(progress * Math.PI).toFloat()
-                                        progressStretchY = -momentum * 0.050f * velFactor * heightDampener
-                                        progressSquishX = -progressStretchY * 0.38f
-                                    }
-
-                                    val strain = Math.max(-0.22f, Math.min(0.50f, expandTransY / 850.0f))
-                                    val pullStretchY = strain * 0.32f * heightDampener
-                                    val pullSquishX = strain * 0.14f * heightDampener
-
-                                    val baseScale = Math.min(1.0f, Math.max(0.89f, 0.91f + (progress * 0.09f)))
-                                    val totalScaleY = baseScale + progressStretchY + pullStretchY
-                                    val totalScaleX = baseScale - progressSquishX - pullSquishX
-
-                                    targetView.pivotX = viewWidth / 2.0f
-                                    if (expandTransY > 3.0f || (!isClosing && progress > 0.05f && progress < 0.95f)) {
-                                        targetView.pivotY = viewHeight * 0.10f
-                                    } else if (expandTransY < -3.0f || isClosing) {
-                                        targetView.pivotY = viewHeight * 0.90f
-                                    } else {
-                                        targetView.pivotY = viewHeight / 2.0f
-                                    }
-
-                                    targetView.scaleX = Math.max(0.78f, Math.min(1.30f, totalScaleX))
-                                    targetView.scaleY = Math.max(0.78f, Math.min(1.40f, totalScaleY))
+                                    JellyPhysicsEngine.onFrame(targetView, holder, progress, expandTransY, row)
                                 } catch (t: Throwable) {}
                             }
                             result
@@ -2356,7 +2321,7 @@ object ControlCenterHook {
                                         val rotateBtn = itemView.findViewById<View>(0x7f099992)
                                         if (rotateBtn != null) {
                                             val isIosCluster = group.isIosFolderCluster()
-                                            val canRotate = isEdit && !ControlCenterConfigHolder.sIsGroupSelectMode && !ControlCenterConfigHolder.sIsDisassembleMode && !isIosCluster
+                                            val canRotate = ControlCenterConfigHolder.config.isModularEditActive && isEdit && !ControlCenterConfigHolder.sIsGroupSelectMode && !ControlCenterConfigHolder.sIsDisassembleMode && !isIosCluster
                                             if (canRotate) {
                                                 rotateBtn.visibility = View.VISIBLE
                                                 rotateBtn.bringToFront()
@@ -2585,7 +2550,7 @@ object ControlCenterHook {
                                         }
 
                                         if (resizeHandle != null) {
-                                            if (isEdit && isAdded && !ControlCenterConfigHolder.sIsGroupSelectMode && !ControlCenterConfigHolder.sIsDisassembleMode) {
+                                            if (ControlCenterConfigHolder.config.isModularEditActive && isEdit && isAdded && !ControlCenterConfigHolder.sIsGroupSelectMode && !ControlCenterConfigHolder.sIsDisassembleMode) {
                                                 resizeHandle.visibility = View.VISIBLE
                                                 val bw = resizeHandle.measuredWidth.takeIf { it > 0 } ?: badgeSize
                                                 val bh = resizeHandle.measuredHeight.takeIf { it > 0 } ?: badgeSize
@@ -2779,7 +2744,7 @@ object ControlCenterHook {
                                                     }
                                                 }
 
-                                                val shouldShow = isCurAdded && !ControlCenterConfigHolder.sIsGroupSelectMode && !ControlCenterConfigHolder.sIsDisassembleMode
+                                                val shouldShow = ControlCenterConfigHolder.config.isModularEditActive && isCurAdded && !ControlCenterConfigHolder.sIsGroupSelectMode && !ControlCenterConfigHolder.sIsDisassembleMode
                                                 if (shouldShow) {
                                                     resizeHandle.visibility = View.VISIBLE
                                                     val bw = resizeHandle.measuredWidth.takeIf { it > 0 } ?: badgeSize
@@ -2814,7 +2779,7 @@ object ControlCenterHook {
 
                                             val selectBadge = itemView.findViewById<ImageView>(0x7f099998)
                                             if (selectBadge != null && !isChildOfContainer(itemView)) {
-                                                if (!ControlCenterConfigHolder.sIsGroupSelectMode) {
+                                                if (!ControlCenterConfigHolder.config.isModularEditActive || !ControlCenterConfigHolder.sIsGroupSelectMode) {
                                                     selectBadge.visibility = View.GONE
                                                     selectBadge.setOnClickListener(null)
                                                     selectBadge.isClickable = false
@@ -2854,7 +2819,7 @@ object ControlCenterHook {
                                                 val group = itemView.getTag(0x7f099994) as? TileGroup
                                                     ?: ControlCenterConfigHolder.isGroupAnchor(itemView.getTag(0x7f099990) as? String)
                                                 val isIosCluster = (group != null && group.isIosFolderCluster())
-                                                val canRotate = !ControlCenterConfigHolder.sIsGroupSelectMode && !ControlCenterConfigHolder.sIsDisassembleMode && !isIosCluster
+                                                val canRotate = ControlCenterConfigHolder.config.isModularEditActive && !ControlCenterConfigHolder.sIsGroupSelectMode && !ControlCenterConfigHolder.sIsDisassembleMode && !isIosCluster
                                                 rotateBtn.visibility = if (canRotate) View.VISIBLE else View.GONE
                                                 if (canRotate) rotateBtn.bringToFront()
                                             }
@@ -3943,7 +3908,7 @@ object ControlCenterHook {
 
             val rotateTag = 0x7f099992
             var rotateBtn = itemView.findViewById<ImageView>(rotateTag)
-            if (ControlCenterConfigHolder.sIsEditMode) {
+            if (ControlCenterConfigHolder.config.isModularEditActive && ControlCenterConfigHolder.sIsEditMode) {
                 val shouldShow = isAdded && !ControlCenterConfigHolder.sIsGroupSelectMode && !ControlCenterConfigHolder.sIsDisassembleMode
                 if (rotateBtn == null && itemView is ViewGroup) {
                     val rSize = (26 * density).toInt()
@@ -3991,7 +3956,7 @@ object ControlCenterHook {
 
             val resizeTag = 0x7f099999
             var resizeHandle = itemView.findViewById<ImageView>(resizeTag)
-            if (ControlCenterConfigHolder.sIsEditMode && isHorizontal) {
+            if (ControlCenterConfigHolder.config.isModularEditActive && ControlCenterConfigHolder.sIsEditMode && isHorizontal) {
                 val badgeSize = (38 * density).toInt()
                 if (resizeHandle == null && itemView is ViewGroup) {
                     resizeHandle = ImageView(ctx).apply {
@@ -6399,7 +6364,7 @@ object ControlCenterHook {
 
             val resizeTag = 0x7f099999
             var resizeHandle = itemView.findViewById<ImageView>(resizeTag)
-            if (ControlCenterConfigHolder.sIsEditMode) {
+            if (ControlCenterConfigHolder.config.isModularEditActive && ControlCenterConfigHolder.sIsEditMode) {
                 val shouldShow = isAdded && !ControlCenterConfigHolder.sIsGroupSelectMode && !ControlCenterConfigHolder.sIsDisassembleMode
                 val badgeSize = (38 * density).toInt()
                 if (resizeHandle == null && itemView is ViewGroup) {

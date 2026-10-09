@@ -84,8 +84,17 @@ class ConfigProvider : ContentProvider() {
                 try {
                     val file = File(ctx.filesDir, "cc_layout.json")
                     if (file.exists()) file.delete()
+                    val p = ctx.getSharedPreferences("hyperbounce_settings", Context.MODE_PRIVATE)
+                    p.edit().putBoolean("cc_pending_reset_layout", false).apply()
                     val intent = Intent("dev.joseph.hyperbounce.RESET_CC_LAYOUT")
                     ctx.sendBroadcast(intent)
+                } catch (t: Throwable) {}
+                return Bundle()
+            }
+            "clearPendingResetLayout" -> {
+                try {
+                    val p = ctx.getSharedPreferences("hyperbounce_settings", Context.MODE_PRIVATE)
+                    p.edit().putBoolean("cc_pending_reset_layout", false).apply()
                 } catch (t: Throwable) {}
                 return Bundle()
             }

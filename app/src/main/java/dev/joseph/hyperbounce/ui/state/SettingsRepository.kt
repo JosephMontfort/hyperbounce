@@ -1279,6 +1279,14 @@ class SettingsRepository(context: Context) {
         var true2dGridEnabled by prefsBooleanState("cc_true_2d_grid_enabled", defaults.true2dGridEnabled); private set
         var fluidResizeEnabled by prefsBooleanState("cc_fluid_resize_enabled", defaults.fluidResizeEnabled); private set
         var landscapeRightMaxRows by prefsIntState("cc_landscape_right_max_rows", defaults.landscapeRightMaxRows); private set
+        var pendingResetLayout by prefsBooleanState("cc_pending_reset_layout", defaults.pendingResetLayout); private set
+
+        private fun checkPendingReset() {
+            val shouldReset = (!masterEnabled || !modularEditEnabled)
+            if (pendingResetLayout != shouldReset) {
+                pendingResetLayout = shouldReset
+            }
+        }
 
         fun snapshot(): ControlCenterSettings = ControlCenterSettings(
             masterEnabled,
@@ -1288,14 +1296,20 @@ class SettingsRepository(context: Context) {
             tileShowResponse, tileShowDamping, tileHideResponse, tileHideDamping,
             tileShrinkResponse, tileShrinkDamping, tileDelayScale, frictionMultiplier,
             lowEndFlashlightEnabled, flashlightMaxBrightness, true2dGridEnabled, fluidResizeEnabled,
-            landscapeRightMaxRows
+            landscapeRightMaxRows, pendingResetLayout
         )
 
-        @JvmName("setCcMasterEnabledPref") fun setMasterEnabled(v: Boolean) { masterEnabled = v }
+        @JvmName("setCcMasterEnabledPref") fun setMasterEnabled(v: Boolean) {
+            masterEnabled = v
+            checkPendingReset()
+        }
         @JvmName("setCcLandscapeRightMaxRowsPref") fun setLandscapeRightMaxRows(v: Int) { landscapeRightMaxRows = v.coerceIn(1, 6) }
         @JvmName("setCcTrue2dGridEnabledPref") fun setTrue2dGridEnabled(v: Boolean) { true2dGridEnabled = v }
         @JvmName("setCcFluidResizeEnabledPref") fun setFluidResizeEnabled(v: Boolean) { fluidResizeEnabled = v }
-        @JvmName("setCcModularEditEnabledPref") fun setModularEditEnabled(v: Boolean) { modularEditEnabled = v }
+        @JvmName("setCcModularEditEnabledPref") fun setModularEditEnabled(v: Boolean) {
+            modularEditEnabled = v
+            checkPendingReset()
+        }
         @JvmName("setCcAnimEnabledPref") fun setAnimEnabled(v: Boolean) { animEnabled = v }
         @JvmName("setCcJellyEnabledPref") fun setJellyEnabled(v: Boolean) { jellyEnabled = v }
         @JvmName("setCcAnimEngineModePref") fun setAnimEngineMode(v: Int) { animEngineMode = v }
@@ -1322,6 +1336,7 @@ class SettingsRepository(context: Context) {
         fun reloadFromDefaults() {
             masterEnabled = defaults.masterEnabled
             modularEditEnabled = defaults.modularEditEnabled
+            pendingResetLayout = defaults.pendingResetLayout
             true2dGridEnabled = defaults.true2dGridEnabled
             fluidResizeEnabled = defaults.fluidResizeEnabled
             animEnabled = defaults.animEnabled

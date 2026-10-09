@@ -311,6 +311,8 @@ object ControlCenterConfigHolder {
         return null
     }
 
+    @Volatile var pendingResetLayout: Boolean = false
+
     fun updateFromPrefs(prefs: SharedPreferences) {
         val defaultMode = DevicePipelineDetector.getDefaultAnimEngineMode()
         val engineMode = if (prefs.contains("cc_anim_engine_mode")) {
@@ -320,6 +322,7 @@ object ControlCenterConfigHolder {
         } else {
             defaultMode
         }
+        pendingResetLayout = prefs.getBoolean("cc_pending_reset_layout", false)
         config = ControlCenterConfig(
             masterEnabled = prefs.getBoolean("cc_master_enabled", true),
             modularEditEnabled = prefs.getBoolean("cc_modular_edit_enabled", true),
@@ -351,11 +354,28 @@ object ControlCenterConfigHolder {
         )
     }
 
+    fun clearPendingReset(ctx: Context?) {
+        if (ctx == null) return
+        try {
+            ctx.contentResolver.call(
+                Uri.parse("content://dev.hyperios.app.provider"),
+                "clearPendingResetLayout", null, null
+            )
+        } catch (t: Throwable) {}
+    }
+
     @Synchronized
     fun loadSavedPriorities(ctx: Context?) {
         if (ctx == null) return
         sLastKnownContext = ctx
         sHasLoadedPriorities = true
+        if (pendingResetLayout) {
+            Log.i(TAG, "Queued reset to stock layout detected on startup. Executing resetLayoutToStock...")
+            resetLayoutToStock(ctx)
+            clearPendingReset(ctx)
+            pendingResetLayout = false
+            return
+        }
         try {
             // 1. Android Settings.Secure
             var jsonStr = try {
@@ -741,6 +761,7 @@ object ControlCenterConfigHolder {
                     "resetCCLayout", null, null
                 )
             } catch (t: Throwable) {}
+            clearPendingReset(ctx)
 
             val prefs = ctx.getSharedPreferences("hyperbounce_cc_layout", Context.MODE_PRIVATE)
             prefs?.edit()?.clear()?.apply()
@@ -1265,7 +1286,7 @@ object ControlCenterConfigHolder {
                     var selectBadge = itemView.findViewById<View>(selectTag) as? ImageView
                     var rotateBtn = itemView.findViewById<View>(rotateTag) as? ImageView
 
-                    if (!sIsEditMode) {
+                    if (!sIsEditMode || !config.isModularEditActive) {
                         ControlCenterHook.hideAllCustomBadges(itemView)
                         hideAllRotateButtons(itemView as? ViewGroup)
                         itemView.isClickable = true
