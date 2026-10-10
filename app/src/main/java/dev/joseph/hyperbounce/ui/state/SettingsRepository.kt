@@ -1482,7 +1482,7 @@ class SettingsRepository(context: Context) {
             private set
         var hapticsEnabled by prefsBooleanState("dialer_haptics_enabled", true)
             private set
-        var morphDuration by prefsFloatState("dialer_morph_duration", 9f)
+        var morphDuration by prefsFloatState("dialer_morph_duration", 480f)
             private set
 
         @JvmName("setDialerRecentsEnabledPref")
@@ -1509,7 +1509,7 @@ class SettingsRepository(context: Context) {
             deleteWidth = 84f
             confirmDelete = true
             hapticsEnabled = true
-            morphDuration = 9f
+            morphDuration = 480f
         }
     }
 

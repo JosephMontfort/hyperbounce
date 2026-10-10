@@ -6,9 +6,11 @@ import android.app.Activity
 import android.app.AlertDialog
 import android.app.Application
 import android.app.WallpaperManager
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.ContextWrapper
 import android.content.Intent
+import android.content.IntentFilter
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
@@ -918,37 +920,72 @@ object DialerRecentsHook {
     }
 
     @Volatile private var cachedBlurredWallpaper: Bitmap? = null
+    @Volatile private var lastWallpaperMtime: Long = 0L
+    @Volatile private var wallpaperReceiverRegistered = false
     @Volatile private var isLoadingWallpaper = false
 
-    fun getBlurredWallpaper(context: Context): Bitmap? {
-        val cached = cachedBlurredWallpaper
-        if (cached != null && !cached.isRecycled) return cached
+    private fun registerWallpaperReceiver(context: Context) {
+        if (wallpaperReceiverRegistered) return
+        synchronized(this) {
+            if (wallpaperReceiverRegistered) return
+            try {
+                val filter = IntentFilter(Intent.ACTION_WALLPAPER_CHANGED)
+                val receiver = object : BroadcastReceiver() {
+                    override fun onReceive(c: Context?, intent: Intent?) {
+                        Log.d(TAG, "Wallpaper changed broadcast received, invalidating dialer wallpaper")
+                        cachedBlurredWallpaper = null
+                        lastWallpaperMtime = 0L
+                    }
+                }
+                context.applicationContext.registerReceiver(receiver, filter)
+                wallpaperReceiverRegistered = true
+            } catch (t: Throwable) {
+                Log.d(TAG, "Failed to register dialer wallpaper receiver", t)
+            }
+        }
+    }
 
-        // 1. ConfigProvider content:// (pre-rendered 914x2034 Xiaomi system blurwallpaper)
+    fun getBlurredWallpaper(context: Context): Bitmap? {
+        registerWallpaperReceiver(context)
+
+        // 1. Direct file check of Xiaomi's system blurwallpaper (809x1800 RGBA, 0644 world-readable)
         try {
+            val blurFile = File("/data/system/users/0/blurwallpaper")
+            if (blurFile.exists() && blurFile.canRead() && blurFile.length() > 50_000L) {
+                val mtime = blurFile.lastModified()
+                val cached = cachedBlurredWallpaper
+                if (cached != null && !cached.isRecycled && mtime == lastWallpaperMtime) {
+                    return cached
+                }
+                val opts = BitmapFactory.Options().apply { inPreferredConfig = Bitmap.Config.ARGB_8888 }
+                val bmp = BitmapFactory.decodeFile(blurFile.absolutePath, opts)
+                if (bmp != null && bmp.width >= 200 && bmp.height >= 200) {
+                    cachedBlurredWallpaper = bmp
+                    lastWallpaperMtime = mtime
+                    return bmp
+                }
+            }
+        } catch (_: Throwable) {}
+
+        // 2. ConfigProvider content:// (pre-rendered high-res blurwallpaper)
+        try {
+            val cached = cachedBlurredWallpaper
+            if (cached != null && !cached.isRecycled) return cached
+
             val uri = Uri.parse("content://dev.hyperios.app.provider/incall_stock_background.png")
             context.contentResolver.openInputStream(uri)?.use { stream ->
                 val bmp = BitmapFactory.decodeStream(stream)
-                if (bmp != null) {
+                if (bmp != null && bmp.width >= 200 && bmp.height >= 200) {
                     cachedBlurredWallpaper = bmp
                     return bmp
                 }
             }
         } catch (_: Throwable) {}
 
-        // 2. Direct file check if readable
-        try {
-            val blurFile = File("/data/system/users/0/blurwallpaper")
-            if (blurFile.exists() && blurFile.canRead()) {
-                val bmp = BitmapFactory.decodeFile(blurFile.absolutePath)
-                if (bmp != null) {
-                    cachedBlurredWallpaper = bmp
-                    return bmp
-                }
-            }
-        } catch (_: Throwable) {}
+        val cached = cachedBlurredWallpaper
+        if (cached != null && !cached.isRecycled) return cached
 
-        // 3. Fallback using Xiaomi's exact algorithm decompiled from N.e / C0214b
+        // 3. Fallback: render blurred wallpaper asynchronously
         if (!isLoadingWallpaper) {
             isLoadingWallpaper = true
             Thread {
@@ -957,8 +994,8 @@ object DialerRecentsHook {
                     val drawable = wm.peekDrawable() ?: wm.drawable
                     if (drawable != null) {
                         val origBmp = (drawable as? BitmapDrawable)?.bitmap ?: run {
-                            val w = drawable.intrinsicWidth.coerceAtLeast(120)
-                            val h = drawable.intrinsicHeight.coerceAtLeast(240)
+                            val w = drawable.intrinsicWidth.coerceAtLeast(360)
+                            val h = drawable.intrinsicHeight.coerceAtLeast(720)
                             val b = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
                             val c = Canvas(b)
                             drawable.setBounds(0, 0, w, h)
@@ -966,7 +1003,7 @@ object DialerRecentsHook {
                             b
                         }
                         val bmp = renderXiaomiBlurredWallpaper(context, origBmp)
-                        if (bmp != null) {
+                        if (bmp != null && bmp.width >= 200 && bmp.height >= 200) {
                             cachedBlurredWallpaper = bmp
                         }
                     }
@@ -982,9 +1019,9 @@ object DialerRecentsHook {
 
     private fun renderXiaomiBlurredWallpaper(context: Context, source: Bitmap): Bitmap? {
         return try {
-            val scale = 0.15f
-            val scaledW = (source.width * scale).toInt().coerceAtLeast(108)
-            val scaledH = (source.height * scale).toInt().coerceAtLeast(240)
+            val scale = 0.35f
+            val scaledW = (source.width * scale).toInt().coerceAtLeast(240)
+            val scaledH = (source.height * scale).toInt().coerceAtLeast(500)
             val scaledBmp = Bitmap.createScaledBitmap(source, scaledW, scaledH, true)
 
             val rs = RenderScript.create(context)
@@ -1106,7 +1143,7 @@ object DialerRecentsHook {
             override fun onDraw(canvas: Canvas) {
                 super.onDraw(canvas)
                 val motion = folmeMotion.getInterpolation(progress)
-                val cornerRadius = 14f * density
+                val cornerRadius = (14f * density) * (1f - progress)
                 currRect.set(
                     startRect.left + (endRect.left - startRect.left) * progress,
                     startRect.top + (endRect.top - startRect.top) * progress,

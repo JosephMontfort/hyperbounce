@@ -2,9 +2,11 @@ package dev.joseph.hyperbounce.caller
 
 import android.app.Activity
 import android.app.WallpaperManager
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.ContextWrapper
 import android.content.Intent
+import android.content.IntentFilter
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
@@ -412,75 +414,90 @@ object IosCallerScreenHook {
     }
 
     @Volatile private var cachedInCallWallpaper: Bitmap? = null
+    @Volatile private var lastInCallWallpaperMtime: Long = 0L
+    @Volatile private var inCallWallpaperReceiverRegistered = false
+
+    private fun registerInCallWallpaperReceiver(context: Context) {
+        if (inCallWallpaperReceiverRegistered) return
+        synchronized(this) {
+            if (inCallWallpaperReceiverRegistered) return
+            try {
+                val filter = IntentFilter(Intent.ACTION_WALLPAPER_CHANGED)
+                val receiver = object : BroadcastReceiver() {
+                    override fun onReceive(c: Context?, intent: Intent?) {
+                        Log.d(TAG, "Wallpaper changed broadcast received, invalidating in-call wallpaper")
+                        cachedInCallWallpaper = null
+                        lastInCallWallpaperMtime = 0L
+                    }
+                }
+                context.applicationContext.registerReceiver(receiver, filter)
+                inCallWallpaperReceiverRegistered = true
+            } catch (t: Throwable) {
+                Log.d(TAG, "Failed to register in-call wallpaper receiver", t)
+            }
+        }
+    }
 
     private fun getInCallBlurredWallpaper(activity: Activity): Bitmap? {
-        val cached = cachedInCallWallpaper
-        if (cached != null && !cached.isRecycled) return cached
+        registerInCallWallpaperReceiver(activity)
 
-        // 1. Reflect Xiaomi's stock N.e singleton in XiaomiInCallUI
+        // 1. Direct file check of Xiaomi's system blurwallpaper (809x1800 RGBA, 0644 world-readable)
         try {
-            val neClass = Class.forName("N.e", false, activity.classLoader)
-            val dMethod = neClass.getDeclaredMethod("d")
-            val instance = dMethod.invoke(null)
-            if (instance != null) {
-                val fieldA = neClass.getDeclaredField("f267a").apply { isAccessible = true }
-                val ref = fieldA.get(instance) as? java.lang.ref.SoftReference<*>
-                val bmp = ref?.get() as? Bitmap
-                if (bmp != null && !bmp.isRecycled) {
+            val blurFile = File("/data/system/users/0/blurwallpaper")
+            if (blurFile.exists() && blurFile.canRead() && blurFile.length() > 50_000L) {
+                val mtime = blurFile.lastModified()
+                val cached = cachedInCallWallpaper
+                if (cached != null && !cached.isRecycled && mtime == lastInCallWallpaperMtime) {
+                    return cached
+                }
+                val opts = BitmapFactory.Options().apply { inPreferredConfig = Bitmap.Config.ARGB_8888 }
+                val bmp = BitmapFactory.decodeFile(blurFile.absolutePath, opts)
+                if (bmp != null && bmp.width >= 200 && bmp.height >= 200) {
                     cachedInCallWallpaper = bmp
-                    syncWallpaperToProvider(activity, bmp)
+                    lastInCallWallpaperMtime = mtime
                     return bmp
                 }
             }
         } catch (_: Throwable) {}
 
-        // 2. Window / DecorView background set by stock InCallBackgroundCallback
+        // 2. Window / DecorView background set by stock InCallBackgroundCallback (only if high-res)
         try {
             val decorBg = activity.window.decorView.background
             if (decorBg is BitmapDrawable && decorBg.bitmap != null && !decorBg.bitmap.isRecycled) {
-                cachedInCallWallpaper = decorBg.bitmap
-                syncWallpaperToProvider(activity, decorBg.bitmap)
-                return decorBg.bitmap
-            }
-        } catch (_: Throwable) {}
-
-        // 3. Reflect InCallBackgroundManager (com.android.incallui)
-        try {
-            val mgrClass = Class.forName("com.android.incallui.background.InCallBackgroundManager", false, activity.classLoader)
-            val getInst = mgrClass.getDeclaredMethod("getInstance")
-            val instance = getInst.invoke(null)
-            if (instance != null) {
-                val getBmp = mgrClass.getDeclaredMethod("getMultiCallBitmap")
-                val ref = getBmp.invoke(instance) as? java.lang.ref.SoftReference<*>
-                val bmp = ref?.get() as? Bitmap
-                if (bmp != null && !bmp.isRecycled) {
+                val bmp = decorBg.bitmap
+                if (bmp.width >= 200 && bmp.height >= 200) {
                     cachedInCallWallpaper = bmp
-                    syncWallpaperToProvider(activity, bmp)
                     return bmp
                 }
             }
         } catch (_: Throwable) {}
 
-        // 4. ConfigProvider content:// (the pre-rendered 914x2034 blurwallpaper)
+        // 3. ConfigProvider content:// (the pre-rendered high-res blurwallpaper)
         try {
+            val cached = cachedInCallWallpaper
+            if (cached != null && !cached.isRecycled) return cached
+
             val uri = Uri.parse("content://dev.hyperios.app.provider/incall_stock_background.png")
             activity.contentResolver.openInputStream(uri)?.use { stream ->
                 val bmp = BitmapFactory.decodeStream(stream)
-                if (bmp != null) {
+                if (bmp != null && bmp.width >= 200 && bmp.height >= 200) {
                     cachedInCallWallpaper = bmp
                     return bmp
                 }
             }
         } catch (_: Throwable) {}
 
-        // 5. Fallback using Xiaomi's exact algorithm decompiled from N.e / C0214b:
+        val cached = cachedInCallWallpaper
+        if (cached != null && !cached.isRecycled) return cached
+
+        // 4. Fallback using Xiaomi's algorithm on current WallpaperManager drawable
         try {
             val wm = WallpaperManager.getInstance(activity)
             val drawable = wm.peekDrawable() ?: wm.drawable
             if (drawable != null) {
                 val origBmp = (drawable as? BitmapDrawable)?.bitmap ?: run {
-                    val w = drawable.intrinsicWidth.coerceAtLeast(120)
-                    val h = drawable.intrinsicHeight.coerceAtLeast(240)
+                    val w = drawable.intrinsicWidth.coerceAtLeast(360)
+                    val h = drawable.intrinsicHeight.coerceAtLeast(720)
                     val b = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
                     val c = Canvas(b)
                     drawable.setBounds(0, 0, w, h)
@@ -488,9 +505,8 @@ object IosCallerScreenHook {
                     b
                 }
                 val bmp = renderXiaomiBlurredWallpaper(activity, origBmp)
-                if (bmp != null) {
+                if (bmp != null && bmp.width >= 200 && bmp.height >= 200) {
                     cachedInCallWallpaper = bmp
-                    syncWallpaperToProvider(activity, bmp)
                     return bmp
                 }
             }
@@ -501,9 +517,9 @@ object IosCallerScreenHook {
 
     private fun renderXiaomiBlurredWallpaper(context: Context, source: Bitmap): Bitmap? {
         return try {
-            val scale = 0.15f
-            val scaledW = (source.width * scale).toInt().coerceAtLeast(108)
-            val scaledH = (source.height * scale).toInt().coerceAtLeast(240)
+            val scale = 0.35f
+            val scaledW = (source.width * scale).toInt().coerceAtLeast(240)
+            val scaledH = (source.height * scale).toInt().coerceAtLeast(500)
             val scaledBmp = Bitmap.createScaledBitmap(source, scaledW, scaledH, true)
 
             val rs = RenderScript.create(context)
@@ -535,17 +551,6 @@ object IosCallerScreenHook {
         } catch (_: Throwable) {
             null
         }
-    }
-
-    private fun syncWallpaperToProvider(context: Context, bitmap: Bitmap) {
-        Thread {
-            try {
-                val uri = Uri.parse("content://dev.hyperios.app.provider/incall_stock_background.png")
-                context.contentResolver.openOutputStream(uri)?.use { out ->
-                    bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
-                }
-            } catch (_: Throwable) {}
-        }.start()
     }
 
     private var stockCallDrawable: Drawable? = null
@@ -658,9 +663,6 @@ object IosCallerScreenHook {
             return
         }
 
-        val intent = activity.intent
-        val isNewOutgoing = intent?.getBooleanExtra("InCallActivity.new_outgoing_call", false) == true
-
         var isRecentMorph = false
         var morphName: String? = null
         var morphNum: String? = null
@@ -669,7 +671,7 @@ object IosCallerScreenHook {
             val morphTimeStr = android.provider.Settings.System.getString(activity.contentResolver, "hb_call_morph_time")
             if (!morphTimeStr.isNullOrEmpty()) {
                 val morphTime = morphTimeStr.toLongOrNull() ?: 0L
-                if (System.currentTimeMillis() - morphTime < 6000L) {
+                if (System.currentTimeMillis() - morphTime < 5000L) {
                     isRecentMorph = true
                     morphName = android.provider.Settings.System.getString(activity.contentResolver, "hb_call_morph_name")
                     morphNum = android.provider.Settings.System.getString(activity.contentResolver, "hb_call_morph_num")
@@ -677,27 +679,11 @@ object IosCallerScreenHook {
             }
         } catch (_: Throwable) {}
 
-        var isOutgoingCall = isRecentMorph || isNewOutgoing
-        if (!isOutgoingCall) {
-            try {
-                val callListClass = Class.forName("com.android.incallui.CallList", false, classLoader)
-                val callList = callListClass.getMethod("getInstance").invoke(null)
-                val outgoing = callListClass.getMethod("getOutgoingCall").invoke(callList)
-                val pending = callListClass.getMethod("getPendingOutgoingCall").invoke(callList)
-                val incoming = callListClass.getMethod("getIncomingCall").invoke(callList)
-                if ((outgoing != null || pending != null) && incoming == null) {
-                    isOutgoingCall = true
-                    val activeOut = outgoing ?: pending
-                    if (morphNum.isNullOrEmpty() && activeOut != null) {
-                        try {
-                            morphNum = activeOut.javaClass.getMethod("getNumber").invoke(activeOut) as? String
-                        } catch (_: Throwable) {}
-                    }
-                }
-            } catch (_: Throwable) {}
-        }
-
-        if (!isOutgoingCall) {
+        // STRICT REQUIREMENT: The handover intermediate page must ONLY be shown when
+        // the call was triggered by the custom swipe right gesture in Dialer Recents.
+        // If the call was placed normally (tapping a contact/entry) or from dialpad/external app,
+        // do not display the handover overlay.
+        if (!isRecentMorph) {
             return
         }
 

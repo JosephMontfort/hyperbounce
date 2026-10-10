@@ -163,11 +163,14 @@ class ConfigProvider : ContentProvider() {
             if (mode.contains("w")) {
                 return ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_WRITE_ONLY or ParcelFileDescriptor.MODE_CREATE or ParcelFileDescriptor.MODE_TRUNCATE)
             }
-            if (segment == "incall_stock_background.png" && (!file.exists() || file.length() == 0L)) {
+            if (segment == "incall_stock_background.png") {
                 try {
                     val sysBlur = File("/data/system/users/0/blurwallpaper")
-                    if (sysBlur.exists() && sysBlur.length() > 0L) {
-                        sysBlur.copyTo(file, overwrite = true)
+                    if (sysBlur.exists() && sysBlur.length() > 50_000L) {
+                        if (!file.exists() || file.length() != sysBlur.length() || file.lastModified() < sysBlur.lastModified()) {
+                            sysBlur.copyTo(file, overwrite = true)
+                            file.setLastModified(sysBlur.lastModified())
+                        }
                     }
                 } catch (_: Throwable) {}
             }
