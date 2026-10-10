@@ -26,6 +26,7 @@ import dev.joseph.hyperbounce.notification.glass.NotificationGlassSheetView
 import dev.joseph.hyperbounce.notification.glass.RealtimeBackdropHelper
 import dev.joseph.hyperbounce.notification.lockscreen.LockScreenBottomAreaView
 import dev.joseph.hyperbounce.notification.lockscreen.LockScreenCoverSheetController
+import dev.joseph.hyperbounce.notification.stack.NotificationStackScrollerHelper
 import io.github.libxposed.api.XposedInterface
 import io.github.libxposed.api.XposedModule
 import java.lang.ref.WeakReference
@@ -376,6 +377,15 @@ object NotificationSheetHook {
 
         // 19. Hook notification row injectors to prevent transparent cards when HyperOS Advanced Textures (background_blur_enable) is active
         hookNotificationCardBlurSuppression(module, classLoader)
+
+        // 20. Hook AnimationHelper to enforce big clock in Notification Center without affecting lockscreen
+        hookAnimationHelper(module, classLoader)
+
+        // 21. Hook StackScrollAlgorithm for static top clearance margin and iOS stacked notifications
+        hookStackScrollAlgorithm(module, classLoader)
+
+        // 22. Hook NotificationStackScrollLayout.getScrollRange() for stacked headroom
+        hookStackScrollLayoutRange(module, classLoader)
     }
 
     private fun hookWakeUpCoordinator(module: XposedModule, classLoader: ClassLoader) {
@@ -1298,6 +1308,8 @@ object NotificationSheetHook {
                         "notif_pill_width" -> cfg.pillWidth = intent.getFloatExtra("value_float", cfg.pillWidth)
                         "notif_pill_height" -> cfg.pillHeight = intent.getFloatExtra("value_float", cfg.pillHeight)
                         "notif_pill_bottom_margin" -> cfg.pillBottomMargin = intent.getFloatExtra("value_float", cfg.pillBottomMargin)
+                        "notif_start_margin_top" -> cfg.notifStartMarginTop = intent.getFloatExtra("value_float", cfg.notifStartMarginTop)
+                        "notif_stack_enabled" -> cfg.notifStackEnabled = intent.getBooleanExtra("value_boolean", cfg.notifStackEnabled)
                         else -> handled = false
                     }
                     if (handled) {
@@ -2469,7 +2481,7 @@ object NotificationSheetHook {
                                 if (container != null) {
                                     val density = container.resources.displayMetrics.density
                                     val clockBottom = LockScreenCoverSheetController.getEffectiveClockBottom(container)
-                                    return (clockBottom + 16f * density).toFloat()
+                                    return (clockBottom + cfg.notifStartMarginTop * density)
                                 }
                             }
                             return chain.proceed()
@@ -2499,7 +2511,7 @@ object NotificationSheetHook {
                                 val cfg = NotificationSheetConfigHolder.sheet
                                 val isHomescreenAllowed = !cfg.lockWallpaperHomescreenOnly || isHomeScreenCached
                                 if (cfg.isLockScreenActive && isHomescreenAllowed && isUnlockedShadeActive) {
-                                    if (!LockScreenCoverSheetController.isCompactClockSynced) {
+                                    if (!LockScreenCoverSheetController.isBigClockSynced) {
                                         val container = containerRef?.get()
                                         if (container != null) {
                                             mainHandler.post {
@@ -2921,6 +2933,143 @@ object NotificationSheetHook {
             }
         } catch (t: Throwable) {
             Log.e(TAG, "Failed to hook MiuiMediaViewControllerImpl.updateMediaBackground: ${t.message}")
+        }
+    }
+
+    private fun hookAnimationHelper(module: XposedModule, classLoader: ClassLoader) {
+        try {
+            val clazz = Class.forName("com.android.keyguard.clock.animation.AnimationHelper", false, classLoader)
+            for (m in clazz.declaredMethods) {
+                if (m.name == "doAnimationToNotification" && m.parameterTypes.size == 2) {
+                    module.hook(m).intercept(object : XposedInterface.Hooker {
+                        override fun intercept(chain: XposedInterface.Chain): Any? {
+                            val cfg = NotificationSheetConfigHolder.sheet
+                            val isHomescreenAllowed = !cfg.lockWallpaperHomescreenOnly || isHomeScreenCached
+                            // Enforce big clock ONLY when our NC feature is active AND shade is pulled down while unlocked!
+                            // On real lock screen (isUnlockedShadeActive is false), let stock HyperOS run completely untouched!
+                            if (cfg.isLockScreenActive && isHomescreenAllowed && isUnlockedShadeActive) {
+                                val rawArgs = chain.args
+                                val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as Array<Any?>
+                                args[0] = false
+                            }
+                            return chain.proceed()
+                        }
+                    })
+                    Log.d(TAG, "Hooked AnimationHelper.doAnimationToNotification successfully")
+                }
+            }
+        } catch (t: Throwable) {
+            Log.d(TAG, "AnimationHelper not found or failed to hook: ${t.message}")
+        }
+    }
+
+    private var cachedScrimPaddingField: Field? = null
+    private fun setScrimPadding(algorithm: Any, value: Float) {
+        try {
+            if (cachedScrimPaddingField == null) {
+                var curr: Class<*>? = algorithm.javaClass
+                while (curr != null) {
+                    try {
+                        cachedScrimPaddingField = curr.getDeclaredField("mNotificationScrimPadding").apply { isAccessible = true }
+                        break
+                    } catch (_: Throwable) {
+                        curr = curr.superclass
+                    }
+                }
+            }
+            cachedScrimPaddingField?.setFloat(algorithm, value)
+        } catch (_: Throwable) {}
+    }
+
+    private fun hookStackScrollAlgorithm(module: XposedModule, classLoader: ClassLoader) {
+        val targetClasses = listOf(
+            "com.android.systemui.statusbar.notification.stack.StackScrollAlgorithm",
+            "com.android.systemui.statusbar.notification.stack.MiuiStackScrollAlgorithm"
+        )
+        for (clsName in targetClasses) {
+            try {
+                val clazz = Class.forName(clsName, false, classLoader)
+                for (m in clazz.declaredMethods) {
+                    if (m.name == "resetViewStates" && m.parameterTypes.size == 2) {
+                        module.hook(m).intercept(object : XposedInterface.Hooker {
+                            override fun intercept(chain: XposedInterface.Chain): Any? {
+                                val thisObject = chain.thisObject ?: return chain.proceed()
+                                val args = chain.args
+                                val rawAmbientState = if (args is List<*>) args[0] else (args as Array<*>)[0]
+
+                                val cfg = NotificationSheetConfigHolder.sheet
+                                val isHomescreenAllowed = !cfg.lockWallpaperHomescreenOnly || isHomeScreenCached
+                                val isLockScreenNcActive = cfg.isLockScreenActive && isHomescreenAllowed && isUnlockedShadeActive
+
+                                // 1. Static Notification Top Clearance Margin (Zero 120Hz CPU overhead)
+                                if (isLockScreenNcActive) {
+                                    try {
+                                        val isOnKeyguard = NotificationStackScrollerHelper.isOnKeyguard(rawAmbientState)
+                                        if (!isOnKeyguard) {
+                                            val container = containerRef?.get()
+                                            if (container != null) {
+                                                val density = container.resources.displayMetrics.density
+                                                val clockBottom = LockScreenCoverSheetController.getEffectiveClockBottom(container)
+                                                val targetScrimPadding = clockBottom + (cfg.notifStartMarginTop * density)
+                                                setScrimPadding(thisObject, targetScrimPadding)
+                                            }
+                                        }
+                                    } catch (_: Throwable) {}
+                                }
+
+                                // Run stock algorithm pass
+                                val result = chain.proceed()
+
+                                // 2. iOS-Style Stacked Notifications Transformation (Post-resetViewStates)
+                                if (cfg.isSheetActive && cfg.notifStackEnabled && isUnlockedShadeActive) {
+                                    try {
+                                        NotificationStackScrollerHelper.applyStackAlgorithm(thisObject, rawAmbientState)
+                                    } catch (t: Throwable) {
+                                        Log.e(TAG, "Error applying stacked notifications", t)
+                                    }
+                                } else {
+                                    NotificationStackScrollerHelper.extraStackScrollRange = 0
+                                }
+
+                                return result
+                            }
+                        })
+                        Log.d(TAG, "Hooked $clsName.resetViewStates successfully")
+                    }
+                }
+            } catch (t: Throwable) {
+                Log.d(TAG, "Failed to hook $clsName.resetViewStates: ${t.message}")
+            }
+        }
+    }
+
+    private fun hookStackScrollLayoutRange(module: XposedModule, classLoader: ClassLoader) {
+        val targetClasses = listOf(
+            "com.android.systemui.statusbar.notification.stack.NotificationStackScrollLayout",
+            "com.android.systemui.statusbar.notification.stack.MiuiNotificationStackScrollLayout"
+        )
+        for (clsName in targetClasses) {
+            try {
+                val clazz = Class.forName(clsName, false, classLoader)
+                for (m in clazz.declaredMethods) {
+                    if (m.name == "getScrollRange" && m.parameterTypes.isEmpty()) {
+                        module.hook(m).intercept(object : XposedInterface.Hooker {
+                            override fun intercept(chain: XposedInterface.Chain): Any? {
+                                val origRange = chain.proceed() as? Int ?: 0
+                                val cfg = NotificationSheetConfigHolder.sheet
+                                val extra = NotificationStackScrollerHelper.extraStackScrollRange
+                                if (cfg.isSheetActive && cfg.notifStackEnabled && isUnlockedShadeActive && extra > 0) {
+                                    return origRange + extra
+                                }
+                                return origRange
+                            }
+                        })
+                        Log.d(TAG, "Hooked $clsName.getScrollRange successfully")
+                    }
+                }
+            } catch (t: Throwable) {
+                Log.d(TAG, "Failed to hook $clsName.getScrollRange: ${t.message}")
+            }
         }
     }
 }

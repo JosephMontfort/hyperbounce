@@ -44,7 +44,11 @@ data class NotificationSheetConfig(
     var iosHunAnimationEnabled: Boolean = true,
     var iosHunDurationMs: Float = 600.0f,
     var iosHunStartScale: Float = 0.25f,
-    var iosHunSqueezeStrength: Float = 1.0f
+    var iosHunSqueezeStrength: Float = 1.0f,
+    // Clearance spacing below big lock screen clock
+    var notifStartMarginTop: Float = 16.0f,
+    // iOS-Style Stacked Notifications
+    var notifStackEnabled: Boolean = false
 ) {
     /**
      * True only if master switch and sheet toggle are both on.
@@ -133,5 +137,7 @@ object NotificationSheetConfigHolder {
         sheet.iosHunDurationMs = prefs.getFloat("notif_ios_hun_duration_ms", 600.0f)
         sheet.iosHunStartScale = prefs.getFloat("notif_ios_hun_start_scale", 0.25f)
         sheet.iosHunSqueezeStrength = prefs.getFloat("notif_ios_hun_squeeze_strength", 1.0f)
+        sheet.notifStartMarginTop = prefs.getFloat("notif_start_margin_top", 16.0f)
+        sheet.notifStackEnabled = prefs.getBoolean("notif_stack_enabled", false)
     }
 }

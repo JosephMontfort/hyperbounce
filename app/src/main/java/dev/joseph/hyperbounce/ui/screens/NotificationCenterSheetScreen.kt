@@ -502,9 +502,31 @@ fun NotificationCenterSheetScreen(
                     valueLabel = { String.format(Locale.US, "%.0f dp", it) },
                     enabled = sheetActive
                 )
+                RowDivider(colors.separator)
+                SettingsSliderRow(
+                    title = "Notification Top Clearance Margin",
+                    subtitle = "Downward margin below big lock screen clock",
+                    colors = colors,
+                    backdrop = backdrop,
+                    value = sheet.notifStartMarginTop,
+                    onValueChange = sheet::setNotifStartMarginTop,
+                    valueRange = 0.0f..100.0f,
+                    defaultValue = 16.0f,
+                    valueLabel = { String.format(Locale.US, "%.0f dp", it) },
+                    enabled = sheetActive && sheet.lockScreenAsNotifCenterEnabled
+                )
+                RowDivider(colors.separator)
+                SettingsToggleRow(
+                    title = "Enable Stacked Notifications",
+                    subtitle = "Compress notifications into an iOS-style bottom stack with fluid expansion",
+                    colors = colors,
+                    checked = sheet.notifStackEnabled,
+                    onCheckedChange = sheet::setNotifStackEnabled,
+                    enabled = sheetActive
+                )
             }
             SectionFooter(
-                "Narrows notifications inward from container edges so the 3-edge liquid glass border renders cleanly around them without clipping content.",
+                "Configure horizontal card insets, vertical clearance spacing beneath the lock screen clock, and iOS-style stacked notifications.",
                 colors
             )
         }

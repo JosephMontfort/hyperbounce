@@ -711,6 +711,8 @@ class SettingsRepository(context: Context) {
         var iosHunDurationMs by prefsFloatState("notif_ios_hun_duration_ms", defaults.iosHunDurationMs); private set
         var iosHunStartScale by prefsFloatState("notif_ios_hun_start_scale", defaults.iosHunStartScale); private set
         var iosHunSqueezeStrength by prefsFloatState("notif_ios_hun_squeeze_strength", defaults.iosHunSqueezeStrength); private set
+        var notifStartMarginTop by prefsFloatState("notif_start_margin_top", defaults.notifStartMarginTop); private set
+        var notifStackEnabled by prefsBooleanState("notif_stack_enabled", defaults.notifStackEnabled); private set
 
         fun snapshot(): NotificationSheetSettings = NotificationSheetSettings(
             masterEnabled,
@@ -725,7 +727,8 @@ class SettingsRepository(context: Context) {
             innerShadow, saturationFactor, blurRadius,
             cornerRadius, sideMargin,
             pillWidth, pillHeight, pillBottomMargin,
-            iosHunAnimationEnabled, iosHunDurationMs, iosHunStartScale, iosHunSqueezeStrength
+            iosHunAnimationEnabled, iosHunDurationMs, iosHunStartScale, iosHunSqueezeStrength,
+            notifStartMarginTop, notifStackEnabled
         )
 
         @JvmName("setNotifMasterEnabledPref") fun setMasterEnabled(v: Boolean) { masterEnabled = v }
@@ -765,6 +768,8 @@ class SettingsRepository(context: Context) {
         @JvmName("setNotifIosHunDurationMsPref") fun setIosHunDurationMs(v: Float) { iosHunDurationMs = v }
         @JvmName("setNotifIosHunStartScalePref") fun setIosHunStartScale(v: Float) { iosHunStartScale = v }
         @JvmName("setNotifIosHunSqueezeStrengthPref") fun setIosHunSqueezeStrength(v: Float) { iosHunSqueezeStrength = v }
+        @JvmName("setNotifStartMarginTopPref") fun setNotifStartMarginTop(v: Float) { notifStartMarginTop = v }
+        @JvmName("setNotifStackEnabledPref") fun setNotifStackEnabled(v: Boolean) { notifStackEnabled = v }
 
         fun reloadFromDefaults() {
             masterEnabled = defaults.masterEnabled
@@ -803,6 +808,8 @@ class SettingsRepository(context: Context) {
             iosHunDurationMs = defaults.iosHunDurationMs
             iosHunStartScale = defaults.iosHunStartScale
             iosHunSqueezeStrength = defaults.iosHunSqueezeStrength
+            notifStartMarginTop = defaults.notifStartMarginTop
+            notifStackEnabled = defaults.notifStackEnabled
         }
     }
 

@@ -54,23 +54,24 @@ object LockScreenCoverSheetController {
         LockScreenInfoReader.addListener { _ ->
             cachedClockContainerRef = null
             cachedFgClockContainerRef = null
-            isClockSyncedSmall = false
+            isClockSyncedBig = false
             Log.d(TAG, "Lockscreen clock style updated, refreshed clock view references immediately")
         }
     }
 
     @Volatile
-    var currentMorphFraction: Float = 1f
+    var currentMorphFraction: Float = 0f
         private set
 
-    private var targetMorphFraction: Float = 1f
+    private var targetMorphFraction: Float = 0f
     private var morphAnimator: android.animation.ValueAnimator? = null
-    private var isClockSyncedSmall: Boolean = false
-    val isCompactClockSynced: Boolean get() = isClockSyncedSmall
+    private var isClockSyncedBig: Boolean = false
+    val isBigClockSynced: Boolean get() = isClockSyncedBig
+    val isCompactClockSynced: Boolean get() = isClockSyncedBig
 
     fun updateMorphFraction(target: Float) {
-        currentMorphFraction = 1f
-        targetMorphFraction = 1f
+        currentMorphFraction = 0f
+        targetMorphFraction = 0f
         morphAnimator?.cancel()
         morphAnimator = null
     }
@@ -142,8 +143,8 @@ object LockScreenCoverSheetController {
 
         resolveClockViews(rootView)
 
-        // User requirement: Notification Center clock ALWAYS stays compact/small.
-        val morph = 1.0f
+        // User requirement: Notification Center clock ALWAYS stays prominent and BIG.
+        val morph = 0.0f
 
         val targetView: ViewGroup? = when (layer) {
             ClockLayer.BACKGROUND -> cachedClockContainerRef?.get()
@@ -163,9 +164,6 @@ object LockScreenCoverSheetController {
                     targetView.layout(0, 0, viewW, viewH)
                 }
 
-                val clockScale = 1.0f - (0.32f * morph)
-                val clockShiftY = -18f * density * morph
-
                 val effectiveAlpha = (alpha.coerceIn(0f, 1f) * 255f).toInt()
                 val saveCount = if (effectiveAlpha < 255) {
                     canvas.saveLayerAlpha(0f, 0f, viewW.toFloat(), viewH.toFloat(), effectiveAlpha)
@@ -174,10 +172,7 @@ object LockScreenCoverSheetController {
                 }
 
                 try {
-                    canvas.translate(0f, translationY + clockShiftY)
-                    if (morph > 0.001f) {
-                        canvas.scale(clockScale, clockScale, viewW / 2f, 50f * density)
-                    }
+                    canvas.translate(0f, translationY)
                     targetView.draw(canvas)
                 } finally {
                     canvas.restoreToCount(saveCount)
@@ -199,7 +194,7 @@ object LockScreenCoverSheetController {
                     h = h,
                     density = density,
                     config = clockConfig,
-                    morphFraction = morph,
+                    morphFraction = 0.0f,
                     alpha = alpha,
                     translationY = translationY
                 )
@@ -405,17 +400,44 @@ object LockScreenCoverSheetController {
     fun getEffectiveClockBottom(container: ViewGroup?): Int {
         if (container == null) return 0
         val density = container.resources.displayMetrics.density
-        return (135f * density).toInt()
+
+        // 1. Try to query the authentic KeyguardClockContainer height
+        try {
+            val clockContainer = getAuthenticClockContainer(container.rootView)
+            if (clockContainer != null) {
+                val h = clockContainer.height
+                if (h > (120f * density).toInt()) {
+                    return h
+                }
+                for (i in 0 until clockContainer.childCount) {
+                    val child = clockContainer.getChildAt(i)
+                    if (child != null && child.height > (120f * density).toInt()) {
+                        return child.height
+                    }
+                }
+            }
+        } catch (_: Throwable) {}
+
+        // 2. Query configured lockscreen template from LockScreenInfoReader
+        val templateId = try {
+            LockScreenInfoReader.getConfig(container.context).templateId.lowercase()
+        } catch (_: Throwable) { "classic" }
+
+        return when {
+            templateId.startsWith("magazine") || templateId.startsWith("signature") -> (340f * density).toInt()
+            templateId.startsWith("oversize") -> (310f * density).toInt()
+            templateId.startsWith("rhombus") -> (285f * density).toInt()
+            else -> (220f * density).toInt()
+        }
     }
 
     /**
      * Synchronizes the authentic SystemUI keyguard clock with live notifications:
      * 1. Inspects notification_stack_scroller visible count.
-     * 2. Sets KeyguardClockContainer.mHasNotification = hasNotif and enables mClockCanScale.
-     * 3. Calls AnimationHelper.doAnimationToNotification(hasNotif, false) to trigger
-     *    the authentic Xiaomi lockscreen Folme morph animation (shrink when notifications exist,
-     *    expand to full size when empty).
-     * 4. Applies non-destructive hardware clipBounds and padding to NSSL.
+     * 2. Sets KeyguardClockContainer.mHasNotification = false and enables mClockCanScale.
+     * 3. Calls AnimationHelper.doAnimationToNotification(false, false) to keep the prominent
+     *    Big Lock Screen Clock style in Notification Center.
+     * 4. Strictly executed ONLY during unlocked shade pulldown (never affects lockscreen).
      */
     private fun getCanScaleField(clazz: Class<*>): Field? {
         if (cachedCanScaleField == null) {
@@ -486,12 +508,10 @@ object LockScreenCoverSheetController {
 
     /**
      * Synchronizes the authentic SystemUI keyguard clock with live notifications:
-     * 1. Inspects notification_stack_scroller visible count.
-     * 2. Sets KeyguardClockContainer.mHasNotification = hasNotif and enables mClockCanScale.
-     * 3. Calls AnimationHelper.doAnimationToNotification(hasNotif, false) to trigger
-     *    the authentic Xiaomi lockscreen Folme morph animation (shrink when notifications exist,
-     *    expand to full size when empty).
-     * 4. Uses cached reflection fields for zero-overhead performance during swipe pull-down.
+     * 1. Sets KeyguardClockContainer.mHasNotification = false and enables mClockCanScale.
+     * 2. Calls AnimationHelper.doAnimationToNotification(false, false) to keep the prominent
+     *    Big Lock Screen Clock style in Notification Center.
+     * 3. Uses cached reflection fields for zero-overhead performance during swipe pull-down.
      */
     fun syncClockWithNotifications(container: ViewGroup?) {
         if (container == null) return
@@ -499,9 +519,10 @@ object LockScreenCoverSheetController {
         if (isLandscape) return
 
         val cfg = NotificationSheetConfigHolder.sheet
-        if (!cfg.isLockScreenActive) return
+        // Strictly only execute when lockScreenAsNotifCenterEnabled is on AND shade is active while unlocked!
+        if (!cfg.isLockScreenActive || !dev.joseph.hyperbounce.notification.NotificationSheetHook.isUnlockedShadeActive) return
 
-        if (isClockSyncedSmall) return
+        if (isClockSyncedBig) return
 
         try {
             val clockContainer = getAuthenticClockContainer(container.rootView)
@@ -510,29 +531,30 @@ object LockScreenCoverSheetController {
                     val clockClass = clockContainer.javaClass
                     getCanScaleField(clockClass)?.setBoolean(clockContainer, true)
 
+                    // Always enforce Big Clock: mHasNotification = false
                     val hasNotifField = getHasNotifField(clockClass)
-                    hasNotifField?.setBoolean(clockContainer, true)
+                    hasNotifField?.setBoolean(clockContainer, false)
 
                     val animHelper = getAnimHelperField(clockClass)?.get(clockContainer)
                     if (animHelper != null) {
-                        getDoAnimMethod(animHelper.javaClass)?.invoke(animHelper, true, false)
-                        Log.d(TAG, "Configured authentic clock to compact mode via doAnimationToNotification(true, false)")
+                        getDoAnimMethod(animHelper.javaClass)?.invoke(animHelper, false, false)
+                        Log.d(TAG, "Enforced authentic clock to big style via doAnimationToNotification(false, false)")
                     }
 
-                    // Direct call to clock view: setShowFullTime(false) forces small / compact mode!
+                    // Direct call to clock view: setShowFullTime(true) forces big / full mode!
                     try {
                         val controller = getControllerField(clockClass)?.get(clockContainer)
                         if (controller != null) {
                             val clockView = getClockViewField(controller.javaClass)?.get(controller)
                             if (clockView != null) {
-                                getSetShowFullTimeMethod(clockView.javaClass)?.invoke(clockView, false)
+                                getSetShowFullTimeMethod(clockView.javaClass)?.invoke(clockView, true)
                             }
                         }
                     } catch (_: Throwable) {}
 
-                    isClockSyncedSmall = true
+                    isClockSyncedBig = true
                 } catch (t: Throwable) {
-                    Log.e(TAG, "Error configuring authentic clock to compact state", t)
+                    Log.e(TAG, "Error configuring authentic clock to big state", t)
                 }
             }
 
@@ -640,9 +662,9 @@ object LockScreenCoverSheetController {
      */
     fun onShadeReset(container: ViewGroup) {
         try {
-            isClockSyncedSmall = false
-            currentMorphFraction = 1f
-            targetMorphFraction = 1f
+            isClockSyncedBig = false
+            currentMorphFraction = 0f
+            targetMorphFraction = 0f
             morphAnimator?.cancel()
             morphAnimator = null
 
