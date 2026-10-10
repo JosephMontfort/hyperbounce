@@ -274,7 +274,7 @@ object NotificationSheetHook {
         return isControlCenterExpanded
     }
 
-    private val isUnlockedShadeActive: Boolean
+    val isUnlockedShadeActive: Boolean
         get() {
             val cfg = NotificationSheetConfigHolder.sheet
             return cfg.isSheetActive && currentStatusBarState == 0 && !isKeyguardShowing && !isControlCenterActive()

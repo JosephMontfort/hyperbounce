@@ -520,6 +520,7 @@ fun NotificationCenterSheetScreen(
                     title = "Enable Stacked Notifications",
                     subtitle = "Compress notifications into an iOS-style bottom stack with fluid expansion",
                     colors = colors,
+                    backdrop = backdrop,
                     checked = sheet.notifStackEnabled,
                     onCheckedChange = sheet::setNotifStackEnabled,
                     enabled = sheetActive
