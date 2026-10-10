@@ -387,9 +387,6 @@ object NotificationSheetHook {
 
         // 22. Hook NotificationStackScrollLayout.getScrollRange() for stacked headroom
         hookStackScrollLayoutRange(module, classLoader)
-
-        // 23. Hook NotificationStackScrollLayout.dispatchDraw() to cleanly clip notifications above the clock
-        hookNsslDispatchDraw(module, classLoader)
     }
 
     private fun hookWakeUpCoordinator(module: XposedModule, classLoader: ClassLoader) {
@@ -2387,10 +2384,7 @@ object NotificationSheetHook {
                 if (event.actionMasked == MotionEvent.ACTION_UP && wasTouching) {
                     val dm = container.resources.displayMetrics
                     val density = dm.density
-                    val screenH = dm.heightPixels.toFloat()
-
-                    val isBottomArea = touchDownY >= screenH - (130f * density)
-                    val isUpwardSwipe = (dy < -20f * density) && (lastTouchDy <= 0f || latestTouchYVelocity < -100f)
+                    val isUpwardSwipe = (dy < -15f * density) && (lastTouchDy <= 0f || latestTouchYVelocity < -50f)
 
                     if (!isOpeningGesture && (lastAppliedFraction >= 0.50f || hasFullyOpenedForCurrentSession)) {
                         isShadeOpen = true
@@ -2400,7 +2394,7 @@ object NotificationSheetHook {
                     }
 
                     if (!isOpeningGesture && hasFullyOpenedForCurrentSession && isShadeFullyOpen && !hasTriggeredUnlockForCurrentOpen &&
-                        !isLaunchingNotificationActivity && isBottomArea && isUpwardSwipe
+                        !isLaunchingNotificationActivity && isUpwardSwipe
                     ) {
                         isClosingMode = true
                         val curSheet = container.findViewWithTag<NotificationGlassSheetView>(TAG_GLASS_SHEET)
@@ -2410,7 +2404,7 @@ object NotificationSheetHook {
                         isShadeFullyOpen = false
                         hasFullyOpenedForCurrentSession = false
                         val effectiveVel = if (touchVelocity > 0f) touchVelocity else latestFlingVelocity
-                        Log.d(TAG, "ACTION_UP closing release detected from bottom area (dy=$dy, touchY=$touchDownY, vel=$effectiveVel) -> triggering simultaneous unlock")
+                        Log.d(TAG, "ACTION_UP closing release detected across notification center (dy=$dy, touchY=$touchDownY, vel=$effectiveVel) -> triggering simultaneous unlock")
                         notifyCloseOverHomescreen(container.context, effectiveVel)
                     }
                 }
@@ -2512,7 +2506,8 @@ object NotificationSheetHook {
                                 val container = containerRef?.get()
                                 if (container != null) {
                                     val density = container.resources.displayMetrics.density
-                                    val stockTopPadding = (chain.proceed() as? Number)?.toFloat() ?: (120f * density)
+                                    val rawProceed = (chain.proceed() as? Number)?.toFloat() ?: 0f
+                                    val stockTopPadding = if (rawProceed > 50f * density) rawProceed else (110f * density)
                                     if (cfg.notifStartMarginTop <= 0.01f) {
                                         return stockTopPadding
                                     }
@@ -3091,58 +3086,5 @@ object NotificationSheetHook {
             }
         }
     }
-
-    private fun hookNsslDispatchDraw(module: XposedModule, classLoader: ClassLoader) {
-        val targetClasses = listOf(
-            "com.android.systemui.statusbar.notification.stack.NotificationStackScrollLayout",
-            "com.android.systemui.statusbar.notification.stack.MiuiNotificationStackScrollLayout"
-        )
-        for (clsName in targetClasses) {
-            try {
-                val clazz = Class.forName(clsName, false, classLoader)
-                for (m in clazz.declaredMethods) {
-                    if (m.name == "dispatchDraw" && m.parameterTypes.size == 1 &&
-                        m.parameterTypes[0] == Canvas::class.java
-                    ) {
-                        module.hook(m).intercept(object : XposedInterface.Hooker {
-                            override fun intercept(chain: XposedInterface.Chain): Any? {
-                                val cfg = NotificationSheetConfigHolder.sheet
-                                val isHomescreenAllowed = !cfg.lockWallpaperHomescreenOnly || isHomeScreenCached
-                                val isLockScreenNcActive = cfg.isLockScreenActive && isHomescreenAllowed && isUnlockedShadeActive
-                                if (isLockScreenNcActive) {
-                                    val thisView = chain.thisObject as? View
-                                    val rawArgs = chain.args
-                                    val canvas = (if (rawArgs is List<*>) rawArgs[0] else (rawArgs as Array<*>)[0]) as? Canvas
-                                    if (thisView != null && canvas != null) {
-                                        val density = thisView.resources.displayMetrics.density
-                                        val container = containerRef?.get()
-                                        val clockBottom = LockScreenCoverSheetController.getEffectiveClockBottom(container)
-                                        val topCutoff = if (cfg.notifStartMarginTop <= 0.01f) {
-                                            val stockTop = 110f * density
-                                            kotlin.math.max(stockTop, clockBottom.toFloat())
-                                        } else {
-                                            clockBottom.toFloat() + (cfg.notifStartMarginTop * density)
-                                        }
-                                        if (topCutoff > 0f && topCutoff < thisView.height.toFloat()) {
-                                            val saveCount = canvas.save()
-                                            try {
-                                                canvas.clipRect(0f, topCutoff, thisView.width.toFloat(), thisView.height.toFloat())
-                                                return chain.proceed()
-                                            } finally {
-                                                canvas.restoreToCount(saveCount)
-                                            }
-                                        }
-                                    }
-                                }
-                                return chain.proceed()
-                            }
-                        })
-                        Log.d(TAG, "Hooked $clsName.dispatchDraw for top clipping successfully")
-                    }
-                }
-            } catch (t: Throwable) {
-                Log.d(TAG, "Failed to hook $clsName.dispatchDraw: ${t.message}")
-            }
-        }
-    }
 }
+
