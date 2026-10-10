@@ -49,6 +49,7 @@ object ControlCenterHook {
     @Volatile private var sShrinkXEaseField: Field? = null
     @Volatile private var sShrinkCenterXField: Field? = null
     @Volatile private var sShrinkCenterYField: Field? = null
+    @Volatile private var sCenterXField: Field? = null
     @Volatile private var sDelayPerField: Field? = null
     @Volatile private var sReleaseTransYEaseField: Field? = null
     @Volatile private var sShowEaseField: Field? = null
@@ -1139,6 +1140,31 @@ object ControlCenterHook {
                         }
                     }
 
+                    if (m.name == "updateEases") {
+                        m.isAccessible = true
+                        module.hook(m).intercept { chain ->
+                            val result = chain.proceed()
+                            if (ControlCenterConfigHolder.config.isJellyActive) {
+                                try {
+                                    val holder = chain.thisObject ?: return@intercept result
+                                    val easeField = sReleaseTransYEaseField ?: holderClass.getDeclaredField("releaseTransYEase").apply {
+                                        isAccessible = true
+                                        sReleaseTransYEaseField = this
+                                    }
+                                    val ease = easeField.get(holder)
+                                    if (ease != null) {
+                                        val method = sSetFactorsMethod ?: ease.javaClass.getMethod("setFactors", DoubleArray::class.java).apply {
+                                            isAccessible = true
+                                            sSetFactorsMethod = this
+                                        }
+                                        method.invoke(ease, doubleArrayOf(0.55, 0.30))
+                                    }
+                                } catch (t: Throwable) {}
+                            }
+                            result
+                        }
+                    }
+
                     if (m.name == "onFrameCallback") {
                         m.isAccessible = true
                         module.hook(m).intercept { chain ->
@@ -1180,7 +1206,13 @@ object ControlCenterHook {
                                     }
                                     val row = spreadRowField.getInt(holder)
 
-                                    JellyPhysicsEngine.onFrame(targetView, holder, progress, expandTransY, row)
+                                    val centerXField = sCenterXField ?: holderClass.getDeclaredField("centerX").apply {
+                                        isAccessible = true
+                                        sCenterXField = this
+                                    }
+                                    val centerX = centerXField.getFloat(holder)
+
+                                    JellyPhysicsEngine.onFrame(targetView, holder, progress, expandTransY, row, centerX)
                                 } catch (t: Throwable) {}
                             }
                             result
@@ -1221,7 +1253,36 @@ object ControlCenterHook {
                                     }
                                     val row = spreadRowField.getInt(holder)
 
-                                    JellyPhysicsEngine.onFrame(itemView, holder, progress, expandTransY, row)
+                                    val centerXField = sCenterXField ?: mHolderClass.getDeclaredField("centerX").apply {
+                                        isAccessible = true
+                                        sCenterXField = this
+                                    }
+                                    val centerX = centerXField.getFloat(holder)
+
+                                    JellyPhysicsEngine.onFrame(itemView, holder, progress, expandTransY, row, centerX)
+                                } catch (t: Throwable) {}
+                            }
+                            result
+                        }
+                    }
+                }
+            } catch (t: Throwable) {}
+
+            // 7c. Hook SpreadRowsAnimator.Row so row springs also use sub-critical damping
+            try {
+                val rowClass = Class.forName("miui.systemui.controlcenter.panel.main.anim.SpreadRowsAnimator\$Row", false, classLoader)
+                for (m in rowClass.declaredMethods) {
+                    if (m.name == "getReleaseEase") {
+                        m.isAccessible = true
+                        module.hook(m).intercept { chain ->
+                            val result = chain.proceed()
+                            if (ControlCenterConfigHolder.config.isJellyActive && result != null) {
+                                try {
+                                    val method = sSetFactorsMethod ?: result.javaClass.getMethod("setFactors", DoubleArray::class.java).apply {
+                                        isAccessible = true
+                                        sSetFactorsMethod = this
+                                    }
+                                    method.invoke(result, doubleArrayOf(0.55, 0.30))
                                 } catch (t: Throwable) {}
                             }
                             result
