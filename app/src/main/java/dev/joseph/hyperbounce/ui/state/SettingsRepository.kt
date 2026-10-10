@@ -1016,10 +1016,6 @@ class SettingsRepository(context: Context) {
         var kineticDockDamping by prefsFloatState("unlock_kinetic_dock_damping", defaults.kineticDockDamping); private set
         var kineticDockResponse by prefsFloatState("unlock_kinetic_dock_response", defaults.kineticDockResponse); private set
         var kineticDockZDepth by prefsFloatState("unlock_kinetic_dock_z_depth", defaults.kineticDockZDepth); private set
-        var xosStiffness by prefsFloatState("unlock_xos_stiffness", defaults.xosStiffness); private set
-        var xosDamping by prefsFloatState("unlock_xos_damping", defaults.xosDamping); private set
-        var xosRowDelayMs by prefsLongState("unlock_xos_row_delay_ms", defaults.xosRowDelayMs); private set
-        var xosAlphaDurationMs by prefsLongState("unlock_xos_alpha_duration_ms", defaults.xosAlphaDurationMs); private set
 
         private val rowZStates = mutableStateMapOf<Int, Float>()
         private val rowCenterBounceStates = mutableStateMapOf<Int, Float>()
@@ -1109,8 +1105,7 @@ class SettingsRepository(context: Context) {
             enabled, animMode, gridColumns, gridRows, dockDamping, dockResponse,
             centerResponse, centerDamping, edgeResponseDelay, edgeDampingDrop, zDepthMultiplier,
             minResponse, maxResponse, minDamping, maxDamping, durationScale, velocityInfluence,
-            maxVelocity, cascadeDamping, kineticDockDamping, kineticDockResponse, kineticDockZDepth,
-            xosStiffness, xosDamping, xosRowDelayMs, xosAlphaDurationMs
+            maxVelocity, cascadeDamping, kineticDockDamping, kineticDockResponse, kineticDockZDepth
         )
 
         @JvmName("setUnlockEnabledPref") fun setEnabled(v: Boolean) { enabled = v }
@@ -1135,10 +1130,6 @@ class SettingsRepository(context: Context) {
         @JvmName("setUnlockKineticDockDampingPref") fun setKineticDockDamping(v: Float) { kineticDockDamping = v }
         @JvmName("setUnlockKineticDockResponsePref") fun setKineticDockResponse(v: Float) { kineticDockResponse = v }
         @JvmName("setUnlockKineticDockZDepthPref") fun setKineticDockZDepth(v: Float) { kineticDockZDepth = v }
-        @JvmName("setUnlockXosStiffnessPref") fun setXosStiffness(v: Float) { xosStiffness = v }
-        @JvmName("setUnlockXosDampingPref") fun setXosDamping(v: Float) { xosDamping = v }
-        @JvmName("setUnlockXosRowDelayMsPref") fun setXosRowDelayMs(v: Long) { xosRowDelayMs = v }
-        @JvmName("setUnlockXosAlphaDurationMsPref") fun setXosAlphaDurationMs(v: Long) { xosAlphaDurationMs = v }
 
         fun reloadFromDefaults() {
             enabled = defaults.enabled
@@ -1163,10 +1154,6 @@ class SettingsRepository(context: Context) {
             kineticDockDamping = defaults.kineticDockDamping
             kineticDockResponse = defaults.kineticDockResponse
             kineticDockZDepth = defaults.kineticDockZDepth
-            xosStiffness = defaults.xosStiffness
-            xosDamping = defaults.xosDamping
-            xosRowDelayMs = defaults.xosRowDelayMs
-            xosAlphaDurationMs = defaults.xosAlphaDurationMs
 
             rowZStates.clear()
             rowCenterBounceStates.clear()

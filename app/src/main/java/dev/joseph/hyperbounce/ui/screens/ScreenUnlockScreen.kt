@@ -99,15 +99,6 @@ fun ScreenUnlockScreen(
                             onClick = { unlock.setAnimMode(1) }
                         )
                     }
-                    ModeSegment(
-                        title = "Mode 2: XOS 16.3 Staggered Wave",
-                        subtitle = "1:1 Damped harmonic spring (Transsion)",
-                        selected = unlock.animMode == 2,
-                        colors = colors,
-                        modifier = Modifier.fillMaxWidth(),
-                        enabled = unlock.enabled,
-                        onClick = { unlock.setAnimMode(2) }
-                    )
                 }
                 RowDivider(colors.separator)
                 SettingsSliderRow(
@@ -137,7 +128,7 @@ fun ScreenUnlockScreen(
                 )
             }
             SectionFooter(
-                "Select between Mode 0 (iOS-style radial bloom), Mode 1 (kinetic Y-axis velocity cascade), and Mode 2 (1:1 XOS 16.3 staggered wave).",
+                "Select between Mode 0 (iOS-style radial bloom) and Mode 1 (kinetic Y-axis velocity cascade).",
                 colors
             )
         }
@@ -167,7 +158,7 @@ fun ScreenUnlockScreen(
                     colors
                 )
             }
-        } else if (unlock.animMode == 1) {
+        } else {
             item {
                 SectionHeader("Fine Tuning", colors)
                 GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
@@ -213,67 +204,6 @@ fun ScreenUnlockScreen(
                 }
                 SectionFooter(
                     "Mode 1 cascades rows downwards along the Y-axis with velocity-coupled spring dynamics and 3D depth perspective.",
-                    colors
-                )
-            }
-        } else {
-            item {
-                SectionHeader("XOS 16.3 Pipeline Parameters", colors)
-                GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
-                    SettingsSliderRow(
-                        title = "Spring Stiffness (k)",
-                        subtitle = "XOS physical oscillator tension (default 150)",
-                        colors = colors,
-                        backdrop = backdrop,
-                        value = unlock.xosStiffness,
-                        onValueChange = unlock::setXosStiffness,
-                        valueRange = 50f..500f,
-                        defaultValue = 150f,
-                        valueLabel = { String.format(Locale.US, "%.0f N/m", it) },
-                        enabled = unlock.enabled
-                    )
-                    RowDivider(colors.separator)
-                    SettingsSliderRow(
-                        title = "Damping Ratio (ζ)",
-                        subtitle = "XOS under-damped bounce ratio (default 0.70)",
-                        colors = colors,
-                        backdrop = backdrop,
-                        value = unlock.xosDamping,
-                        onValueChange = unlock::setXosDamping,
-                        valueRange = 0.20f..1.00f,
-                        defaultValue = 0.70f,
-                        valueLabel = { String.format(Locale.US, "%.2f", it) },
-                        enabled = unlock.enabled
-                    )
-                    RowDivider(colors.separator)
-                    SettingsSliderRow(
-                        title = "Row Latency Delay",
-                        subtitle = "Bottom-to-top wave stagger delay per row (default 10ms)",
-                        colors = colors,
-                        backdrop = backdrop,
-                        value = unlock.xosRowDelayMs.toFloat(),
-                        onValueChange = { unlock.setXosRowDelayMs(it.toLong()) },
-                        valueRange = 0f..50f,
-                        defaultValue = 10f,
-                        valueLabel = { String.format(Locale.US, "%.0f ms", it) },
-                        enabled = unlock.enabled
-                    )
-                    RowDivider(colors.separator)
-                    SettingsSliderRow(
-                        title = "Alpha Fade Duration",
-                        subtitle = "Linear icon visibility ramp duration (default 250ms)",
-                        colors = colors,
-                        backdrop = backdrop,
-                        value = unlock.xosAlphaDurationMs.toFloat(),
-                        onValueChange = { unlock.setXosAlphaDurationMs(it.toLong()) },
-                        valueRange = 100f..600f,
-                        defaultValue = 250f,
-                        valueLabel = { String.format(Locale.US, "%.0f ms", it) },
-                        enabled = unlock.enabled
-                    )
-                }
-                SectionFooter(
-                    "Mode 2 completely replaces HyperOS's 3D perspective with Transsion XOS 16.3's exact closed-form damped oscillator, bottom-to-top staggered row latency, and flick-velocity modulation.",
                     colors
                 )
             }
