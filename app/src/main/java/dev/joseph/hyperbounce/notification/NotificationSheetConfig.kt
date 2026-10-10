@@ -48,7 +48,9 @@ data class NotificationSheetConfig(
     // Clearance spacing below big lock screen clock
     var notifStartMarginTop: Float = 16.0f,
     // iOS-Style Stacked Notifications
-    var notifStackEnabled: Boolean = false
+    var notifStackEnabled: Boolean = false,
+    // Launcher Unlock Animation on Notification Center Dismiss
+    var launcherUnlockOnDismiss: Boolean = true
 ) {
     /**
      * True only if master switch and sheet toggle are both on.
@@ -139,5 +141,6 @@ object NotificationSheetConfigHolder {
         sheet.iosHunSqueezeStrength = prefs.getFloat("notif_ios_hun_squeeze_strength", 1.0f)
         sheet.notifStartMarginTop = prefs.getFloat("notif_start_margin_top", 16.0f)
         sheet.notifStackEnabled = prefs.getBoolean("notif_stack_enabled", false)
+        sheet.launcherUnlockOnDismiss = prefs.getBoolean("notif_launcher_unlock_on_dismiss", true)
     }
 }

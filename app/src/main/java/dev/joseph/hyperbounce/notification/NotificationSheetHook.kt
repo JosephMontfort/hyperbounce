@@ -1310,6 +1310,7 @@ object NotificationSheetHook {
                         "notif_pill_bottom_margin" -> cfg.pillBottomMargin = intent.getFloatExtra("value_float", cfg.pillBottomMargin)
                         "notif_start_margin_top" -> cfg.notifStartMarginTop = intent.getFloatExtra("value_float", cfg.notifStartMarginTop)
                         "notif_stack_enabled" -> cfg.notifStackEnabled = intent.getBooleanExtra("value_boolean", cfg.notifStackEnabled)
+                        "notif_launcher_unlock_on_dismiss" -> cfg.launcherUnlockOnDismiss = intent.getBooleanExtra("value_boolean", cfg.launcherUnlockOnDismiss)
                         else -> handled = false
                     }
                     if (handled) {
@@ -1480,6 +1481,12 @@ object NotificationSheetHook {
     fun notifyCloseOverHomescreen(context: Context, velocity: Float = latestFlingVelocity) {
         isShadeOpen = false
 
+        val cfg = NotificationSheetConfigHolder.sheet
+        if (!cfg.launcherUnlockOnDismiss) {
+            Log.d(TAG, "notifyCloseOverHomescreen: launcherUnlockOnDismiss disabled, skipping")
+            return
+        }
+
         if (currentStatusBarState != 0 || isKeyguard()) {
             Log.d(TAG, "notifyCloseOverHomescreen: keyguard active, skipping")
             return
@@ -1502,6 +1509,8 @@ object NotificationSheetHook {
                 listOf("com.miui.home", "com.mi.android.globallauncher").forEach { pkg ->
                     try {
                         val intent = Intent("dev.joseph.hyperbounce.ACTION_TRIGGER_UNLOCK_ANIMATION").apply {
+                            putExtra("EXTRA_FORCE", true)
+                            putExtra("EXTRA_SOURCE", "NOTIFICATION_CENTER")
                             if (velocity > 0.0f) {
                                 putExtra("EXTRA_VELOCITY", velocity)
                             }
@@ -1511,7 +1520,7 @@ object NotificationSheetHook {
                         context.sendBroadcast(intent)
                     } catch (_: Throwable) {}
                 }
-                Log.d(TAG, "Dispatched ACTION_TRIGGER_UNLOCK_ANIMATION to launcher (velocity=$velocity)")
+                Log.d(TAG, "Dispatched ACTION_TRIGGER_UNLOCK_ANIMATION to launcher (velocity=$velocity, forced=true)")
             } catch (t: Throwable) {
                 Log.e(TAG, "Failed to send unlock broadcast", t)
             }
@@ -2089,10 +2098,9 @@ object NotificationSheetHook {
             val sheet = cachedGlassSheetRef?.get() ?: ensureGlassSheetInjected(container)
             val pill = cachedHomePillRef?.get() ?: ensureHomePillInjected(container)
 
-            // Check if closing started from full open
-            if ((isShadeFullyOpen || hasFullyOpenedForCurrentSession) &&
-                prevFraction > 0f && fraction < prevFraction && fraction < 0.98f
-            ) {
+            // Stabilized closing mode: Only enter closing mode upon intentional upward swipe from full open
+            val isIntentionalClosingSwipe = prevFraction > 0f && (prevFraction - fraction > 0.015f) && (isClosingMode || fraction < 0.96f)
+            if ((isShadeFullyOpen || hasFullyOpenedForCurrentSession) && isIntentionalClosingSwipe) {
                 isClosingMode = true
             }
 
@@ -2106,6 +2114,12 @@ object NotificationSheetHook {
             }
 
             if (fraction <= 0.015f) {
+                val wasOpen = isShadeFullyOpen || hasFullyOpenedForCurrentSession
+                if (wasOpen && !hasTriggeredUnlockForCurrentOpen) {
+                    hasTriggeredUnlockForCurrentOpen = true
+                    val effectiveVel = if (latestTouchYVelocity < -50f) -latestTouchYVelocity else latestFlingVelocity
+                    notifyCloseOverHomescreen(container.context, effectiveVel)
+                }
                 isClosingMode = false
                 sheet?.visibility = View.GONE
                 sheet?.translationY = -viewHeight
@@ -2134,8 +2148,8 @@ object NotificationSheetHook {
             val curSheet = sheet
             if (curSheet != null) {
                 curSheet.visibility = View.VISIBLE
-                curSheet.isClosingMode = isClosingMode || (hasFullyOpenedForCurrentSession && fraction < 0.95f && (prevFraction < 0f || fraction < prevFraction))
-                curSheet.isClosingFromFullOpen = curSheet.isClosingMode
+                curSheet.isClosingMode = isClosingMode
+                curSheet.isClosingFromFullOpen = isClosingMode && hasFullyOpenedForCurrentSession
                 curSheet.expansionFraction = fraction
                 val prevY = curSheet.translationY
                 curSheet.translationY = finalSheetY
@@ -2155,11 +2169,11 @@ object NotificationSheetHook {
                     RealtimeBackdropHelper.stopLiveRefresh()
                 }
 
-                // Suppress background blur and dimming when iOS 27 Depth Wallpaper is active
+                // Suppress background blur and dimming when iOS 27 Depth Wallpaper is active without flickering
                 if (isDepthActive && currentStatusBarState == 0) {
-                    val bgAlpha = if (curSheet.isClosingFromFullOpen) 1f else if (fraction >= 0.90f) ((fraction - 0.90f) / 0.10f).coerceIn(0f, 1f) else 0f
-                    curSheet.shadeBackgroundView?.alpha = bgAlpha
-                    themeBackgroundViewRef?.get()?.alpha = bgAlpha
+                    // Keep stock shade background invisible during pulldown and resting state so depth wallpaper displays cleanly
+                    curSheet.shadeBackgroundView?.alpha = 0.0f
+                    themeBackgroundViewRef?.get()?.alpha = 0.0f
                 } else {
                     curSheet.shadeBackgroundView?.alpha = 1.0f
                     themeBackgroundViewRef?.get()?.alpha = 1.0f
@@ -3001,23 +3015,7 @@ object NotificationSheetHook {
                                 val isHomescreenAllowed = !cfg.lockWallpaperHomescreenOnly || isHomeScreenCached
                                 val isLockScreenNcActive = cfg.isLockScreenActive && isHomescreenAllowed && isUnlockedShadeActive
 
-                                // 1. Static Notification Top Clearance Margin (Zero 120Hz CPU overhead)
-                                if (isLockScreenNcActive) {
-                                    try {
-                                        val isOnKeyguard = NotificationStackScrollerHelper.isOnKeyguard(rawAmbientState)
-                                        if (!isOnKeyguard) {
-                                            val container = containerRef?.get()
-                                            if (container != null) {
-                                                val density = container.resources.displayMetrics.density
-                                                val clockBottom = LockScreenCoverSheetController.getEffectiveClockBottom(container)
-                                                val targetScrimPadding = clockBottom + (cfg.notifStartMarginTop * density)
-                                                setScrimPadding(thisObject, targetScrimPadding)
-                                            }
-                                        }
-                                    } catch (_: Throwable) {}
-                                }
-
-                                // Run stock algorithm pass
+                                // Run stock algorithm pass (mTopPadding already set cleanly by hookTopPaddingController)
                                 val result = chain.proceed()
 
                                 // 2. iOS-Style Stacked Notifications Transformation (Post-resetViewStates)

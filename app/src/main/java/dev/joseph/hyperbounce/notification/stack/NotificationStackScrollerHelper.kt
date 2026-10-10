@@ -199,6 +199,25 @@ object NotificationStackScrollerHelper {
         }
     }
 
+    private fun setBoolean(viewState: Any, fieldName: String, cachedRef: Field?, value: Boolean): Field? {
+        var f = cachedRef
+        try {
+            if (f == null) {
+                var curr: Class<*>? = viewState.javaClass
+                while (curr != null) {
+                    try {
+                        f = curr.getDeclaredField(fieldName).apply { isAccessible = true }
+                        break
+                    } catch (_: Throwable) {
+                        curr = curr.superclass
+                    }
+                }
+            }
+            f?.setBoolean(viewState, value)
+        } catch (_: Throwable) {}
+        return f
+    }
+
     /**
      * Executes the stacked notification mathematical transformation after Stock StackScrollAlgorithm
      * has generated initial view states.
@@ -267,12 +286,18 @@ object NotificationStackScrollerHelper {
             cachedGoneField = gRef
             if (isGone) continue
 
-            val (isHidden, hRef) = getBoolean(vs, "hidden", cachedHiddenField)
-            cachedHiddenField = hRef
-            if (isHidden) continue
-
             val (rowY, yRef) = getFloat(vs, "mYTranslation", cachedYTranslationField)
             cachedYTranslationField = yRef
+
+            val (isHidden, hRef) = getBoolean(vs, "hidden", cachedHiddenField)
+            cachedHiddenField = hRef
+            if (isHidden) {
+                if (rowY < maxLayoutHeight + (100f * density)) {
+                    cachedHiddenField = setBoolean(vs, "hidden", cachedHiddenField, false)
+                } else {
+                    continue
+                }
+            }
 
             val (rowH, heightRef) = getInt(vs, "height", cachedHeightField)
             cachedHeightField = heightRef
@@ -314,6 +339,7 @@ object NotificationStackScrollerHelper {
                 cachedYTranslationField = setFloat(vs, "mYTranslation", cachedYTranslationField, newY)
 
                 child.pivotX = child.width / 2.0f
+                child.pivotY = 0.0f
                 cachedScaleXField = setFloat(vs, "mScaleX", cachedScaleXField, scale)
                 cachedScaleYField = setFloat(vs, "mScaleY", cachedScaleYField, scale)
 

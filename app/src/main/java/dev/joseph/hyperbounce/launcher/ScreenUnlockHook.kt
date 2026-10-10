@@ -541,7 +541,8 @@ object ScreenUnlockHook {
                         }
                         "dev.joseph.hyperbounce.ACTION_TRIGGER_UNLOCK_ANIMATION" -> {
                             val cfg = LauncherConfigHolder.unlockConfig
-                            if (!cfg.enabled) return
+                            val isForced = intent.getBooleanExtra("EXTRA_FORCE", false)
+                            if (!cfg.enabled && !isForced) return
                             val velocity = intent.getFloatExtra("EXTRA_VELOCITY", 0.0f)
                             if (velocity != 0.0f) {
                                 updateVelocity(velocity)
@@ -553,14 +554,14 @@ object ScreenUnlockHook {
                             }
                             lastReceivedUnlockTime = now
 
-                            Log.d(TAG, "Received ACTION_TRIGGER_UNLOCK_ANIMATION broadcast (velocity=$velocity)")
+                            Log.d(TAG, "Received ACTION_TRIGGER_UNLOCK_ANIMATION broadcast (velocity=$velocity, forced=$isForced)")
                             val launcher = getLauncherActivity(c)
                             if (launcher == null) {
                                 Log.w(TAG, "Cannot trigger unlock animation: launcher activity is null")
                                 return
                             }
                             launcher.runOnUiThread {
-                                triggerUnlockAnimationOnLauncher(launcher)
+                                triggerUnlockAnimationOnLauncher(launcher, isForced)
                             }
                         }
                     }
@@ -579,16 +580,16 @@ object ScreenUnlockHook {
         }
     }
 
-    private fun triggerUnlockAnimationOnLauncher(launcher: android.app.Activity) {
+    private fun triggerUnlockAnimationOnLauncher(launcher: android.app.Activity, isForced: Boolean = false) {
         try {
             if (launcher.isFinishing || launcher.isDestroyed) return
 
             val now = SystemClock.uptimeMillis()
             lastTriggeredUnlockAnimTime = now
-            Log.d(TAG, "triggerUnlockAnimationOnLauncher: executing on $launcher (time=$now)")
+            Log.d(TAG, "triggerUnlockAnimationOnLauncher: executing on $launcher (time=$now, forced=$isForced)")
 
             val cfg = LauncherConfigHolder.unlockConfig
-            if (!cfg.enabled) return
+            if (!cfg.enabled && !isForced) return
 
             // 1. Prepare animation on current screen icons
             var prepared = false

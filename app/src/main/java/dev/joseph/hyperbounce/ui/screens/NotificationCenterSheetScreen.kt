@@ -533,6 +533,25 @@ fun NotificationCenterSheetScreen(
         }
 
         item {
+            SectionHeader("Screen Unlock Animation", colors)
+            GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
+                SettingsToggleRow(
+                    title = "Launcher Animation on dismiss",
+                    subtitle = "Play the screen unlock animation on notification center dismiss",
+                    colors = colors,
+                    backdrop = backdrop,
+                    checked = sheet.launcherUnlockOnDismiss,
+                    onCheckedChange = sheet::setLauncherUnlockOnDismiss,
+                    enabled = sheetActive
+                )
+            }
+            SectionFooter(
+                "Play the screen unlock animation on notification center dismiss. Triggers launcher icon kinetic unlock animation with independent velocity-based scaling.",
+                colors
+            )
+        }
+
+        item {
             SectionHeader("Optics & Components", colors)
             GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
                 SettingsNavRow(

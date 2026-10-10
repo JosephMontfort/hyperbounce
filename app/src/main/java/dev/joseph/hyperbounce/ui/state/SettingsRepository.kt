@@ -713,6 +713,7 @@ class SettingsRepository(context: Context) {
         var iosHunSqueezeStrength by prefsFloatState("notif_ios_hun_squeeze_strength", defaults.iosHunSqueezeStrength); private set
         var notifStartMarginTop by prefsFloatState("notif_start_margin_top", defaults.notifStartMarginTop); private set
         var notifStackEnabled by prefsBooleanState("notif_stack_enabled", defaults.notifStackEnabled); private set
+        var launcherUnlockOnDismiss by prefsBooleanState("notif_launcher_unlock_on_dismiss", defaults.launcherUnlockOnDismiss); private set
 
         fun snapshot(): NotificationSheetSettings = NotificationSheetSettings(
             masterEnabled,
@@ -728,7 +729,7 @@ class SettingsRepository(context: Context) {
             cornerRadius, sideMargin,
             pillWidth, pillHeight, pillBottomMargin,
             iosHunAnimationEnabled, iosHunDurationMs, iosHunStartScale, iosHunSqueezeStrength,
-            notifStartMarginTop, notifStackEnabled
+            notifStartMarginTop, notifStackEnabled, launcherUnlockOnDismiss
         )
 
         @JvmName("setNotifMasterEnabledPref") fun setMasterEnabled(v: Boolean) { masterEnabled = v }
@@ -770,6 +771,7 @@ class SettingsRepository(context: Context) {
         @JvmName("setNotifIosHunSqueezeStrengthPref") fun setIosHunSqueezeStrength(v: Float) { iosHunSqueezeStrength = v }
         @JvmName("setNotifStartMarginTopPref") fun setNotifStartMarginTop(v: Float) { notifStartMarginTop = v }
         @JvmName("setNotifStackEnabledPref") fun setNotifStackEnabled(v: Boolean) { notifStackEnabled = v }
+        @JvmName("setNotifLauncherUnlockOnDismissPref") fun setLauncherUnlockOnDismiss(v: Boolean) { launcherUnlockOnDismiss = v }
 
         fun reloadFromDefaults() {
             masterEnabled = defaults.masterEnabled
@@ -810,6 +812,7 @@ class SettingsRepository(context: Context) {
             iosHunSqueezeStrength = defaults.iosHunSqueezeStrength
             notifStartMarginTop = defaults.notifStartMarginTop
             notifStackEnabled = defaults.notifStackEnabled
+            launcherUnlockOnDismiss = defaults.launcherUnlockOnDismiss
         }
     }
 
