@@ -40,7 +40,7 @@ object ScreenUnlockDefaults {
 
 data class ScreenUnlockConfig(
     val enabled: Boolean = true,
-    val animMode: Int = 1, // 0 = iOS Radial Dispersion, 1 = Kinetic Y-Axis Cascade
+    val animMode: Int = 1, // 0 = iOS Radial Dispersion, 1 = Kinetic Y-Axis Cascade, 2 = XOS 16.3 Staggered Wave
     val gridColumns: Int = 4,
     val gridRows: Int = 7,
 
@@ -65,6 +65,12 @@ data class ScreenUnlockConfig(
     val kineticDockDamping: Float = 1.00f,
     val kineticDockResponse: Float = 0.55f,
     val kineticDockZDepth: Float = 800.0f,
+
+    // Mode 2: XOS 16.3 1:1 Staggered Wave
+    val xosStiffness: Float = 150.0f,
+    val xosDamping: Float = 0.70f,
+    val xosRowDelayMs: Long = 10L,
+    val xosAlphaDurationMs: Long = 250L,
 
     // Row-by-row dynamics (r0_z..r6_z, r0_center_bounce..r6_center_bounce, etc.)
     val dyn: Map<String, Float> = emptyMap()
@@ -151,6 +157,10 @@ object LauncherConfigHolder {
             kineticDockDamping = prefs.getFloat("unlock_kinetic_dock_damping", 1.00f),
             kineticDockResponse = prefs.getFloat("unlock_kinetic_dock_response", 0.55f),
             kineticDockZDepth = prefs.getFloat("unlock_kinetic_dock_z_depth", 800.0f),
+            xosStiffness = prefs.getFloat("unlock_xos_stiffness", 150.0f),
+            xosDamping = prefs.getFloat("unlock_xos_damping", 0.70f),
+            xosRowDelayMs = prefs.getLong("unlock_xos_row_delay_ms", 10L),
+            xosAlphaDurationMs = prefs.getLong("unlock_xos_alpha_duration_ms", 250L),
             dyn = dynMap
         )
 

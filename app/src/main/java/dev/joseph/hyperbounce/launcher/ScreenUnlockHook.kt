@@ -1,5 +1,8 @@
 package dev.joseph.hyperbounce.launcher
 
+import android.animation.Animator
+import android.animation.AnimatorListenerAdapter
+import android.animation.ObjectAnimator
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -10,6 +13,7 @@ import android.os.SystemClock
 import android.util.Log
 import android.view.View
 import android.view.ViewGroup
+import android.view.animation.LinearInterpolator
 import io.github.libxposed.api.XposedInterface
 import java.lang.ref.WeakReference
 import java.lang.reflect.Constructor
@@ -275,6 +279,21 @@ object ScreenUnlockHook {
                         } catch (t: Throwable) {
                             Log.w(TAG, "Error calculating icon position", t)
                         }
+                    }
+
+                    // Mode 2: Complete 1:1 Replacement with XOS 16.3 Staggered Wave Pipeline
+                    if (cfg.animMode == 2) {
+                        if (view != null) {
+                            animateXos163StaggeredView(
+                                userPresentObj = chain.thisObject,
+                                view = view,
+                                isHotseat = isDockView.get() || isIndicator.get(),
+                                row = currentRow.get(),
+                                totalRows = max(1, cfg.gridRows),
+                                cfg = cfg
+                            )
+                        }
+                        return null
                     }
 
                     isAnimating.set(true)
@@ -641,6 +660,109 @@ object ScreenUnlockHook {
             } catch (_: Throwable) {}
         } catch (t: Throwable) {
             Log.e(TAG, "Error triggering unlock animation on launcher", t)
+        }
+    }
+
+    /**
+     * Mode 2: 1:1 Pure XOS 16.3 Staggered Icon Wave Animation.
+     * Replaces Xiaomi HyperOS 3D radial camera perspective with:
+     * - Pure 1D vertical displacement (zero lateral X-drift)
+     * - Bottom-to-top staggered latency: ((totalRows - effectiveRow) + 1) * 10ms
+     * - Under-damped spring oscillator (stiffness = 150.0, dampingRatio = 0.70)
+     * - Physical velocity flick modulation of start displacement & upward velocity
+     * - Linear 250ms alpha ramp
+     */
+    private fun animateXos163StaggeredView(
+        userPresentObj: Any?,
+        view: View,
+        isHotseat: Boolean,
+        row: Int,
+        totalRows: Int,
+        cfg: ScreenUnlockConfig
+    ) {
+        try {
+            // 1. Completely neutralize 3D perspective / camera translation from Xiaomi prepare stage
+            view.translationX = 0.0f
+            view.scaleX = 1.0f
+            view.scaleY = 1.0f
+            view.pivotX = view.width / 2.0f
+            view.pivotY = view.height / 2.0f
+
+            // 2. Compute 1:1 XOS Staggered Row Delay
+            // In XOS (StaggeredWorkspaceAnim.java):
+            // Hotseat / Dock is considered the bottom row (effectiveRow = totalRows)
+            // Workspace rows are 1-indexed (effectiveRow = row + 1)
+            val effectiveRow = if (isHotseat) totalRows else (row + 1).coerceIn(1, totalRows)
+            val startDelay = ((totalRows - effectiveRow) + 1) * cfg.xosRowDelayMs
+
+            // 3. Compute 1:1 XOS Velocity Flick Initial Displacement & Velocity
+            // In XOS (StaggeredWorkspaceAnim.java):
+            // mSpringTransY = (((abs(f2) * 0.9f) / MAX_VELOCITY) + 0.2f) * maxTransY
+            val dm = view.resources.displayMetrics
+            val maxTransYPx = 70.0f * dm.density // ~210px on xxhdpi (matching XOS swipe_up_max_workspace_trans_y)
+            val timeDelta = System.currentTimeMillis() - lastVelocityTime
+            val effectiveVelocity = if (timeDelta < 2500L && latestVelocity > 0.0f) latestVelocity else 0.0f
+            val normV = (effectiveVelocity / cfg.maxVelocity).coerceIn(0.0f, 1.0f)
+            val velocityMultiplier = (normV * 0.9f) + 0.2f
+            val springTransY = velocityMultiplier * maxTransYPx
+
+            // Upward initial velocity (- signum towards 0)
+            val startVelocity = -1.0f * (normV * 22.0f * 100.0f * dm.density)
+
+            view.translationY = springTransY
+            view.alpha = 0.0f
+
+            // 4. Build and start XOS analytical spring animator
+            val springAnimator = XosSpringAnimationBuilder(view.context)
+                .setStiffness(cfg.xosStiffness)
+                .setDampingRatio(cfg.xosDamping)
+                .setStartValue(springTransY)
+                .setEndValue(0.0f)
+                .setStartVelocity(startVelocity)
+                .setMinimumVisibleChange(1.0f)
+                .build(view, startDelay) {
+                    view.translationY = 0.0f
+                    notifyEnd(userPresentObj, view)
+                }
+
+            // 5. Build and start XOS linear alpha animator (250ms with same row startDelay)
+            val alphaAnimator = ObjectAnimator.ofFloat(view, View.ALPHA, 0.0f, 1.0f).apply {
+                duration = cfg.xosAlphaDurationMs
+                this.startDelay = startDelay
+                interpolator = LinearInterpolator()
+                addListener(object : AnimatorListenerAdapter() {
+                    override fun onAnimationEnd(animation: Animator) {
+                        view.alpha = 1.0f
+                    }
+                    override fun onAnimationCancel(animation: Animator) {
+                        view.alpha = 1.0f
+                    }
+                })
+            }
+
+            springAnimator.start()
+            alphaAnimator.start()
+        } catch (t: Throwable) {
+            Log.e(TAG, "Error in animateXos163StaggeredView", t)
+            view.translationX = 0.0f
+            view.translationY = 0.0f
+            view.scaleX = 1.0f
+            view.scaleY = 1.0f
+            view.alpha = 1.0f
+            notifyEnd(userPresentObj, view)
+        }
+    }
+
+    private fun notifyEnd(userPresentObj: Any?, view: View) {
+        if (userPresentObj == null) return
+        try {
+            val endMethod = userPresentObj.javaClass.getMethod("endAnimation", View::class.java)
+            endMethod.invoke(userPresentObj, view)
+        } catch (_: Throwable) {
+            try {
+                val m = userPresentObj.javaClass.getDeclaredMethod("endAnimation", View::class.java).apply { isAccessible = true }
+                m.invoke(userPresentObj, view)
+            } catch (_: Throwable) {}
         }
     }
 }

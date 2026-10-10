@@ -292,7 +292,11 @@ data class ScreenUnlockSettings(
     val cascadeDamping: Float = 0.86f,
     val kineticDockDamping: Float = 1.00f,
     val kineticDockResponse: Float = 0.55f,
-    val kineticDockZDepth: Float = 800.0f
+    val kineticDockZDepth: Float = 800.0f,
+    val xosStiffness: Float = 150.0f,
+    val xosDamping: Float = 0.70f,
+    val xosRowDelayMs: Long = 10L,
+    val xosAlphaDurationMs: Long = 250L
 )
 
 /** Feature 4: App Transition & Physics Settings */
