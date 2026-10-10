@@ -49,7 +49,6 @@ object ControlCenterHook {
     @Volatile private var sShrinkXEaseField: Field? = null
     @Volatile private var sShrinkCenterXField: Field? = null
     @Volatile private var sShrinkCenterYField: Field? = null
-    @Volatile private var sCenterXField: Field? = null
     @Volatile private var sDelayPerField: Field? = null
     @Volatile private var sReleaseTransYEaseField: Field? = null
     @Volatile private var sShowEaseField: Field? = null
@@ -1156,10 +1155,6 @@ object ControlCenterHook {
                             val result = chain.proceed()
                             if (ControlCenterConfigHolder.config.isJellyActive) {
                                 try {
-                                    if (holder != null && holder.javaClass.name.contains("MultipleAnimViewHolder")) {
-                                        return@intercept result
-                                    }
-
                                     val targetView = itemView ?: (sItemViewField ?: holderClass.getField("itemView").apply {
                                         sItemViewField = this
                                     }).get(holder) as? View ?: return@intercept result
@@ -1182,64 +1177,59 @@ object ControlCenterHook {
                                     }
                                     val row = spreadRowField.getInt(holder)
 
-                                    val centerXField = sCenterXField ?: holderClass.getDeclaredField("centerX").apply {
-                                        isAccessible = true
-                                        sCenterXField = this
+                                    val viewWidth = targetView.width
+                                    val viewHeight = targetView.height
+                                    if (viewWidth <= 0 || viewHeight <= 0) return@intercept result
+
+                                    val isRecentGesture = (System.currentTimeMillis() - ControlCenterConfigHolder.sLastTouchTime) < 700
+                                    val isClosing = (progress < 0.99f && ControlCenterConfigHolder.sCurrentVelocityY < -100.0f)
+
+                                    if (!ControlCenterConfigHolder.sIsUserFlicking && !isRecentGesture && Math.abs(expandTransY) < 1.0f) {
+                                        targetView.scaleX = 1.0f
+                                        targetView.scaleY = 1.0f
+                                        return@intercept result
                                     }
-                                    val centerX = centerXField.getFloat(holder)
 
-                                    JellyPhysicsEngine.onFrame(targetView, holder, progress, expandTransY, row, centerX)
-                                } catch (t: Throwable) {}
-                            }
-                            result
-                        }
-                    }
-                }
-            } catch (t: Throwable) {}
+                                    val absVel = Math.abs(ControlCenterConfigHolder.sCurrentVelocityY)
+                                    val velFactor = if (absVel > 0.1f) Math.max(0.35f, Math.min(1.20f, absVel / 3500.0f)) else 0.70f
 
-            // 7b. Hook MultipleAnimViewHolder (Sliders) so JellyPhysicsEngine runs after MultipleAnimViewHolder's scale logic
-            try {
-                val multiAnimClass = Class.forName("miui.systemui.controlcenter.panel.main.recyclerview.MultipleAnimViewHolder", false, classLoader)
-                val mHolderClass = Class.forName("miui.systemui.controlcenter.panel.main.recyclerview.MainPanelItemViewHolder", false, classLoader)
-                for (m in multiAnimClass.declaredMethods) {
-                    if (m.name == "onFrameCallback") {
-                        m.isAccessible = true
-                        module.hook(m).intercept { chain ->
-                            val holder = chain.thisObject
-                            val itemView = ControlCenterGrouping.getViewHolderItemView(holder)
-                            if (itemView != null && ControlCenterConfigHolder.config.isJellyActive) {
-                                itemView.scaleX = 1.0f
-                                itemView.scaleY = 1.0f
-                            }
-                            val result = chain.proceed()
-                            if (ControlCenterConfigHolder.config.isJellyActive && itemView != null) {
-                                try {
+                                    val density = targetView.context.resources.displayMetrics.density
+                                    val standardCardHeight = 110.0f * density
+                                    val heightDampener = Math.max(0.42f, Math.min(1.0f, standardCardHeight / viewHeight))
 
-                                    val expandScaleRatioField = sExpandScaleRatioField ?: mHolderClass.getDeclaredField("expandScaleRatio").apply {
-                                        isAccessible = true
-                                        sExpandScaleRatioField = this
+                                    var progressStretchY = 0.0f
+                                    var progressSquishX = 0.0f
+
+                                    if (!isClosing && progress in 0.01f..0.99f && (ControlCenterConfigHolder.sIsUserFlicking || isRecentGesture)) {
+                                        val momentum = Math.sin(progress * Math.PI).toFloat()
+                                        val rowStagger = 1.0f + (row * 0.040f)
+                                        progressStretchY = momentum * 0.090f * velFactor * heightDampener * rowStagger
+                                        progressSquishX = progressStretchY * 0.38f
+                                    } else if (isClosing && (ControlCenterConfigHolder.sIsUserFlicking || isRecentGesture)) {
+                                        val momentum = Math.sin(progress * Math.PI).toFloat()
+                                        progressStretchY = -momentum * 0.050f * velFactor * heightDampener
+                                        progressSquishX = -progressStretchY * 0.38f
                                     }
-                                    val progress = expandScaleRatioField.getFloat(holder)
 
-                                    val expandTransYField = sExpandTransYField ?: mHolderClass.getDeclaredField("expandTransY").apply {
-                                        isAccessible = true
-                                        sExpandTransYField = this
+                                    val strain = Math.max(-0.22f, Math.min(0.50f, expandTransY / 850.0f))
+                                    val pullStretchY = strain * 0.32f * heightDampener
+                                    val pullSquishX = strain * 0.14f * heightDampener
+
+                                    val baseScale = Math.min(1.0f, Math.max(0.89f, 0.91f + (progress * 0.09f)))
+                                    val totalScaleY = baseScale + progressStretchY + pullStretchY
+                                    val totalScaleX = baseScale - progressSquishX - pullSquishX
+
+                                    targetView.pivotX = viewWidth / 2.0f
+                                    if (expandTransY > 3.0f || (!isClosing && progress > 0.05f && progress < 0.95f)) {
+                                        targetView.pivotY = viewHeight * 0.10f
+                                    } else if (expandTransY < -3.0f || isClosing) {
+                                        targetView.pivotY = viewHeight * 0.90f
+                                    } else {
+                                        targetView.pivotY = viewHeight / 2.0f
                                     }
-                                    val expandTransY = expandTransYField.getFloat(holder)
 
-                                    val spreadRowField = sSpreadRowField ?: mHolderClass.getDeclaredField("spreadRow").apply {
-                                        isAccessible = true
-                                        sSpreadRowField = this
-                                    }
-                                    val row = spreadRowField.getInt(holder)
-
-                                    val centerXField = sCenterXField ?: mHolderClass.getDeclaredField("centerX").apply {
-                                        isAccessible = true
-                                        sCenterXField = this
-                                    }
-                                    val centerX = centerXField.getFloat(holder)
-
-                                    JellyPhysicsEngine.onFrame(itemView, holder, progress, expandTransY, row, centerX)
+                                    targetView.scaleX = Math.max(0.78f, Math.min(1.30f, totalScaleX))
+                                    targetView.scaleY = Math.max(0.78f, Math.min(1.40f, totalScaleY))
                                 } catch (t: Throwable) {}
                             }
                             result
