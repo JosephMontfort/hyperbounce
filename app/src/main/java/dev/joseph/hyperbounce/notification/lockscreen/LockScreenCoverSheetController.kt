@@ -2,6 +2,7 @@ package dev.joseph.hyperbounce.notification.lockscreen
 
 import android.content.Context
 import android.graphics.Canvas
+import android.os.SystemClock
 import android.util.Log
 import android.view.View
 import android.view.ViewGroup
@@ -652,7 +653,8 @@ object LockScreenCoverSheetController {
             }
 
             // 3. Ensure bottom affordances injected and tracked
-            val bottomArea = ensureBottomAffordancesInjected(container)
+            ensureBottomAffordancesInjected(container)
+            val bottomArea = getBottomAreaView(container)
             if (bottomArea != null) {
                 if (cfg.showBottomWidgets) {
                     bottomArea.translationY = finalSheetY + (if (finalSheetY == 0f) currentStretchOffset else 0f)
