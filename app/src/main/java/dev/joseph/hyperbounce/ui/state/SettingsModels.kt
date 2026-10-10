@@ -207,7 +207,8 @@ data class NotificationSheetSettings(
     val iosHunDurationMs: Float = 600.0f,
     val iosHunStartScale: Float = 0.25f,
     val iosHunSqueezeStrength: Float = 1.0f,
-    val notifStartMarginTop: Float = 16.0f,
+    val notifStartMarginTop: Float = 0.0f,
+    val notifClockScale: Float = 0.70f,
     val notifStackEnabled: Boolean = false,
     val launcherUnlockOnDismiss: Boolean = true
 )

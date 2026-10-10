@@ -173,8 +173,8 @@ object LockScreenCoverSheetController {
 
                 try {
                     canvas.translate(0f, translationY)
-                    // Apply intermediate scale (0.88x) centered horizontally and pinned to top
-                    val intermediateScale = 0.88f
+                    // Apply intermediate scale configured by user centered horizontally and pinned to top
+                    val intermediateScale = NotificationSheetConfigHolder.sheet.notifClockScale.coerceIn(0.40f, 1.20f)
                     val pivotX = viewW / 2.0f
                     val pivotY = 0.0f
                     canvas.scale(intermediateScale, intermediateScale, pivotX, pivotY)
@@ -192,7 +192,7 @@ object LockScreenCoverSheetController {
         if (layer == ClockLayer.BACKGROUND) {
             try {
                 val clockConfig = LockScreenInfoReader.getConfig(context)
-                val intermediateScale = 0.88f
+                val intermediateScale = NotificationSheetConfigHolder.sheet.notifClockScale.coerceIn(0.40f, 1.20f)
                 val pivotX = w / 2.0f
                 val pivotY = 0.0f
                 val saveCount = canvas.save()
@@ -447,8 +447,9 @@ object LockScreenCoverSheetController {
             (220f * density).toInt()
         }
 
-        // Match 0.88x intermediate clock scale
-        return (rawBottom * 0.88f).toInt()
+        // Match configured clock scale
+        val clockScale = NotificationSheetConfigHolder.sheet.notifClockScale.coerceIn(0.40f, 1.20f)
+        return (rawBottom * clockScale).toInt()
     }
 
     /**

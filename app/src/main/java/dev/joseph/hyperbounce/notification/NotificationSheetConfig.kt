@@ -46,7 +46,9 @@ data class NotificationSheetConfig(
     var iosHunStartScale: Float = 0.25f,
     var iosHunSqueezeStrength: Float = 1.0f,
     // Clearance spacing below big lock screen clock
-    var notifStartMarginTop: Float = 16.0f,
+    var notifStartMarginTop: Float = 0.0f,
+    // Clock size scale in notification center
+    var notifClockScale: Float = 0.70f,
     // iOS-Style Stacked Notifications
     var notifStackEnabled: Boolean = false,
     // Launcher Unlock Animation on Notification Center Dismiss
@@ -139,7 +141,8 @@ object NotificationSheetConfigHolder {
         sheet.iosHunDurationMs = prefs.getFloat("notif_ios_hun_duration_ms", 600.0f)
         sheet.iosHunStartScale = prefs.getFloat("notif_ios_hun_start_scale", 0.25f)
         sheet.iosHunSqueezeStrength = prefs.getFloat("notif_ios_hun_squeeze_strength", 1.0f)
-        sheet.notifStartMarginTop = prefs.getFloat("notif_start_margin_top", 16.0f)
+        sheet.notifStartMarginTop = prefs.getFloat("notif_start_margin_top", 0.0f)
+        sheet.notifClockScale = prefs.getFloat("notif_clock_scale", 0.70f)
         sheet.notifStackEnabled = prefs.getBoolean("notif_stack_enabled", false)
         sheet.launcherUnlockOnDismiss = prefs.getBoolean("notif_launcher_unlock_on_dismiss", true)
     }

@@ -505,14 +505,27 @@ fun NotificationCenterSheetScreen(
                 RowDivider(colors.separator)
                 SettingsSliderRow(
                     title = "Notification Top Clearance Margin",
-                    subtitle = "Downward margin below big lock screen clock",
+                    subtitle = "Downward margin below clock (0 dp = stock position)",
                     colors = colors,
                     backdrop = backdrop,
                     value = sheet.notifStartMarginTop,
                     onValueChange = sheet::setNotifStartMarginTop,
-                    valueRange = 0.0f..100.0f,
-                    defaultValue = 16.0f,
+                    valueRange = 0.0f..150.0f,
+                    defaultValue = 0.0f,
                     valueLabel = { String.format(Locale.US, "%.0f dp", it) },
+                    enabled = sheetActive && sheet.lockScreenAsNotifCenterEnabled
+                )
+                RowDivider(colors.separator)
+                SettingsSliderRow(
+                    title = "Clock Size Scale",
+                    subtitle = "Scale factor of lock screen clock in notification center",
+                    colors = colors,
+                    backdrop = backdrop,
+                    value = sheet.notifClockScale,
+                    onValueChange = sheet::setNotifClockScale,
+                    valueRange = 0.50f..1.0f,
+                    defaultValue = 0.70f,
+                    valueLabel = { String.format(Locale.US, "%.0f%%", it * 100.0f) },
                     enabled = sheetActive && sheet.lockScreenAsNotifCenterEnabled
                 )
                 RowDivider(colors.separator)
