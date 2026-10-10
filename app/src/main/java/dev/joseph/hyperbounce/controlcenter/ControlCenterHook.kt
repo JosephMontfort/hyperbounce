@@ -1205,11 +1205,15 @@ object ControlCenterHook {
                     if (m.name == "onFrameCallback") {
                         m.isAccessible = true
                         module.hook(m).intercept { chain ->
+                            val holder = chain.thisObject
+                            val itemView = ControlCenterGrouping.getViewHolderItemView(holder)
+                            if (itemView != null && ControlCenterConfigHolder.config.isJellyActive) {
+                                itemView.scaleX = 1.0f
+                                itemView.scaleY = 1.0f
+                            }
                             val result = chain.proceed()
-                            if (ControlCenterConfigHolder.config.isJellyActive) {
+                            if (ControlCenterConfigHolder.config.isJellyActive && itemView != null) {
                                 try {
-                                    val holder = chain.thisObject ?: return@intercept result
-                                    val itemView = ControlCenterGrouping.getViewHolderItemView(holder) ?: return@intercept result
 
                                     val expandScaleRatioField = sExpandScaleRatioField ?: mHolderClass.getDeclaredField("expandScaleRatio").apply {
                                         isAccessible = true
