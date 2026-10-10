@@ -1140,30 +1140,6 @@ object ControlCenterHook {
                         }
                     }
 
-                    if (m.name == "updateEases") {
-                        m.isAccessible = true
-                        module.hook(m).intercept { chain ->
-                            val result = chain.proceed()
-                            if (ControlCenterConfigHolder.config.isJellyActive) {
-                                try {
-                                    val holder = chain.thisObject ?: return@intercept result
-                                    val easeField = sReleaseTransYEaseField ?: holderClass.getDeclaredField("releaseTransYEase").apply {
-                                        isAccessible = true
-                                        sReleaseTransYEaseField = this
-                                    }
-                                    val ease = easeField.get(holder)
-                                    if (ease != null) {
-                                        val method = sSetFactorsMethod ?: ease.javaClass.getMethod("setFactors", DoubleArray::class.java).apply {
-                                            isAccessible = true
-                                            sSetFactorsMethod = this
-                                        }
-                                        method.invoke(ease, doubleArrayOf(0.55, 0.30))
-                                    }
-                                } catch (t: Throwable) {}
-                            }
-                            result
-                        }
-                    }
 
                     if (m.name == "onFrameCallback") {
                         m.isAccessible = true
@@ -1268,28 +1244,6 @@ object ControlCenterHook {
                 }
             } catch (t: Throwable) {}
 
-            // 7c. Hook SpreadRowsAnimator.Row so row springs also use sub-critical damping
-            try {
-                val rowClass = Class.forName("miui.systemui.controlcenter.panel.main.anim.SpreadRowsAnimator\$Row", false, classLoader)
-                for (m in rowClass.declaredMethods) {
-                    if (m.name == "getReleaseEase") {
-                        m.isAccessible = true
-                        module.hook(m).intercept { chain ->
-                            val result = chain.proceed()
-                            if (ControlCenterConfigHolder.config.isJellyActive && result != null) {
-                                try {
-                                    val method = sSetFactorsMethod ?: result.javaClass.getMethod("setFactors", DoubleArray::class.java).apply {
-                                        isAccessible = true
-                                        sSetFactorsMethod = this
-                                    }
-                                    method.invoke(result, doubleArrayOf(0.55, 0.30))
-                                } catch (t: Throwable) {}
-                            }
-                            result
-                        }
-                    }
-                }
-            } catch (t: Throwable) {}
 
             // 8. Hook Major Modules (Edit Unlock & Dynamic Priority)
             val majorModuleClassNames = arrayOf(
