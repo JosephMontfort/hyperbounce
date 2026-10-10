@@ -49,11 +49,15 @@ object LockScreenCoverSheetController {
     private var cachedNsslId: Int = 0
     private var cachedNsslRef: WeakReference<ViewGroup>? = null
 
+    private var triedResolvingFgClock: Boolean = false
+    private var lastClockResolveAttempt: Long = 0L
+
     init {
         // Immediate style update: when user changes lockscreen clock theme/style, invalidate references
         LockScreenInfoReader.addListener { _ ->
             cachedClockContainerRef = null
             cachedFgClockContainerRef = null
+            triedResolvingFgClock = false
             isClockSyncedBig = false
             Log.d(TAG, "Lockscreen clock style updated, refreshed clock view references immediately")
         }
@@ -93,6 +97,14 @@ object LockScreenCoverSheetController {
      */
     private fun resolveClockViews(rootView: View?) {
         if (rootView == null) return
+        val now = SystemClock.uptimeMillis()
+        if (cachedClockContainerRef?.get() != null && (triedResolvingFgClock || cachedFgClockContainerRef?.get() != null)) {
+            return
+        }
+        if (now - lastClockResolveAttempt < 1000L) {
+            return
+        }
+        lastClockResolveAttempt = now
         try {
             if (cachedClockContainerRef?.get() == null) {
                 if (cachedClockId == 0) {
@@ -105,7 +117,7 @@ object LockScreenCoverSheetController {
                     }
                 }
             }
-            if (cachedFgClockContainerRef?.get() == null) {
+            if (!triedResolvingFgClock && cachedFgClockContainerRef?.get() == null) {
                 if (cachedFgClockId == 0) {
                     cachedFgClockId = rootView.resources.getIdentifier("miui_keyguard_foreground_clock_container", "id", "com.android.systemui")
                 }
@@ -115,6 +127,7 @@ object LockScreenCoverSheetController {
                         cachedFgClockContainerRef = WeakReference(fgView)
                     }
                 }
+                triedResolvingFgClock = true
             }
         } catch (t: Throwable) {
             Log.e(TAG, "Error resolving clock views", t)
@@ -223,6 +236,7 @@ object LockScreenCoverSheetController {
      */
     fun suppressStockShadeHeader(rootView: View?, isSuppress: Boolean) {
         if (rootView == null) return
+        if (isSuppress == isHeaderSuppressedByUs && cachedHeaderViewRef?.get() != null) return
         try {
             val cfg = NotificationSheetConfigHolder.sheet
             val isUnlocked = dev.joseph.hyperbounce.notification.NotificationSheetHook.currentStatusBarState == 0
@@ -632,12 +646,13 @@ object LockScreenCoverSheetController {
             // 1. Suppress stock shade header when pulling down
             suppressStockShadeHeader(container.rootView, fraction > 0.015f)
 
-            // 2. Synchronize authentic lockscreen clock with notifications (cached reflection, zero overhead)
-            syncClockWithNotifications(container)
+            // 2. Synchronize authentic lockscreen clock with notifications (once until shade resets)
+            if (!isClockSyncedBig) {
+                syncClockWithNotifications(container)
+            }
 
             // 3. Ensure bottom affordances injected and tracked
-            ensureBottomAffordancesInjected(container)
-            val bottomArea = getBottomAreaView(container)
+            val bottomArea = ensureBottomAffordancesInjected(container)
             if (bottomArea != null) {
                 if (cfg.showBottomWidgets) {
                     bottomArea.translationY = finalSheetY + (if (finalSheetY == 0f) currentStretchOffset else 0f)

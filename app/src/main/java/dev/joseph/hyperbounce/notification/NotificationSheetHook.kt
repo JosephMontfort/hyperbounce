@@ -2018,8 +2018,8 @@ object NotificationSheetHook {
 
         if (lastAppliedFraction >= 0.85f || isShadeOpen || hasFullyOpened) {
             val updateAction = Runnable {
-                val sheet = container.findViewWithTag<View>(TAG_GLASS_SHEET)
-                val pill = container.findViewWithTag<View>(TAG_HOME_PILL)
+                val sheet = cachedGlassSheetRef?.get() ?: container.findViewWithTag<View>(TAG_GLASS_SHEET)
+                val pill = cachedHomePillRef?.get() ?: container.findViewWithTag<View>(TAG_HOME_PILL)
                 // Over-pull bounce: wallpaper sheet remains pinned at 0f so top is never cut off!
                 sheet?.translationY = 0f
                 pill?.translationY = offset
@@ -2036,8 +2036,8 @@ object NotificationSheetHook {
         val container = containerRef?.get() ?: return
         if (currentStretchOffset <= 0.01f) return
         mainHandler.post {
-            val sheet = container.findViewWithTag<View>(TAG_GLASS_SHEET)
-            val pill = container.findViewWithTag<View>(TAG_HOME_PILL)
+            val sheet = cachedGlassSheetRef?.get() ?: container.findViewWithTag<View>(TAG_GLASS_SHEET)
+            val pill = cachedHomePillRef?.get() ?: container.findViewWithTag<View>(TAG_HOME_PILL)
             sheet?.translationY = 0f
             pill?.animate()
                 ?.translationY(0f)

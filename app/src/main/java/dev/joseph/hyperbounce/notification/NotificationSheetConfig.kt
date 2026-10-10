@@ -17,12 +17,12 @@ data class NotificationSheetConfig(
     var glassOnlyWithoutWallpaper: Boolean = false,
     // Optics (Liquid Glass 2.0)
     var refractionHeight: Float = 24.0f,
-    var sideRefraction: Float = 32.0f,
+    var sideRefraction: Float = 20.0f,
     var bottomRefraction: Float = 18.0f,
     var bevelWidth: Float = 28.0f,
     var leftBevelWidth: Float = 32.0f,
     var rightBevelWidth: Float = 32.0f,
-    var bottomBevelWidth: Float = 28.0f,
+    var bottomBevelWidth: Float = 45.0f,
     var dispersionStrength: Float = 0.030f,
     var specularStrength: Float = 0.90f,
     var hairlineStrength: Float = 0.75f,
@@ -33,7 +33,7 @@ data class NotificationSheetConfig(
     var blurRadius: Float = 0.0f,
     var cornerRadius: Float = 36.0f,
     // Notification item horizontal margin inset
-    var sideMargin: Float = 14.0f,
+    var sideMargin: Float = 10.0f,
     // Home indicator pill
     var pillWidth: Float = 156.0f,
     var pillHeight: Float = 6.0f,
@@ -46,9 +46,9 @@ data class NotificationSheetConfig(
     var iosHunStartScale: Float = 0.25f,
     var iosHunSqueezeStrength: Float = 1.0f,
     // Clearance spacing below big lock screen clock
-    var notifStartMarginTop: Float = 0.0f,
+    var notifStartMarginTop: Float = 250.0f,
     // Clock size scale in notification center
-    var notifClockScale: Float = 0.70f,
+    var notifClockScale: Float = 0.60f,
     // iOS-Style Stacked Notifications
     var notifStackEnabled: Boolean = false,
     // Launcher Unlock Animation on Notification Center Dismiss
@@ -118,12 +118,12 @@ object NotificationSheetConfigHolder {
         sheet.glassEffectsEnabled = prefs.getBoolean("notif_sheet_glass_effects_enabled", false)
         sheet.glassOnlyWithoutWallpaper = prefs.getBoolean("notif_sheet_glass_only_without_wallpaper", false)
         sheet.refractionHeight = prefs.getFloat("notif_card_refraction_height", 24.0f)
-        sheet.sideRefraction = prefs.getFloat("notif_card_side_refraction", 32.0f)
+        sheet.sideRefraction = prefs.getFloat("notif_card_side_refraction", 20.0f)
         sheet.bottomRefraction = prefs.getFloat("notif_card_bottom_refraction", 18.0f)
         sheet.bevelWidth = prefs.getFloat("notif_card_bevel_width", 28.0f)
         sheet.leftBevelWidth = prefs.getFloat("notif_card_left_bevel", 32.0f)
         sheet.rightBevelWidth = prefs.getFloat("notif_card_right_bevel", 32.0f)
-        sheet.bottomBevelWidth = prefs.getFloat("notif_card_bottom_bevel", 28.0f)
+        sheet.bottomBevelWidth = prefs.getFloat("notif_card_bottom_bevel", 45.0f)
         sheet.dispersionStrength = prefs.getFloat("notif_card_dispersion", 0.030f)
         sheet.specularStrength = prefs.getFloat("notif_card_specular", 0.90f)
         sheet.hairlineStrength = prefs.getFloat("notif_card_hairline", 0.75f)
@@ -133,7 +133,7 @@ object NotificationSheetConfigHolder {
         sheet.saturationFactor = prefs.getFloat("notif_card_saturation", 120.0f)
         sheet.blurRadius = prefs.getFloat("notif_card_blur_radius", 0.0f)
         sheet.cornerRadius = prefs.getFloat("notif_card_corner_radius", 36.0f)
-        sheet.sideMargin = prefs.getFloat("notif_side_margin", 14.0f)
+        sheet.sideMargin = prefs.getFloat("notif_side_margin", 10.0f)
         sheet.pillWidth = prefs.getFloat("notif_pill_width", 156.0f)
         sheet.pillHeight = prefs.getFloat("notif_pill_height", 6.0f)
         sheet.pillBottomMargin = prefs.getFloat("notif_pill_bottom_margin", 9.0f)
@@ -141,8 +141,8 @@ object NotificationSheetConfigHolder {
         sheet.iosHunDurationMs = prefs.getFloat("notif_ios_hun_duration_ms", 600.0f)
         sheet.iosHunStartScale = prefs.getFloat("notif_ios_hun_start_scale", 0.25f)
         sheet.iosHunSqueezeStrength = prefs.getFloat("notif_ios_hun_squeeze_strength", 1.0f)
-        sheet.notifStartMarginTop = prefs.getFloat("notif_start_margin_top", 0.0f)
-        sheet.notifClockScale = prefs.getFloat("notif_clock_scale", 0.70f)
+        sheet.notifStartMarginTop = prefs.getFloat("notif_start_margin_top", 250.0f)
+        sheet.notifClockScale = prefs.getFloat("notif_clock_scale", 0.60f)
         sheet.notifStackEnabled = prefs.getBoolean("notif_stack_enabled", false)
         sheet.launcherUnlockOnDismiss = prefs.getBoolean("notif_launcher_unlock_on_dismiss", true)
     }

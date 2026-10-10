@@ -462,7 +462,7 @@ fun NotificationCenterSheetScreen(
                         value = sheet.bottomBevelWidth,
                         onValueChange = sheet::setBottomBevelWidth,
                         valueRange = 0.0f..80.0f,
-                        defaultValue = 28.0f,
+                        defaultValue = 45.0f,
                         valueLabel = { String.format(Locale.US, "%.0f dp", it) },
                         enabled = sheetActive && sheet.lockWallpaperEnabled && sheet.glassEffectsEnabled
                     )
@@ -498,7 +498,7 @@ fun NotificationCenterSheetScreen(
                     value = sheet.sideMargin,
                     onValueChange = sheet::setSideMargin,
                     valueRange = 0.0f..32.0f,
-                    defaultValue = 14.0f,
+                    defaultValue = 10.0f,
                     valueLabel = { String.format(Locale.US, "%.0f dp", it) },
                     enabled = sheetActive
                 )
@@ -510,8 +510,8 @@ fun NotificationCenterSheetScreen(
                     backdrop = backdrop,
                     value = sheet.notifStartMarginTop,
                     onValueChange = sheet::setNotifStartMarginTop,
-                    valueRange = 0.0f..150.0f,
-                    defaultValue = 0.0f,
+                    valueRange = 0.0f..300.0f,
+                    defaultValue = 250.0f,
                     valueLabel = { String.format(Locale.US, "%.0f dp", it) },
                     enabled = sheetActive && sheet.lockScreenAsNotifCenterEnabled
                 )
@@ -524,7 +524,7 @@ fun NotificationCenterSheetScreen(
                     value = sheet.notifClockScale,
                     onValueChange = sheet::setNotifClockScale,
                     valueRange = 0.50f..1.0f,
-                    defaultValue = 0.70f,
+                    defaultValue = 0.60f,
                     valueLabel = { String.format(Locale.US, "%.0f%%", it * 100.0f) },
                     enabled = sheetActive && sheet.lockScreenAsNotifCenterEnabled
                 )

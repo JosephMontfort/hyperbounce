@@ -30,7 +30,7 @@ fun NotificationCenterSheetGlassTuningScreen(
         backdrop = backdrop,
         onBack = onBack,
         onResetPage = {
-            sheet.setSideRefraction(32.0f)
+            sheet.setSideRefraction(20.0f)
             sheet.setBottomRefraction(18.0f)
             sheet.setDispersionStrength(0.030f)
             sheet.setRimSoftness(2.0f)
@@ -52,7 +52,7 @@ fun NotificationCenterSheetGlassTuningScreen(
                     value = sheet.sideRefraction,
                     onValueChange = sheet::setSideRefraction,
                     valueRange = 0.0f..120.0f,
-                    defaultValue = 32.0f,
+                    defaultValue = 20.0f,
                     valueLabel = { String.format(Locale.US, "%.0f dp", it) },
                     enabled = sheet.enabled && sheet.lockWallpaperEnabled && sheet.glassEffectsEnabled
                 )
