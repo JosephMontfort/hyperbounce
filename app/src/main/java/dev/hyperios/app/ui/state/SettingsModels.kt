@@ -146,7 +146,7 @@ data class GlobalGlassSettings(
 data class LockScreenSheetSettings(
     val enabled: Boolean = ModuleDefaults.MasterToggles.LOCK_SHEET_ENABLED,
     val enableOptimization: Boolean = ModuleDefaults.LockScreenSheet.ENABLE_OPTIMIZATION,
-    val refractionHeight: Float = ModuleDefaults.LockScreenSheet.REFRAATION_OR_DEFAULT,
+    val refractionHeight: Float = ModuleDefaults.LockScreenSheet.REFRACTION_HEIGHT,
     val sideRefraction: Float = ModuleDefaults.LockScreenSheet.SIDE_REFRACTION,
     val bottomRefraction: Float = ModuleDefaults.LockScreenSheet.BOTTOM_REFRACTION,
     val bevelWidth: Float = ModuleDefaults.LockScreenSheet.BEVEL_WIDTH,
@@ -167,11 +167,7 @@ data class LockScreenSheetSettings(
     val pillWidth: Float = ModuleDefaults.LockScreenSheet.PILL_WIDTH,
     val pillHeight: Float = ModuleDefaults.LockScreenSheet.PILL_HEIGHT,
     val pillBottomMargin: Float = ModuleDefaults.LockScreenSheet.PILL_BOTTOM_MARGIN
-) {
-    companion object {
-        const val REFRAATION_OR_DEFAULT = 77.0f
-    }
-}
+)
 
 /** Feature 7: Notification Center iOS Sheet & Liquid Glass Refraction Settings */
 data class NotificationSheetSettings(

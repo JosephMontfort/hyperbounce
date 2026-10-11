@@ -24,17 +24,13 @@ data class LockScreenSheetConfig(
     var rimSoftness: Float = ModuleDefaults.LockScreenSheet.RIM_SOFTNESS,
     var blurRadius: Float = ModuleDefaults.LockScreenSheet.BLUR_RADIUS,
     var cornerRadius: Float = ModuleDefaults.LockScreenSheet.CORNER_RADIUS,
-    var edgeStretch: Float = ModuleDefaults.LockScreenSheet.EDGE_STRESTH_OR_DEFAULT,
+    var edgeStretch: Float = ModuleDefaults.LockScreenSheet.EDGE_STRETCH,
     // Home indicator pill
     var pillEnabled: Boolean = ModuleDefaults.LockScreenSheet.PILL_ENABLED,
     var pillWidth: Float = ModuleDefaults.LockScreenSheet.PILL_WIDTH,
     var pillHeight: Float = ModuleDefaults.LockScreenSheet.PILL_HEIGHT,
     var pillBottomMargin: Float = ModuleDefaults.LockScreenSheet.PILL_BOTTOM_MARGIN
-) {
-    companion object {
-        private const val EDGE_STRESTH_OR_DEFAULT = 28.0f
-    }
-}
+)
 
 data class LockScreenKeypadConfig(
     var enabled: Boolean = ModuleDefaults.MasterToggles.ENGINE_KEYPAD_ENABLED,
