@@ -25,6 +25,7 @@ import android.view.animation.PathInterpolator
 import android.widget.FrameLayout
 import android.widget.ImageView
 import dev.joseph.hyperbounce.lockscreen.glass.LockScreenGlassSheetOptimizedView
+import dev.joseph.hyperbounce.lockscreen.glass.LockScreenWallpaperHelper
 import io.github.libxposed.api.XposedInterface
 import io.github.libxposed.api.XposedModule
 import java.lang.ref.WeakReference
@@ -300,6 +301,9 @@ object LockScreenSheetHook {
                     lockscreenVelocityTracker = null
                 }
             }
+        }
+    }
+
     fun applySwipeProgressInternal(
         kpvc: Any?,
         rootView: ViewGroup,
