@@ -65,7 +65,7 @@ object LockScreenWallpaperHelper {
         triggerAsyncUnblurredWallpaperLoad(context)
         return try {
             val wm = WallpaperManager.getInstance(context)
-            wm.peekDrawable()
+            wm.peekDrawable() ?: wm.drawable
         } catch (_: Throwable) {
             null
         }

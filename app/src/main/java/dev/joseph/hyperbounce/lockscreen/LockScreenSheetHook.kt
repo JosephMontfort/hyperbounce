@@ -87,6 +87,7 @@ object LockScreenSheetHook {
     // Dismissal animation coordinator (prevents Folme vs ViewPropertyAnimator clash)
     @Volatile var isDismissAnimationRunning: Boolean = false
     private var dismissReturnAnimator: ValueAnimator? = null
+    @Volatile private var interruptBlendOffset: Float = 0.0f
 
     @Volatile var lockscreenFlingVelocity: Float = 0.0f
     private var lastExpansionFraction: Float = 1.0f
@@ -102,6 +103,7 @@ object LockScreenSheetHook {
             dismissReturnAnimator?.cancel()
             dismissReturnAnimator = null
             isDismissAnimationRunning = false
+            interruptBlendOffset = 0.0f
             hasSearchedDepthSubject = false
             lastAppliedUpwardOffset = 0.0f
             lastAppliedDimAlpha = 0.0f
@@ -281,6 +283,15 @@ object LockScreenSheetHook {
     private fun handleLockscreenTouchEvent(event: MotionEvent) {
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
+                if (isDismissAnimationRunning) {
+                    val currentCardProgress = cachedLockGlassSheetRef?.get()?.swipeProgress ?: 0.0f
+                    dismissReturnAnimator?.cancel()
+                    dismissReturnAnimator = null
+                    isDismissAnimationRunning = false
+                    if (currentCardProgress > 0.01f) {
+                        interruptBlendOffset = currentCardProgress
+                    }
+                }
                 lockscreenVelocityTracker?.recycle()
                 lockscreenVelocityTracker = VelocityTracker.obtain()
                 lockscreenVelocityTracker?.addMovement(event)
@@ -439,7 +450,7 @@ object LockScreenSheetHook {
             isDismissAnimationRunning = true
 
             val animator = ValueAnimator.ofFloat(startProgress, 0.0f).apply {
-                duration = 500L
+                duration = 400L
                 interpolator = PathInterpolator(0.25f, 0.1f, 0.25f, 1.0f)
                 addUpdateListener { va ->
                     val p = va.animatedValue as Float
@@ -448,6 +459,7 @@ object LockScreenSheetHook {
                 addListener(object : AnimatorListenerAdapter() {
                     override fun onAnimationEnd(animation: Animator) {
                         isDismissAnimationRunning = false
+                        interruptBlendOffset = 0.0f
                         applySwipeProgressInternal(kpvc, rootView, 0.0f, cfg)
                         dismissReturnAnimator = null
                     }
@@ -487,11 +499,6 @@ object LockScreenSheetHook {
                         override fun intercept(chain: XposedInterface.Chain): Any? {
                             val result = chain.proceed()
                             try {
-                                // If dismissal animation is actively driving the view, do not fight or overwrite it
-                                if (isDismissAnimationRunning) {
-                                    return result
-                                }
-
                                 val rawArgs = chain.args
                                 val f = ((if (rawArgs is List<*>) rawArgs[0] else (rawArgs as Array<*>)[0]) as Number).toFloat()
                                 val kpvc = chain.thisObject ?: return result
@@ -528,8 +535,10 @@ object LockScreenSheetHook {
                                         if (isDismissAnimationRunning) {
                                             return result
                                         }
-                                        if (lastExpansionFraction < 0.85f) {
-                                            val startProgress = 1.0f - lastExpansionFraction
+                                        interruptBlendOffset = 0.0f
+                                        val currentSheetProgress = cachedLockGlassSheetRef?.get()?.swipeProgress ?: 0.0f
+                                        if (lastExpansionFraction < 0.85f || currentSheetProgress > 0.05f) {
+                                            val startProgress = if (currentSheetProgress > 0.05f) currentSheetProgress else (1.0f - lastExpansionFraction)
                                             lastExpansionFraction = 1.0f
                                             startDismissReturnAnimation(kpvc, rootView, startProgress)
                                             return result
@@ -543,12 +552,29 @@ object LockScreenSheetHook {
                                         dismissReturnAnimator?.cancel()
                                         dismissReturnAnimator = null
                                         isDismissAnimationRunning = false
+
+                                        val currentCardProgress = cachedLockGlassSheetRef?.get()?.swipeProgress ?: 0.0f
+                                        if (currentCardProgress > swipeProgress) {
+                                            interruptBlendOffset = (currentCardProgress - swipeProgress).coerceIn(0.0f, 1.0f)
+                                        } else {
+                                            interruptBlendOffset = 0.0f
+                                        }
+                                    }
+
+                                    val effectiveProgress = if (interruptBlendOffset > 0.001f) {
+                                        val blended = (swipeProgress + interruptBlendOffset * (1.0f - swipeProgress)).coerceIn(0.0f, 1.0f)
+                                        if (swipeProgress >= 0.99f) {
+                                            interruptBlendOffset = 0.0f
+                                        }
+                                        blended
+                                    } else {
+                                        swipeProgress
                                     }
 
                                     lastExpansionFraction = f
                                     lastExpansionTime = now
 
-                                    applySwipeProgressInternal(kpvc, rootView, swipeProgress, cfg)
+                                    applySwipeProgressInternal(kpvc, rootView, effectiveProgress, cfg)
                                 }
                             } catch (t: Throwable) {
                                 Log.e(TAG, "KPVC expansion hook error", t)
