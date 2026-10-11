@@ -1428,28 +1428,23 @@ public class LiquidTogglesHook extends XposedModule {
         if (toggleEnabled && (packageName.equals("com.android.systemui") ||
                 packageName.equals("miui.systemui.plugin"))) {
             try {
-                // First, attempt direct binding to avoid ClassLoader overhead if already available
-                applyUnifiedToggleEngine("miui.systemui.controlcenter.widget.SlidingButton", packageClassLoader);
-                applyUnifiedToggleEngine("com.miui.systemui.widget.SlidingButton", packageClassLoader);
-
                 Method loadClass = ClassLoader.class.getDeclaredMethod(
                         "loadClass", String.class, boolean.class);
                 loadClass.setAccessible(true);
                 installHook(loadClass, chain -> {
-                    String name = (String) chain.getArg(0);
-                    if (name != null && (name.equals("miui.systemui.controlcenter.widget.SlidingButton") ||
-                            name.equals("com.miui.systemui.widget.SlidingButton"))) {
-                        Object result = chain.proceed();
-                        if (result instanceof Class<?>) {
-                            Class<?> clazz = (Class<?>) result;
+                    Object result = chain.proceed();
+                    if (result instanceof Class<?>) {
+                        Class<?> clazz = (Class<?>) result;
+                        String name = clazz.getName();
+                        if (name.equals("miui.systemui.controlcenter.widget.SlidingButton") ||
+                                name.equals("com.miui.systemui.widget.SlidingButton")) {
                             applyUnifiedToggleEngine(name, clazz.getClassLoader());
                         }
-                        return result;
                     }
-                    return chain.proceed();
+                    return result;
                 });
             } catch (Throwable t) {
-                log(4, "HyperBounce", "Control Center toggle hook failed", t);
+                log(4, "HyperBounce", "ClassLoader hook failed", t);
             }
         }
 

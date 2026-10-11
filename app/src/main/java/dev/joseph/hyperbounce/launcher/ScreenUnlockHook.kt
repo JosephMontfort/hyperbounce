@@ -80,24 +80,8 @@ object ScreenUnlockHook {
         return sLauncherRef?.get()
     }
 
-    @Volatile private var cachedCellXField: Field? = null
-    @Volatile private var cachedCellYField: Field? = null
-    @Volatile private var cachedContainerField: Field? = null
-
     private fun extractItemInfo(tag: Any?): Triple<Int, Int, Long>? {
         if (tag == null) return null
-        var fx = cachedCellXField
-        var fy = cachedCellYField
-        var fc = cachedContainerField
-
-        if (fx != null && fy != null && fc != null) {
-            return try {
-                Triple(fx.getInt(tag), fy.getInt(tag), fc.getLong(tag))
-            } catch (_: Throwable) {
-                null
-            }
-        }
-
         var curr: Class<*>? = tag.javaClass
         var cx: Int? = null
         var cy: Int? = null
@@ -105,22 +89,22 @@ object ScreenUnlockHook {
         while (curr != null && curr != Any::class.java) {
             if (cx == null) {
                 try {
-                    val f = curr.getDeclaredField("cellX").apply { isAccessible = true }
-                    cachedCellXField = f
+                    val f = curr.getDeclaredField("cellX")
+                    f.isAccessible = true
                     cx = f.getInt(tag)
                 } catch (_: Throwable) {}
             }
             if (cy == null) {
                 try {
-                    val f = curr.getDeclaredField("cellY").apply { isAccessible = true }
-                    cachedCellYField = f
+                    val f = curr.getDeclaredField("cellY")
+                    f.isAccessible = true
                     cy = f.getInt(tag)
                 } catch (_: Throwable) {}
             }
             if (cont == null) {
                 try {
-                    val f = curr.getDeclaredField("container").apply { isAccessible = true }
-                    cachedContainerField = f
+                    val f = curr.getDeclaredField("container")
+                    f.isAccessible = true
                     cont = f.getLong(tag)
                 } catch (_: Throwable) {}
             }

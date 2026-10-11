@@ -262,15 +262,16 @@ class NotificationGlassSheetView @JvmOverloads constructor(
                 if (cfg.isCustomWallpaperActive) {
                     val customBmp = CustomWallpaperHelper.getCustomWallpaperBitmap(context)
                     if (customBmp != null && !customBmp.isRecycled) {
-                        drawCenterCropBitmap(targetCanvas, customBmp, 0, 0, w, h, (drawWpAlpha * 255).toInt())
+                        val wpY = if (isClosing) 0 else (-translationY).toInt()
+                        drawCenterCropBitmap(targetCanvas, customBmp, 0, wpY, w, h, (drawWpAlpha * 255).toInt())
                         drawn = true
                     }
                 }
                 if (!drawn) {
                     val unblurredWp = LockScreenWallpaperHelper.getUnblurredLockWallpaper(context)
                     if (unblurredWp != null) {
-                        unblurredWp.mutate()
-                        unblurredWp.setBounds(0, 0, w, h)
+                        val wpY = if (isClosing) 0 else (-translationY).toInt()
+                        unblurredWp.setBounds(0, wpY, w, wpY + h)
                         unblurredWp.alpha = (drawWpAlpha * 255).toInt()
                         unblurredWp.draw(targetCanvas)
                     }

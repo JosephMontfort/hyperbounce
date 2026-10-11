@@ -1033,10 +1033,6 @@ object KeypadPhysicsHook {
                                 pinView.findViewById<View>(row0Id)?.animate()?.alpha(0f)?.setDuration(120L)?.start()
                             }
 
-                            try {
-                                LockScreenSheetHook.startDismissReturnAnimation()
-                            } catch (_: Throwable) {}
-
                             Handler(Looper.getMainLooper()).postDelayed({
                                 try {
                                     val finishField = pinViewObj.javaClass.getDeclaredField("mDisappearAnimationFinishRunnable")
