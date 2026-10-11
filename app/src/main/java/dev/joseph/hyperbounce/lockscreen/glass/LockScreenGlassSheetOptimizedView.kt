@@ -139,7 +139,8 @@ class LockScreenGlassSheetOptimizedView @JvmOverloads constructor(
             ) { recordingCanvas ->
                 recordingCanvas.translate(margin.toFloat() - viewX.toFloat(), margin.toFloat() - viewY.toFloat())
                 if (wp != null) {
-                    wp.setBounds(0, 0, screenW, screenH)
+                    wp.mutate()
+                    wp.setBounds(0, 0, screenW + margin * 2, screenH + margin * 2)
                     wp.draw(recordingCanvas)
                 } else {
                     val p = Paint().apply {

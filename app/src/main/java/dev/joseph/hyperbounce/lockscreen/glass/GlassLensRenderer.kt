@@ -170,7 +170,7 @@ class GlassLensRenderer {
                 float2 cB = coord + offset * (1.0 + dispersion * slope);
 
                 float2 lo = float2(margin + 1.0, margin + 1.0);
-                float2 hi = lo + viewSize - float2(2.0, 2.0);
+                float2 hi = lo + viewSize - float2(3.0, 2.0);
                 cR = clamp(cR, lo, hi);
                 cG = clamp(cG, lo, hi);
                 cB = clamp(cB, lo, hi);
@@ -299,6 +299,9 @@ class GlassLensRenderer {
                 float glow = glowIn * pow(clamp(1.0 - (-d - 2.5) / bandW, 0.0, 1.0), 1.5) * cov;
 
                 float spec = (hair * hairlineStrength * (lobeF * 0.55 + lobeB * 0.35 + lobeSide) + glow * innerGlowStrength * (lobeF * 0.70 + lobeSide * 0.50)) * specStrength;
+                if (n.x > 0.5 && edgeBevels.y <= 0.5) {
+                    spec = 0.0;
+                }
                 col += float3(spec);
                 col = clamp(col, float3(0.0), float3(1.0));
 
@@ -389,7 +392,7 @@ class GlassLensRenderer {
             return false
         }
 
-        val needsEffectRebuild = activeEffect == null || width != lastWidth || height != lastHeight || margin != lastMargin
+        val needsEffectRebuild = activeEffect == null || width != lastWidth || height != lastHeight || margin != lastMargin || backdropBmp != lastBackdropBmp
         if (needsEffectRebuild) {
             try {
                 val effect = RenderEffect.createRuntimeShaderEffect(sh, "content")
@@ -403,6 +406,7 @@ class GlassLensRenderer {
             lastWidth = width
             lastHeight = height
             lastMargin = margin
+            lastBackdropBmp = backdropBmp
         }
 
         // Update uniforms directly in-place on the compiled runtime shader without tearing down the HWUI filter

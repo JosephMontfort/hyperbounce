@@ -473,8 +473,14 @@ object NotificationSheetHook {
             } else {
                 RealtimeBackdropHelper.stopLiveRefresh()
             }
-            sheet?.shadeBackgroundView?.alpha = 1.0f
-            themeBackgroundViewRef?.get()?.alpha = 1.0f
+            val isWallpaperOrDepth = (cfg.isDepthActive || cfg.isWallpaperActive) && isHomescreenAllowed
+            if (isWallpaperOrDepth) {
+                sheet?.shadeBackgroundView?.alpha = 0.0f
+                themeBackgroundViewRef?.get()?.alpha = 0.0f
+            } else {
+                sheet?.shadeBackgroundView?.alpha = 1.0f
+                themeBackgroundViewRef?.get()?.alpha = 1.0f
+            }
         }
     }
 
@@ -484,7 +490,8 @@ object NotificationSheetHook {
         val isLandscape = container != null && (container.resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE || container.width > container.height)
         if (isLandscape) return
         val isHomescreenAllowed = !cfg.lockWallpaperHomescreenOnly || isHomeScreenCached
-        if (cfg.isDepthActive && isHomescreenAllowed && currentStatusBarState == 0 && !isControlCenterActive()) {
+        val isWallpaperOrDepth = (cfg.isDepthActive || cfg.isWallpaperActive) && isHomescreenAllowed
+        if (isWallpaperOrDepth && currentStatusBarState == 0 && !isControlCenterActive()) {
             val anim = blurAnimatorRef?.get() ?: return
             try {
                 for (m in anim.javaClass.declaredMethods) {
@@ -2187,9 +2194,9 @@ object NotificationSheetHook {
                     RealtimeBackdropHelper.stopLiveRefresh()
                 }
 
-                // Suppress background blur and dimming when iOS 27 Depth Wallpaper is active without flickering
-                if (isDepthActive && currentStatusBarState == 0) {
-                    // Keep stock shade background invisible during pulldown and resting state so depth wallpaper displays cleanly
+                // Suppress background blur and dimming when wallpaper background or iOS 27 Depth Wallpaper is active without flickering
+                if ((isDepthActive || shouldDrawWallpaper) && currentStatusBarState == 0) {
+                    // Keep stock shade background invisible during pulldown and resting state so wallpaper displays cleanly
                     curSheet.shadeBackgroundView?.alpha = 0.0f
                     themeBackgroundViewRef?.get()?.alpha = 0.0f
                 } else {
@@ -2435,8 +2442,8 @@ object NotificationSheetHook {
                             val cfg = NotificationSheetConfigHolder.sheet
                             val container = containerRef?.get()
                             val isLandscape = container != null && (container.resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE || container.width > container.height)
-                            val isHomescreenAllowed = !cfg.lockWallpaperHomescreenOnly || isHomeScreenCached
-                            if (cfg.isDepthActive && !isLandscape && isHomescreenAllowed && currentStatusBarState == 0 && !isControlCenterActive()) {
+                            val isWallpaperOrDepth = (cfg.isDepthActive || cfg.isWallpaperActive) && isHomescreenAllowed
+                            if (isWallpaperOrDepth && !isLandscape && currentStatusBarState == 0 && !isControlCenterActive()) {
                                 val args = chain.args.toTypedArray()
                                 if (args.isNotEmpty()) {
                                     args[0] = 0.0f
