@@ -179,8 +179,10 @@ object LockScreenCoverSheetController {
                 }
 
                 val effectiveAlpha = (alpha.coerceIn(0f, 1f) * 255f).toInt()
+                val intermediateScale = NotificationSheetConfigHolder.sheet.notifClockScale.coerceIn(0.40f, 1.20f)
                 val saveCount = if (effectiveAlpha < 255) {
-                    canvas.saveLayerAlpha(0f, 0f, viewW.toFloat(), viewH.toFloat(), effectiveAlpha)
+                    val clockBottom = (targetView.height.toFloat() * intermediateScale).coerceAtLeast(320f * density)
+                    canvas.saveLayerAlpha(0f, 0f, viewW.toFloat(), (clockBottom + kotlin.math.abs(translationY)).coerceAtMost(viewH.toFloat()), effectiveAlpha)
                 } else {
                     canvas.save()
                 }
@@ -188,7 +190,6 @@ object LockScreenCoverSheetController {
                 try {
                     canvas.translate(0f, translationY)
                     // Apply intermediate scale configured by user centered horizontally and pinned to top
-                    val intermediateScale = NotificationSheetConfigHolder.sheet.notifClockScale.coerceIn(0.40f, 1.20f)
                     val pivotX = viewW / 2.0f
                     val pivotY = 0.0f
                     canvas.scale(intermediateScale, intermediateScale, pivotX, pivotY)

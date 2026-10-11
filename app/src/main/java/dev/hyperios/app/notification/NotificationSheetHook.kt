@@ -548,6 +548,7 @@ object NotificationSheetHook {
                                             container.scaleY = 1.0f
                                             resetNotificationMargins(container)
                                             LockScreenCoverSheetController.onShadeReset(container)
+                                            RealtimeBackdropHelper.stopLiveRefresh()
                                             val headerId = container.resources.getIdentifier("normal_notification_header_view", "id", "com.android.systemui")
                                             if (headerId != 0) {
                                                 container.rootView?.findViewById<View>(headerId)?.let { hView ->
@@ -2153,6 +2154,7 @@ object NotificationSheetHook {
                 isLaunchingNotificationActivity = false
                 currentStretchOffset = 0f
                 resetNotificationMargins(container)
+                RealtimeBackdropHelper.stopLiveRefresh()
                 return
             }
 
