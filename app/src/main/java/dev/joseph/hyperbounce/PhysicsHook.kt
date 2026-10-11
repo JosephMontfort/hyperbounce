@@ -10,6 +10,25 @@ import io.github.libxposed.api.XposedModuleInterface
 
 class PhysicsHook : XposedModule() {
 
+    override fun onHotReloading(param: XposedModuleInterface.HotReloadingParam): Boolean {
+        val prefs = try {
+            getRemotePreferences(dev.joseph.hyperbounce.prefs.PREFS_GROUP)
+        } catch (_: Throwable) {
+            null
+        }
+        val enabled = prefs?.getBoolean("hot_reload_enabled", false) ?: false
+        if (!enabled) {
+            log(android.util.Log.INFO, "HyperBounce", "Hot reload refused (disabled in settings)")
+            return false
+        }
+        return true
+    }
+
+    override fun onHotReloaded(param: XposedModuleInterface.HotReloadedParam) {
+        super.onHotReloaded(param)
+        log(android.util.Log.INFO, "HyperBounce", "Hot reloaded successfully")
+    }
+
     override fun onPackageReady(param: XposedModuleInterface.PackageReadyParam) {
         super.onPackageReady(param)
 
@@ -19,6 +38,8 @@ class PhysicsHook : XposedModule() {
             } catch (t: Throwable) {
                 null
             }
+
+            val isHotReload = prefs?.getBoolean("hot_reload_enabled", false) ?: false
 
             // Safe Mode Check (HyperCeiler Architecture)
             if (SafeModeHandler.isSafeMode(param.packageName, prefs)) {
@@ -42,10 +63,12 @@ class PhysicsHook : XposedModule() {
                             dev.joseph.hyperbounce.lockscreen.LockScreenConfigHolder.updateFromPrefs(prefs)
                             dev.joseph.hyperbounce.controlcenter.ControlCenterConfigHolder.updateFromPrefs(prefs)
                             dev.joseph.hyperbounce.notification.NotificationSheetConfigHolder.updateFromPrefs(prefs)
-                            prefs.registerOnSharedPreferenceChangeListener { _, _ ->
-                                dev.joseph.hyperbounce.lockscreen.LockScreenConfigHolder.updateFromPrefs(prefs)
-                                dev.joseph.hyperbounce.controlcenter.ControlCenterConfigHolder.updateFromPrefs(prefs)
-                                dev.joseph.hyperbounce.notification.NotificationSheetConfigHolder.updateFromPrefs(prefs)
+                            if (isHotReload) {
+                                prefs.registerOnSharedPreferenceChangeListener { _, _ ->
+                                    dev.joseph.hyperbounce.lockscreen.LockScreenConfigHolder.updateFromPrefs(prefs)
+                                    dev.joseph.hyperbounce.controlcenter.ControlCenterConfigHolder.updateFromPrefs(prefs)
+                                    dev.joseph.hyperbounce.notification.NotificationSheetConfigHolder.updateFromPrefs(prefs)
+                                }
                             }
                         } catch (t: Throwable) {
                             Log.e("HyperBounce", "Failed to bind remote preferences in SystemUI", t)
@@ -62,8 +85,10 @@ class PhysicsHook : XposedModule() {
                     if (prefs != null) {
                         try {
                             dev.joseph.hyperbounce.controlcenter.ControlCenterConfigHolder.updateFromPrefs(prefs)
-                            prefs.registerOnSharedPreferenceChangeListener { _, _ ->
-                                dev.joseph.hyperbounce.controlcenter.ControlCenterConfigHolder.updateFromPrefs(prefs)
+                            if (isHotReload) {
+                                prefs.registerOnSharedPreferenceChangeListener { _, _ ->
+                                    dev.joseph.hyperbounce.controlcenter.ControlCenterConfigHolder.updateFromPrefs(prefs)
+                                }
                             }
                         } catch (t: Throwable) {
                             Log.e("HyperBounce", "Failed to bind remote preferences in Control Center Plugin", t)
@@ -76,8 +101,10 @@ class PhysicsHook : XposedModule() {
                     if (prefs != null) {
                         try {
                             dev.joseph.hyperbounce.launcher.LauncherConfigHolder.update(prefs)
-                            prefs.registerOnSharedPreferenceChangeListener { _, _ ->
-                                dev.joseph.hyperbounce.launcher.LauncherConfigHolder.update(prefs)
+                            if (isHotReload) {
+                                prefs.registerOnSharedPreferenceChangeListener { _, _ ->
+                                    dev.joseph.hyperbounce.launcher.LauncherConfigHolder.update(prefs)
+                                }
                             }
                         } catch (t: Throwable) {
                             Log.e("HyperBounce", "Failed to bind remote preferences in MIUI Home", t)
@@ -92,9 +119,11 @@ class PhysicsHook : XposedModule() {
                         try {
                             dev.joseph.hyperbounce.caller.IosCallerConfigHolder.updateFromPrefs(prefs)
                             dev.joseph.hyperbounce.dialer.DialerRecentsConfigHolder.updateFromPrefs(prefs)
-                            prefs.registerOnSharedPreferenceChangeListener { _, _ ->
-                                dev.joseph.hyperbounce.caller.IosCallerConfigHolder.updateFromPrefs(prefs)
-                                dev.joseph.hyperbounce.dialer.DialerRecentsConfigHolder.updateFromPrefs(prefs)
+                            if (isHotReload) {
+                                prefs.registerOnSharedPreferenceChangeListener { _, _ ->
+                                    dev.joseph.hyperbounce.caller.IosCallerConfigHolder.updateFromPrefs(prefs)
+                                    dev.joseph.hyperbounce.dialer.DialerRecentsConfigHolder.updateFromPrefs(prefs)
+                                }
                             }
                         } catch (t: Throwable) {
                             Log.e("HyperBounce", "Failed to bind remote preferences in InCallUI", t)
@@ -107,8 +136,10 @@ class PhysicsHook : XposedModule() {
                     if (prefs != null) {
                         try {
                             dev.joseph.hyperbounce.dialer.DialerRecentsConfigHolder.updateFromPrefs(prefs)
-                            prefs.registerOnSharedPreferenceChangeListener { _, _ ->
-                                dev.joseph.hyperbounce.dialer.DialerRecentsConfigHolder.updateFromPrefs(prefs)
+                            if (isHotReload) {
+                                prefs.registerOnSharedPreferenceChangeListener { _, _ ->
+                                    dev.joseph.hyperbounce.dialer.DialerRecentsConfigHolder.updateFromPrefs(prefs)
+                                }
                             }
                         } catch (t: Throwable) {
                             Log.e("HyperBounce", "Failed to bind remote preferences in Contacts", t)
@@ -138,8 +169,10 @@ class PhysicsHook : XposedModule() {
             if (prefs != null) {
                 try {
                     dev.joseph.hyperbounce.haptics.hook.AudioHapticConfigHolder.updateFromPrefs(prefs)
-                    prefs.registerOnSharedPreferenceChangeListener { _, _ ->
-                        dev.joseph.hyperbounce.haptics.hook.AudioHapticConfigHolder.updateFromPrefs(prefs)
+                    if (isHotReload) {
+                        prefs.registerOnSharedPreferenceChangeListener { _, _ ->
+                            dev.joseph.hyperbounce.haptics.hook.AudioHapticConfigHolder.updateFromPrefs(prefs)
+                        }
                     }
                 } catch (t: Throwable) {
                     Log.e("HyperBounce", "Failed to bind audio haptic prefs for ${param.packageName}", t)

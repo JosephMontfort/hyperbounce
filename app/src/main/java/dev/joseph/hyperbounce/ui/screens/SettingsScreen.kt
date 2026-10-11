@@ -181,6 +181,17 @@ fun SettingsScreen(
         SectionHeader("System Integration", colors)
         GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
             SettingsToggleRow(
+                title = "Hot Reloading",
+                subtitle = "Apply visual changes immediately without restarting apps. Turning off saves battery (apps require restart to apply changes).",
+                colors = colors,
+                backdrop = backdrop,
+                checked = repository.hotReloadEnabled,
+                onCheckedChange = repository::setHotReloadEnabled
+            )
+
+            RowDivider(colors.separator)
+
+            SettingsToggleRow(
                 title = "Add entry in Settings",
                 subtitle = "Display HyperiOS in system Settings app",
                 colors = colors,

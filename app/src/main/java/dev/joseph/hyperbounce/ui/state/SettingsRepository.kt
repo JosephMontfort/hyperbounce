@@ -46,6 +46,8 @@ class SettingsRepository(context: Context) {
         fun sendSettingsChangedBroadcast(key: String, value: Any?) {
             val ctx = appContext ?: return
             try {
+                val p = ctx.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                if (!p.safeGetBoolean("hot_reload_enabled", false)) return
                 val intent = Intent("dev.joseph.hyperbounce.ACTION_SETTINGS_CHANGED").apply {
                     putExtra("key", key)
                     when (value) {
@@ -94,6 +96,14 @@ class SettingsRepository(context: Context) {
 
     var moduleEnabled by prefsBooleanState("module_enabled", true)
         private set
+
+    var hotReloadEnabled by prefsBooleanState("hot_reload_enabled", false)
+        private set
+
+    @JvmName("setHotReloadEnabledExplicit")
+    fun setHotReloadEnabled(enabled: Boolean) {
+        hotReloadEnabled = enabled
+    }
 
     var appTheme by prefsEnumState("app_theme", AppTheme.FollowSystem)
         private set

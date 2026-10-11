@@ -65,15 +65,18 @@ fun rememberLiveNavBarSettings(hyperBouncePrefs: HyperBouncePrefs, appKey: Strin
     var settings by remember(hyperBouncePrefs, appKey) {
         mutableStateOf(readNavBarSettings(hyperBouncePrefs, appKey))
     }
-    DisposableEffect(hyperBouncePrefs, appKey) {
-        val prefix = "app_${appKey}_"
-        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, changedKey ->
-            if (changedKey != null && changedKey.startsWith(prefix)) {
-                settings = readNavBarSettings(hyperBouncePrefs, appKey)
+    val isHotReload = remember(hyperBouncePrefs) { hyperBouncePrefs.hotReloadEnabled }
+    if (isHotReload) {
+        DisposableEffect(hyperBouncePrefs, appKey) {
+            val prefix = "app_${appKey}_"
+            val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, changedKey ->
+                if (changedKey != null && changedKey.startsWith(prefix)) {
+                    settings = readNavBarSettings(hyperBouncePrefs, appKey)
+                }
             }
+            hyperBouncePrefs.prefs.registerOnSharedPreferenceChangeListener(listener)
+            onDispose { hyperBouncePrefs.prefs.unregisterOnSharedPreferenceChangeListener(listener) }
         }
-        hyperBouncePrefs.prefs.registerOnSharedPreferenceChangeListener(listener)
-        onDispose { hyperBouncePrefs.prefs.unregisterOnSharedPreferenceChangeListener(listener) }
     }
     return settings
 }
@@ -83,15 +86,18 @@ fun rememberLiveGlassFeel(hyperBouncePrefs: HyperBouncePrefs, prefix: String): G
     var feel by remember(hyperBouncePrefs, prefix) {
         mutableStateOf(hyperBouncePrefs.glassFeel(prefix))
     }
-    DisposableEffect(hyperBouncePrefs, prefix) {
-        val keyPrefix = "${prefix}_"
-        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, changedKey ->
-            if (changedKey != null && changedKey.startsWith(keyPrefix)) {
-                feel = hyperBouncePrefs.glassFeel(prefix)
+    val isHotReload = remember(hyperBouncePrefs) { hyperBouncePrefs.hotReloadEnabled }
+    if (isHotReload) {
+        DisposableEffect(hyperBouncePrefs, prefix) {
+            val keyPrefix = "${prefix}_"
+            val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, changedKey ->
+                if (changedKey != null && changedKey.startsWith(keyPrefix)) {
+                    feel = hyperBouncePrefs.glassFeel(prefix)
+                }
             }
+            hyperBouncePrefs.prefs.registerOnSharedPreferenceChangeListener(listener)
+            onDispose { hyperBouncePrefs.prefs.unregisterOnSharedPreferenceChangeListener(listener) }
         }
-        hyperBouncePrefs.prefs.registerOnSharedPreferenceChangeListener(listener)
-        onDispose { hyperBouncePrefs.prefs.unregisterOnSharedPreferenceChangeListener(listener) }
     }
     return feel
 }
@@ -101,14 +107,17 @@ fun rememberLiveToggleColor(hyperBouncePrefs: HyperBouncePrefs): Long {
     var color by remember(hyperBouncePrefs) {
         mutableStateOf(hyperBouncePrefs.toggleAccentColor())
     }
-    DisposableEffect(hyperBouncePrefs) {
-        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, changedKey ->
-            if (changedKey == "toggle_accent" || changedKey == "toggle_custom_color") {
-                color = hyperBouncePrefs.toggleAccentColor()
+    val isHotReload = remember(hyperBouncePrefs) { hyperBouncePrefs.hotReloadEnabled }
+    if (isHotReload) {
+        DisposableEffect(hyperBouncePrefs) {
+            val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, changedKey ->
+                if (changedKey == "toggle_accent" || changedKey == "toggle_custom_color") {
+                    color = hyperBouncePrefs.toggleAccentColor()
+                }
             }
+            hyperBouncePrefs.prefs.registerOnSharedPreferenceChangeListener(listener)
+            onDispose { hyperBouncePrefs.prefs.unregisterOnSharedPreferenceChangeListener(listener) }
         }
-        hyperBouncePrefs.prefs.registerOnSharedPreferenceChangeListener(listener)
-        onDispose { hyperBouncePrefs.prefs.unregisterOnSharedPreferenceChangeListener(listener) }
     }
     return color
 }
@@ -118,14 +127,17 @@ fun rememberLiveSliderColor(hyperBouncePrefs: HyperBouncePrefs): Long {
     var color by remember(hyperBouncePrefs) {
         mutableStateOf(hyperBouncePrefs.sliderAccentColor())
     }
-    DisposableEffect(hyperBouncePrefs) {
-        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, changedKey ->
-            if (changedKey == "slider_accent" || changedKey == "slider_custom_color") {
-                color = hyperBouncePrefs.sliderAccentColor()
+    val isHotReload = remember(hyperBouncePrefs) { hyperBouncePrefs.hotReloadEnabled }
+    if (isHotReload) {
+        DisposableEffect(hyperBouncePrefs) {
+            val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, changedKey ->
+                if (changedKey == "slider_accent" || changedKey == "slider_custom_color") {
+                    color = hyperBouncePrefs.sliderAccentColor()
+                }
             }
+            hyperBouncePrefs.prefs.registerOnSharedPreferenceChangeListener(listener)
+            onDispose { hyperBouncePrefs.prefs.unregisterOnSharedPreferenceChangeListener(listener) }
         }
-        hyperBouncePrefs.prefs.registerOnSharedPreferenceChangeListener(listener)
-        onDispose { hyperBouncePrefs.prefs.unregisterOnSharedPreferenceChangeListener(listener) }
     }
     return color
 }

@@ -55,6 +55,7 @@ object ScreenUnlockHook {
 
     private var sLauncherRef: WeakReference<android.app.Activity>? = null
     private var sClassLoader: ClassLoader? = null
+    private var sModule: XposedInterface? = null
     private var isReceiverRegistered = false
 
     fun updateVelocity(velocity: Float) {
@@ -116,6 +117,7 @@ object ScreenUnlockHook {
     fun init(module: XposedInterface, classLoader: ClassLoader?) {
         if (classLoader == null) return
         sClassLoader = classLoader
+        sModule = module
 
         hookBaseLauncher(module, classLoader)
 
@@ -524,9 +526,18 @@ object ScreenUnlockHook {
     private fun registerUnlockReceiver(context: Context) {
         if (isReceiverRegistered) return
         try {
+            val prefs = try {
+                sModule?.getRemotePreferences(dev.joseph.hyperbounce.prefs.PREFS_GROUP)
+            } catch (_: Throwable) {
+                null
+            }
+            val isHotReload = prefs?.getBoolean("hot_reload_enabled", false) ?: false
+
             val filter = IntentFilter().apply {
                 addAction("dev.joseph.hyperbounce.ACTION_TRIGGER_UNLOCK_ANIMATION")
-                addAction("dev.joseph.hyperbounce.ACTION_SETTINGS_CHANGED")
+                if (isHotReload) {
+                    addAction("dev.joseph.hyperbounce.ACTION_SETTINGS_CHANGED")
+                }
             }
             val receiver = object : BroadcastReceiver() {
                 private var lastReceivedUnlockTime = 0L

@@ -318,6 +318,7 @@ object NotificationSheetHook {
     }
 
     fun init(module: XposedModule, classLoader: ClassLoader) {
+        sModule = module
         // 0. Crash prevention: Hook NotificationWakeUpCoordinator to prevent early NPE before stackScrollerController is injected
         hookWakeUpCoordinator(module, classLoader)
 
@@ -1202,12 +1203,23 @@ object NotificationSheetHook {
         }
     }
 
+    private var sModule: XposedModule? = null
     private var isSettingsReceiverRegistered = false
 
     private fun registerSettingsReceiver(context: Context) {
         if (isSettingsReceiverRegistered) return
         try {
-            val filter = android.content.IntentFilter("dev.joseph.hyperbounce.ACTION_SETTINGS_CHANGED").apply {
+            val prefs = try {
+                sModule?.getRemotePreferences(dev.joseph.hyperbounce.prefs.PREFS_GROUP)
+            } catch (_: Throwable) {
+                null
+            }
+            val isHotReload = prefs?.getBoolean("hot_reload_enabled", false) ?: false
+
+            val filter = android.content.IntentFilter().apply {
+                if (isHotReload) {
+                    addAction("dev.joseph.hyperbounce.ACTION_SETTINGS_CHANGED")
+                }
                 addAction("dev.joseph.hyperbounce.ACTION_REFRESH_DEPTH_WALLPAPER")
                 addAction(android.content.Intent.ACTION_WALLPAPER_CHANGED)
             }

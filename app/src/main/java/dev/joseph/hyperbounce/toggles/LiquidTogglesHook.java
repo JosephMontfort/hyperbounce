@@ -1248,6 +1248,27 @@ public class LiquidTogglesHook extends XposedModule {
     }
 
     @Override
+    public boolean onHotReloading(XposedModuleInterface.HotReloadingParam param) {
+        try {
+            android.content.SharedPreferences prefs = getRemotePreferences(dev.joseph.hyperbounce.prefs.HyperBouncePrefsKt.PREFS_GROUP);
+            boolean enabled = prefs != null && prefs.getBoolean("hot_reload_enabled", false);
+            if (!enabled) {
+                log(4, "HyperBounce", "Hot reload refused in LiquidTogglesHook (disabled in settings)");
+                return false;
+            }
+            return true;
+        } catch (Throwable t) {
+            return false;
+        }
+    }
+
+    @Override
+    public void onHotReloaded(XposedModuleInterface.HotReloadedParam param) {
+        super.onHotReloaded(param);
+        log(4, "HyperBounce", "Hot reloaded successfully in LiquidTogglesHook");
+    }
+
+    @Override
     public void onPackageReady(
             XposedModuleInterface.PackageReadyParam param) {
         String packageName = param.getPackageName();

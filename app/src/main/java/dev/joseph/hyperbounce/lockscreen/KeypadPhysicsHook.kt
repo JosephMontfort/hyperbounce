@@ -87,11 +87,20 @@ object KeypadPhysicsHook {
         return false
     }
 
+    private var sModule: XposedModule? = null
     private var isSettingsReceiverRegistered = false
 
     fun registerSettingsReceiver(context: Context) {
         if (isSettingsReceiverRegistered) return
         try {
+            val prefs = try {
+                sModule?.getRemotePreferences(dev.joseph.hyperbounce.prefs.PREFS_GROUP)
+            } catch (_: Throwable) {
+                null
+            }
+            val isHotReload = prefs?.getBoolean("hot_reload_enabled", false) ?: false
+            if (!isHotReload) return
+
             val filter = IntentFilter("dev.joseph.hyperbounce.ACTION_SETTINGS_CHANGED")
             val receiver = object : BroadcastReceiver() {
                 override fun onReceive(c: Context?, intent: Intent?) {
@@ -372,6 +381,7 @@ object KeypadPhysicsHook {
     }
 
     fun init(module: XposedModule, classLoader: ClassLoader) {
+        sModule = module
         // 1. Hook MiuiNumPadKey touch events for Liquid Glass 2.0 Press Optics & Jelly Physics
         try {
             val numPadKeyClass = Class.forName("com.android.keyguard.widget.MiuiNumPadKey", false, classLoader)

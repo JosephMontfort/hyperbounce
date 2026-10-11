@@ -1321,6 +1321,7 @@ object IosCallerScreenHook {
 
     private fun registerSettingsReceiver(context: Context, prefs: HyperBouncePrefs) {
         if (isReceiverRegistered) return
+        if (!prefs.hotReloadEnabled) return
         try {
             val filter = android.content.IntentFilter("dev.joseph.hyperbounce.ACTION_SETTINGS_CHANGED")
             val receiver = object : android.content.BroadcastReceiver() {
