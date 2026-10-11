@@ -2442,6 +2442,7 @@ object NotificationSheetHook {
                             val cfg = NotificationSheetConfigHolder.sheet
                             val container = containerRef?.get()
                             val isLandscape = container != null && (container.resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE || container.width > container.height)
+                            val isHomescreenAllowed = !cfg.lockWallpaperHomescreenOnly || isHomeScreenCached
                             val isWallpaperOrDepth = (cfg.isDepthActive || cfg.isWallpaperActive) && isHomescreenAllowed
                             if (isWallpaperOrDepth && !isLandscape && currentStatusBarState == 0 && !isControlCenterActive()) {
                                 val args = chain.args.toTypedArray()
