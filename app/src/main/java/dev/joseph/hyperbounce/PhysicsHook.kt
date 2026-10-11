@@ -165,24 +165,7 @@ class PhysicsHook : XposedModule() {
                 }
             }
 
-            // Real-Time Audio-to-Haptic Engine (Games, Media, AudioTrack)
-            if (prefs != null) {
-                try {
-                    dev.joseph.hyperbounce.haptics.hook.AudioHapticConfigHolder.updateFromPrefs(prefs)
-                    if (isHotReload) {
-                        prefs.registerOnSharedPreferenceChangeListener { _, _ ->
-                            dev.joseph.hyperbounce.haptics.hook.AudioHapticConfigHolder.updateFromPrefs(prefs)
-                        }
-                    }
-                } catch (t: Throwable) {
-                    Log.e("HyperBounce", "Failed to bind audio haptic prefs for ${param.packageName}", t)
-                }
-            }
-            if (param.packageName != "com.android.systemui" &&
-                param.packageName != "android" &&
-                param.packageName != "dev.joseph.hyperbounce") {
-                dev.joseph.hyperbounce.haptics.hook.RealtimeAudioHapticHook.init(this, param.classLoader)
-            }
+
         } catch (t: Throwable) {
             Log.e("HyperBounce", "PhysicsHook failed for ${param.packageName}, leaving stock UI untouched", t)
         }

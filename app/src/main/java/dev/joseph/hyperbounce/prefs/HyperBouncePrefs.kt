@@ -162,10 +162,17 @@ class HyperBouncePrefs(module: XposedInterface) {
     val miuixAppsHookingEnabled: Boolean
         get() = prefs.getBoolean("miuix_apps_hooking_enabled", false)
 
+    private var cachedToggleAccent: Long? = null
+    private var cachedSliderAccent: Long? = null
+    private val cachedGlassFeel = java.util.concurrent.ConcurrentHashMap<String, GlassFeelValues>()
+
     fun toggleAccentColor(): Long {
+        if (!hotReloadEnabled && cachedToggleAccent != null) {
+            return cachedToggleAccent!!
+        }
         val presetName = prefs.getString("toggle_accent", "Green") ?: "Green"
         val customColor = prefs.getLong("toggle_custom_color", 0xFF30D158L)
-        return when (presetName) {
+        val result = when (presetName) {
             "Blue" -> 0xFF0088FFL
             "Pink" -> 0xFFFF2D78L
             "Purple" -> 0xFFAF52DEL
@@ -174,12 +181,19 @@ class HyperBouncePrefs(module: XposedInterface) {
             "Custom" -> customColor
             else -> 0xFF30D158L
         }
+        if (!hotReloadEnabled) {
+            cachedToggleAccent = result
+        }
+        return result
     }
 
     fun sliderAccentColor(): Long {
+        if (!hotReloadEnabled && cachedSliderAccent != null) {
+            return cachedSliderAccent!!
+        }
         val presetName = prefs.getString("slider_accent", "Green") ?: "Green"
         val customColor = prefs.getLong("slider_custom_color", 0xFF30D158L)
-        return when (presetName) {
+        val result = when (presetName) {
             "Blue" -> 0xFF0088FFL
             "Pink" -> 0xFFFF2D78L
             "Purple" -> 0xFFAF52DEL
@@ -188,18 +202,31 @@ class HyperBouncePrefs(module: XposedInterface) {
             "Custom" -> customColor
             else -> 0xFF30D158L
         }
+        if (!hotReloadEnabled) {
+            cachedSliderAccent = result
+        }
+        return result
     }
 
-    fun glassFeel(prefix: String): GlassFeelValues = GlassFeelValues(
-        blurDp = prefs.getFloat("${prefix}_blur", if (prefix == "toggle_glass") 8f else 8f),
-        lensSizeDp = prefs.getFloat("${prefix}_lens_size", if (prefix == "toggle_glass") 5f else 10f),
-        lensDepthDp = prefs.getFloat("${prefix}_lens_depth", if (prefix == "toggle_glass") 10f else 14f),
-        highlightStrength = prefs.getFloat("${prefix}_highlight", 0.67f),
-        shadowRadiusDp = prefs.getFloat("${prefix}_shadow", 4f),
-        dragSensitivity = prefs.getFloat("${prefix}_drag_sensitivity", if (prefix == "toggle_glass") 0.72f else 1.0f),
-        springDamping = prefs.getFloat("${prefix}_spring_damping", if (prefix == "toggle_glass") 0.82f else 0.7f),
-        springStiffness = prefs.getFloat("${prefix}_spring_stiffness", if (prefix == "toggle_glass") 400f else 800f)
-    )
+    fun glassFeel(prefix: String): GlassFeelValues {
+        if (!hotReloadEnabled) {
+            cachedGlassFeel[prefix]?.let { return it }
+        }
+        val feel = GlassFeelValues(
+            blurDp = prefs.getFloat("${prefix}_blur", if (prefix == "toggle_glass") 8f else 8f),
+            lensSizeDp = prefs.getFloat("${prefix}_lens_size", if (prefix == "toggle_glass") 5f else 10f),
+            lensDepthDp = prefs.getFloat("${prefix}_lens_depth", if (prefix == "toggle_glass") 10f else 14f),
+            highlightStrength = prefs.getFloat("${prefix}_highlight", 0.67f),
+            shadowRadiusDp = prefs.getFloat("${prefix}_shadow", 4f),
+            dragSensitivity = prefs.getFloat("${prefix}_drag_sensitivity", if (prefix == "toggle_glass") 0.72f else 1.0f),
+            springDamping = prefs.getFloat("${prefix}_spring_damping", if (prefix == "toggle_glass") 0.82f else 0.7f),
+            springStiffness = prefs.getFloat("${prefix}_spring_stiffness", if (prefix == "toggle_glass") 400f else 300f)
+        )
+        if (!hotReloadEnabled) {
+            cachedGlassFeel[prefix] = feel
+        }
+        return feel
+    }
 
     val toggleGlassFeel: GlassFeelValues get() = glassFeel("toggle_glass")
     val sliderGlassFeel: GlassFeelValues get() = glassFeel("slider_glass")

@@ -292,17 +292,24 @@ object CrashMonitor {
         }
     }
 
+    @Volatile private var callingPackageField: java.lang.reflect.Field? = null
+    @Volatile private var realCallingPackageField: java.lang.reflect.Field? = null
+
     private fun shouldAllowBackgroundStart(state: Any): Boolean {
         return try {
-            val callingField = try {
-                state.javaClass.getDeclaredField("mCallingPackage").apply { isAccessible = true }
-            } catch (_: Throwable) { null }
-            val realCallingField = try {
-                state.javaClass.getDeclaredField("mRealCallingPackage").apply { isAccessible = true }
-            } catch (_: Throwable) { null }
+            var f1 = callingPackageField
+            if (f1 == null) {
+                f1 = state.javaClass.getDeclaredField("mCallingPackage").apply { isAccessible = true }
+                callingPackageField = f1
+            }
+            var f2 = realCallingPackageField
+            if (f2 == null) {
+                f2 = state.javaClass.getDeclaredField("mRealCallingPackage").apply { isAccessible = true }
+                realCallingPackageField = f2
+            }
 
-            val calling = callingField?.get(state) as? String
-            val realCalling = realCallingField?.get(state) as? String
+            val calling = f1?.get(state) as? String
+            val realCalling = f2?.get(state) as? String
             isModulePackage(calling) || isModulePackage(realCalling)
         } catch (_: Throwable) {
             false

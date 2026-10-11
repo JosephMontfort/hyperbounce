@@ -363,6 +363,8 @@ class GlassLensRenderer {
 
     val isAvailable: Boolean get() = !shaderBroken
 
+    private var activeEffect: RenderEffect? = null
+
     fun draw(
         canvas: Canvas,
         width: Int,
@@ -387,29 +389,24 @@ class GlassLensRenderer {
             return false
         }
 
-        val needsRebuild = params != lastParams || width != lastWidth || height != lastHeight ||
-                margin != lastMargin || backdropBmp != lastBackdropBmp ||
-                viewX != lastViewX || viewY != lastViewY ||
-                screenW != lastScreenW || screenH != lastScreenH
-
-        if (needsRebuild) {
+        val needsEffectRebuild = activeEffect == null || width != lastWidth || height != lastHeight || margin != lastMargin
+        if (needsEffectRebuild) {
             try {
-                renderNode.setRenderEffect(buildEffect(sh, params, margin, width, height, backdropBmp, viewX, viewY, screenW, screenH))
+                val effect = RenderEffect.createRuntimeShaderEffect(sh, "content")
+                renderNode.setRenderEffect(effect)
+                activeEffect = effect
             } catch (e: Exception) {
                 Log.e(TAG, "Lens 2.0 RenderEffect build failed", e)
                 shaderBroken = true
                 return false
             }
-            lastParams = params
             lastWidth = width
             lastHeight = height
             lastMargin = margin
-            lastBackdropBmp = backdropBmp
-            lastViewX = viewX
-            lastViewY = viewY
-            lastScreenW = screenW
-            lastScreenH = screenH
         }
+
+        // Update uniforms directly in-place on the compiled runtime shader without tearing down the HWUI filter
+        updateUniforms(sh, params, margin, width, height, backdropBmp, viewX, viewY, screenW, screenH)
 
         renderNode.setPosition(-margin, -margin, width + margin, height + margin)
         val recordingCanvas = renderNode.beginRecording(width + 2 * margin, height + 2 * margin)
@@ -423,7 +420,7 @@ class GlassLensRenderer {
         return true
     }
 
-    private fun buildEffect(
+    private fun updateUniforms(
         sh: RuntimeShader,
         p: LensParams,
         margin: Int,
@@ -434,7 +431,7 @@ class GlassLensRenderer {
         viewY: Int,
         screenW: Int,
         screenH: Int
-    ): RenderEffect {
+    ) {
         sh.setFloatUniform("margin", margin.toFloat())
         sh.setFloatUniform("viewSize", width.toFloat(), height.toFloat())
         sh.setFloatUniform("viewPos", viewX.toFloat(), viewY.toFloat())
@@ -473,12 +470,12 @@ class GlassLensRenderer {
             sh.setInputShader("backdrop", fallbackEmptyShader)
             sh.setFloatUniform("hasBackdrop", 0.0f)
         }
-
-        return RenderEffect.createRuntimeShaderEffect(sh, "content")
     }
 
     fun release() {
         renderNode.discardDisplayList()
+        renderNode.setRenderEffect(null)
+        activeEffect = null
         shader = null
         lastParams = null
         lastBackdropBmp = null

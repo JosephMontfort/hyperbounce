@@ -1878,16 +1878,6 @@ object ControlCenterHook {
                                     val ctx = getCtxMethod.invoke(distributor) as? Context
                                     ControlCenterConfigHolder.loadSavedPriorities(ctx)
 
-                                    if (ctx != null) {
-                                        try {
-                                            val resetFilter = IntentFilter("dev.joseph.hyperbounce.RESET_CC_LAYOUT")
-                                            ctx.registerReceiver(object : BroadcastReceiver() {
-                                                override fun onReceive(rCtx: Context?, intent: Intent?) {
-                                                    ControlCenterConfigHolder.resetLayoutToStock(rCtx)
-                                                }
-                                            }, resetFilter, Context.RECEIVER_EXPORTED)
-                                        } catch (t: Throwable) {}
-                                    }
 
                                     val rightPanelContentField = distributorClass.getDeclaredField("rightPanelContent")
                                     rightPanelContentField.isAccessible = true
