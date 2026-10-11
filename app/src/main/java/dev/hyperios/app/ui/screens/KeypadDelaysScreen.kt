@@ -6,6 +6,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.kyant.backdrop.Backdrop
+import dev.hyperios.app.common.ModuleDefaults
 import dev.hyperios.app.ui.components.GlassCard
 import dev.hyperios.app.ui.components.RowDivider
 import dev.hyperios.app.ui.components.SectionHeader
@@ -16,23 +17,6 @@ import java.util.Locale
 
 /**
  * KeypadDelaysScreen: Fine-tune individual start delays for keys 0-9 and action buttons.
- *
- * NOTE FOR FUTURE AGENTS / DEVELOPERS:
- * This screen and its backend preferences (`pin_delay_key1` .. `pin_delay_cancel`) are fully preserved.
- * The navigation link from KeypadScreen was removed to declutter the UI per user request, while
- * the calibrated delays (Key 1: 0ms, Key 2: 25ms, ..., Cancel/Emergency: 270ms) are enforced as defaults.
- *
- * If you ever need to re-expose this screen in the UI, simply re-add a SettingsNavRow to KeypadScreen.kt:
- * ```kotlin
- * SettingsNavRow(
- *     title = "Custom Key Delays",
- *     subtitle = "Fine-tune individual start delays for keys 0-9",
- *     colors = colors,
- *     iconTint = colors.accentOrange,
- *     onClick = { onNavigate(Destination.KeypadDelays) },
- *     icon = { SlidersIcon(color = Color.White, size = 15.dp) }
- * )
- * ```
  */
 @Composable
 fun KeypadDelaysScreen(
@@ -51,18 +35,18 @@ fun KeypadDelaysScreen(
         backdrop = backdrop,
         onBack = onBack,
         onResetPage = {
-            keypad.setDelayKey1(0f)
-            keypad.setDelayKey2(25f)
-            keypad.setDelayKey3(50f)
-            keypad.setDelayKey4(55f)
-            keypad.setDelayKey5(80f)
-            keypad.setDelayKey6(105f)
-            keypad.setDelayKey7(110f)
-            keypad.setDelayKey8(135f)
-            keypad.setDelayKey9(160f)
-            keypad.setDelayKey0(215f)
-            keypad.setDelayEmergency(270f)
-            keypad.setDelayCancel(270f)
+            keypad.setDelayKey1(ModuleDefaults.LockScreenKeypad.DELAY_KEY1)
+            keypad.setDelayKey2(ModuleDefaults.LockScreenKeypad.DELAY_KEY2)
+            keypad.setDelayKey3(ModuleDefaults.LockScreenKeypad.DELAY_KEY3)
+            keypad.setDelayKey4(ModuleDefaults.LockScreenKeypad.DELAY_KEY4)
+            keypad.setDelayKey5(ModuleDefaults.LockScreenKeypad.DELAY_KEY5)
+            keypad.setDelayKey6(ModuleDefaults.LockScreenKeypad.DELAY_KEY6)
+            keypad.setDelayKey7(ModuleDefaults.LockScreenKeypad.DELAY_KEY7)
+            keypad.setDelayKey8(ModuleDefaults.LockScreenKeypad.DELAY_KEY8)
+            keypad.setDelayKey9(ModuleDefaults.LockScreenKeypad.DELAY_KEY9)
+            keypad.setDelayKey0(ModuleDefaults.LockScreenKeypad.DELAY_KEY0)
+            keypad.setDelayEmergency(ModuleDefaults.LockScreenKeypad.DELAY_EMERGENCY)
+            keypad.setDelayCancel(ModuleDefaults.LockScreenKeypad.DELAY_CANCEL)
         },
         restartAppTitle = "Restart System UI",
         restartAppSubtitle = "Restart com.android.systemui",
@@ -78,8 +62,8 @@ fun KeypadDelaysScreen(
                     backdrop = backdrop,
                     value = keypad.delayKey1,
                     onValueChange = keypad::setDelayKey1,
-                    valueRange = 0.0f..500.0f,
-                    defaultValue = 0.0f,
+                    valueRange = ModuleDefaults.LockScreenKeypad.DELAY_RANGE,
+                    defaultValue = ModuleDefaults.LockScreenKeypad.DELAY_KEY1,
                     valueLabel = { String.format(Locale.US, "%.0f ms", it) },
                     enabled = keypad.enabled
                 )
@@ -91,8 +75,8 @@ fun KeypadDelaysScreen(
                     backdrop = backdrop,
                     value = keypad.delayKey2,
                     onValueChange = keypad::setDelayKey2,
-                    valueRange = 0.0f..500.0f,
-                    defaultValue = 25.0f,
+                    valueRange = ModuleDefaults.LockScreenKeypad.DELAY_RANGE,
+                    defaultValue = ModuleDefaults.LockScreenKeypad.DELAY_KEY2,
                     valueLabel = { String.format(Locale.US, "%.0f ms", it) },
                     enabled = keypad.enabled
                 )
@@ -104,8 +88,8 @@ fun KeypadDelaysScreen(
                     backdrop = backdrop,
                     value = keypad.delayKey3,
                     onValueChange = keypad::setDelayKey3,
-                    valueRange = 0.0f..500.0f,
-                    defaultValue = 50.0f,
+                    valueRange = ModuleDefaults.LockScreenKeypad.DELAY_RANGE,
+                    defaultValue = ModuleDefaults.LockScreenKeypad.DELAY_KEY3,
                     valueLabel = { String.format(Locale.US, "%.0f ms", it) },
                     enabled = keypad.enabled
                 )
@@ -122,8 +106,8 @@ fun KeypadDelaysScreen(
                     backdrop = backdrop,
                     value = keypad.delayKey4,
                     onValueChange = keypad::setDelayKey4,
-                    valueRange = 0.0f..500.0f,
-                    defaultValue = 55.0f,
+                    valueRange = ModuleDefaults.LockScreenKeypad.DELAY_RANGE,
+                    defaultValue = ModuleDefaults.LockScreenKeypad.DELAY_KEY4,
                     valueLabel = { String.format(Locale.US, "%.0f ms", it) },
                     enabled = keypad.enabled
                 )
@@ -135,8 +119,8 @@ fun KeypadDelaysScreen(
                     backdrop = backdrop,
                     value = keypad.delayKey5,
                     onValueChange = keypad::setDelayKey5,
-                    valueRange = 0.0f..500.0f,
-                    defaultValue = 80.0f,
+                    valueRange = ModuleDefaults.LockScreenKeypad.DELAY_RANGE,
+                    defaultValue = ModuleDefaults.LockScreenKeypad.DELAY_KEY5,
                     valueLabel = { String.format(Locale.US, "%.0f ms", it) },
                     enabled = keypad.enabled
                 )
@@ -148,8 +132,8 @@ fun KeypadDelaysScreen(
                     backdrop = backdrop,
                     value = keypad.delayKey6,
                     onValueChange = keypad::setDelayKey6,
-                    valueRange = 0.0f..500.0f,
-                    defaultValue = 105.0f,
+                    valueRange = ModuleDefaults.LockScreenKeypad.DELAY_RANGE,
+                    defaultValue = ModuleDefaults.LockScreenKeypad.DELAY_KEY6,
                     valueLabel = { String.format(Locale.US, "%.0f ms", it) },
                     enabled = keypad.enabled
                 )
@@ -166,8 +150,8 @@ fun KeypadDelaysScreen(
                     backdrop = backdrop,
                     value = keypad.delayKey7,
                     onValueChange = keypad::setDelayKey7,
-                    valueRange = 0.0f..500.0f,
-                    defaultValue = 110.0f,
+                    valueRange = ModuleDefaults.LockScreenKeypad.DELAY_RANGE,
+                    defaultValue = ModuleDefaults.LockScreenKeypad.DELAY_KEY7,
                     valueLabel = { String.format(Locale.US, "%.0f ms", it) },
                     enabled = keypad.enabled
                 )
@@ -179,8 +163,8 @@ fun KeypadDelaysScreen(
                     backdrop = backdrop,
                     value = keypad.delayKey8,
                     onValueChange = keypad::setDelayKey8,
-                    valueRange = 0.0f..500.0f,
-                    defaultValue = 135.0f,
+                    valueRange = ModuleDefaults.LockScreenKeypad.DELAY_RANGE,
+                    defaultValue = ModuleDefaults.LockScreenKeypad.DELAY_KEY8,
                     valueLabel = { String.format(Locale.US, "%.0f ms", it) },
                     enabled = keypad.enabled
                 )
@@ -192,8 +176,8 @@ fun KeypadDelaysScreen(
                     backdrop = backdrop,
                     value = keypad.delayKey9,
                     onValueChange = keypad::setDelayKey9,
-                    valueRange = 0.0f..500.0f,
-                    defaultValue = 160.0f,
+                    valueRange = ModuleDefaults.LockScreenKeypad.DELAY_RANGE,
+                    defaultValue = ModuleDefaults.LockScreenKeypad.DELAY_KEY9,
                     valueLabel = { String.format(Locale.US, "%.0f ms", it) },
                     enabled = keypad.enabled
                 )
@@ -210,8 +194,8 @@ fun KeypadDelaysScreen(
                     backdrop = backdrop,
                     value = keypad.delayKey0,
                     onValueChange = keypad::setDelayKey0,
-                    valueRange = 0.0f..500.0f,
-                    defaultValue = 215.0f,
+                    valueRange = ModuleDefaults.LockScreenKeypad.DELAY_RANGE,
+                    defaultValue = ModuleDefaults.LockScreenKeypad.DELAY_KEY0,
                     valueLabel = { String.format(Locale.US, "%.0f ms", it) },
                     enabled = keypad.enabled
                 )
@@ -223,8 +207,8 @@ fun KeypadDelaysScreen(
                     backdrop = backdrop,
                     value = keypad.delayCancel,
                     onValueChange = keypad::setDelayCancel,
-                    valueRange = 0.0f..500.0f,
-                    defaultValue = 270.0f,
+                    valueRange = ModuleDefaults.LockScreenKeypad.DELAY_RANGE,
+                    defaultValue = ModuleDefaults.LockScreenKeypad.DELAY_CANCEL,
                     valueLabel = { String.format(Locale.US, "%.0f ms", it) },
                     enabled = keypad.enabled
                 )
@@ -236,8 +220,8 @@ fun KeypadDelaysScreen(
                     backdrop = backdrop,
                     value = keypad.delayEmergency,
                     onValueChange = keypad::setDelayEmergency,
-                    valueRange = 0.0f..500.0f,
-                    defaultValue = 270.0f,
+                    valueRange = ModuleDefaults.LockScreenKeypad.DELAY_RANGE,
+                    defaultValue = ModuleDefaults.LockScreenKeypad.DELAY_EMERGENCY,
                     valueLabel = { String.format(Locale.US, "%.0f ms", it) },
                     enabled = keypad.enabled
                 )

@@ -5,6 +5,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.kyant.backdrop.Backdrop
+import dev.hyperios.app.common.ModuleDefaults
 import dev.hyperios.app.ui.components.GlassCard
 import dev.hyperios.app.ui.components.RowDivider
 import dev.hyperios.app.ui.components.SectionHeader
@@ -29,9 +30,9 @@ fun NotificationCenterSheetHomeIndicatorScreen(
         backdrop = backdrop,
         onBack = onBack,
         onResetPage = {
-            sheet.setPillWidth(156.0f)
-            sheet.setPillHeight(6.0f)
-            sheet.setPillBottomMargin(9.0f)
+            sheet.setPillWidth(ModuleDefaults.NotificationSheet.PILL_WIDTH)
+            sheet.setPillHeight(ModuleDefaults.NotificationSheet.PILL_HEIGHT)
+            sheet.setPillBottomMargin(ModuleDefaults.NotificationSheet.PILL_BOTTOM_MARGIN)
         },
         restartAppTitle = "Restart System UI",
         restartAppSubtitle = "Restart com.android.systemui",
@@ -47,8 +48,8 @@ fun NotificationCenterSheetHomeIndicatorScreen(
                     backdrop = backdrop,
                     value = sheet.pillWidth,
                     onValueChange = sheet::setPillWidth,
-                    valueRange = 40.0f..280.0f,
-                    defaultValue = 156.0f,
+                    valueRange = ModuleDefaults.NotificationSheet.PILL_WIDTH_RANGE,
+                    defaultValue = ModuleDefaults.NotificationSheet.PILL_WIDTH,
                     valueLabel = { String.format(Locale.US, "%.0f dp", it) },
                     enabled = sheet.enabled
                 )
@@ -60,8 +61,8 @@ fun NotificationCenterSheetHomeIndicatorScreen(
                     backdrop = backdrop,
                     value = sheet.pillHeight,
                     onValueChange = sheet::setPillHeight,
-                    valueRange = 2.0f..16.0f,
-                    defaultValue = 6.0f,
+                    valueRange = ModuleDefaults.NotificationSheet.PILL_HEIGHT_RANGE,
+                    defaultValue = ModuleDefaults.NotificationSheet.PILL_HEIGHT,
                     valueLabel = { String.format(Locale.US, "%.1f dp", it) },
                     enabled = sheet.enabled
                 )
@@ -73,8 +74,8 @@ fun NotificationCenterSheetHomeIndicatorScreen(
                     backdrop = backdrop,
                     value = sheet.pillBottomMargin,
                     onValueChange = sheet::setPillBottomMargin,
-                    valueRange = 0.0f..35.0f,
-                    defaultValue = 9.0f,
+                    valueRange = ModuleDefaults.NotificationSheet.PILL_BOTTOM_MARGIN_RANGE,
+                    defaultValue = ModuleDefaults.NotificationSheet.PILL_BOTTOM_MARGIN,
                     valueLabel = { String.format(Locale.US, "%.0f dp", it) },
                     enabled = sheet.enabled
                 )

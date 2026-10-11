@@ -6,6 +6,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.kyant.backdrop.Backdrop
+import dev.hyperios.app.common.ModuleDefaults
 import dev.hyperios.app.ui.components.AppGridIcon
 import dev.hyperios.app.ui.components.AppsIcon
 import dev.hyperios.app.ui.components.GlassCard
@@ -64,8 +65,8 @@ fun AppTransitionsScreen(
                     backdrop = backdrop,
                     value = trans.animSpeed,
                     onValueChange = trans::setAnimSpeed,
-                    valueRange = 0.50f..1.80f,
-                    defaultValue = 1.00f,
+                    valueRange = ModuleDefaults.IOSTransitions.ANIM_SPEED_RANGE,
+                    defaultValue = ModuleDefaults.IOSTransitions.ANIM_SPEED,
                     valueLabel = { String.format(Locale.US, "%.2fx", it) }
                 )
                 RowDivider(colors.separator)
@@ -76,8 +77,8 @@ fun AppTransitionsScreen(
                     backdrop = backdrop,
                     value = trans.openSpringDamping,
                     onValueChange = trans::setOpenSpringDamping,
-                    valueRange = 0.80f..1.25f,
-                    defaultValue = 0.98f,
+                    valueRange = ModuleDefaults.IOSTransitions.OPEN_SPRING_DAMPING_RANGE,
+                    defaultValue = ModuleDefaults.IOSTransitions.OPEN_SPRING_DAMPING,
                     valueLabel = { String.format(Locale.US, "%.2f", it) }
                 )
                 RowDivider(colors.separator)
@@ -88,8 +89,8 @@ fun AppTransitionsScreen(
                     backdrop = backdrop,
                     value = trans.closeSpringDamping,
                     onValueChange = trans::setCloseSpringDamping,
-                    valueRange = 0.70f..1.10f,
-                    defaultValue = 0.84f,
+                    valueRange = ModuleDefaults.IOSTransitions.CLOSE_SPRING_DAMPING_RANGE,
+                    defaultValue = ModuleDefaults.IOSTransitions.CLOSE_SPRING_DAMPING,
                     valueLabel = { String.format(Locale.US, "%.2f", it) }
                 )
             }

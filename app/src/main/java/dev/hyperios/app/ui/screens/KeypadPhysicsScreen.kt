@@ -6,6 +6,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.kyant.backdrop.Backdrop
+import dev.hyperios.app.common.ModuleDefaults
 import dev.hyperios.app.ui.Destination
 import dev.hyperios.app.ui.components.GlassCard
 import dev.hyperios.app.ui.components.SectionFooter
@@ -42,22 +43,22 @@ fun KeypadPhysicsScreen(
         backdrop = backdrop,
         onBack = onBack,
         onResetPage = {
-            keypad.setIosBloomDuration(900.0f)
-            keypad.setIosBloomClusterFactor(0.60f)
-            keypad.setIosBloomOvershoot(0.16f)
-            keypad.setIosBloomDamping(0.40f)
-            keypad.setIosBloomStiffness(18.0f)
-            keypad.setIosBloomRadialSquish(0.28f)
-            keypad.setIosBloomVelocityStretch(0.16f)
-            keypad.setIosBloomWaveStagger(22.0f)
-            keypad.setIosBloomDecoupleText(false)
-            keypad.setDragMaxThreshold(0.16f)
-            keypad.setDragInitialStiffness(0.22f)
-            keypad.setDragResistancePower(1.8f)
-            keypad.setDragVolumeStretch(0.11f)
-            keypad.setReleaseDuration(600.0f)
-            keypad.setReleaseSquishAmp(0.35f)
-            keypad.setReleaseOvershoot(2.0f)
+            keypad.setIosBloomDuration(ModuleDefaults.LockScreenKeypad.BLOOM_DURATION)
+            keypad.setIosBloomClusterFactor(ModuleDefaults.LockScreenKeypad.BLOOM_CLUSTER_FACTOR)
+            keypad.setIosBloomOvershoot(ModuleDefaults.LockScreenKeypad.BLOOM_OVERSHOOT)
+            keypad.setIosBloomDamping(ModuleDefaults.LockScreenKeypad.BLOOM_DAMPING)
+            keypad.setIosBloomStiffness(ModuleDefaults.LockScreenKeypad.BLOOM_STIFFNESS)
+            keypad.setIosBloomRadialSquish(ModuleDefaults.LockScreenKeypad.BLOOM_RADIAL_SQUISH)
+            keypad.setIosBloomVelocityStretch(ModuleDefaults.LockScreenKeypad.BLOOM_VELOCITY_STRETCH)
+            keypad.setIosBloomWaveStagger(ModuleDefaults.LockScreenKeypad.BLOOM_WAVE_STAGGER)
+            keypad.setIosBloomDecoupleText(ModuleDefaults.LockScreenKeypad.BLOOM_DECOUPLE_TEXT)
+            keypad.setDragMaxThreshold(ModuleDefaults.LockScreenKeypad.DRAG_MAX_THRESHOLD)
+            keypad.setDragInitialStiffness(ModuleDefaults.LockScreenKeypad.DRAG_INITIAL_STIFFNESS)
+            keypad.setDragResistancePower(ModuleDefaults.LockScreenKeypad.DRAG_RESISTANCE_POWER)
+            keypad.setDragVolumeStretch(ModuleDefaults.LockScreenKeypad.DRAG_VOLUME_STRETCH)
+            keypad.setReleaseDuration(ModuleDefaults.LockScreenKeypad.RELEASE_DURATION)
+            keypad.setReleaseSquishAmp(ModuleDefaults.LockScreenKeypad.RELEASE_SQUISH_AMP)
+            keypad.setReleaseOvershoot(ModuleDefaults.LockScreenKeypad.RELEASE_OVERSHOOT)
         },
         restartAppTitle = "Restart System UI",
         restartAppSubtitle = "Restart com.android.systemui",

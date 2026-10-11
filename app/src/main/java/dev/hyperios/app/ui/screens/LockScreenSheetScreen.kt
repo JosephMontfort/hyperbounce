@@ -6,6 +6,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
 import com.kyant.backdrop.Backdrop
+import dev.hyperios.app.common.ModuleDefaults
 import dev.hyperios.app.ui.Destination
 import dev.hyperios.app.ui.components.GlassCard
 import dev.hyperios.app.ui.components.RowDivider
@@ -62,8 +63,8 @@ fun LockScreenSheetScreen(
                     backdrop = backdrop,
                     value = sheet.leftBevelWidth,
                     onValueChange = sheet::setSideBevelWidth,
-                    valueRange = 0.0f..120.0f,
-                    defaultValue = 38.0f,
+                    valueRange = ModuleDefaults.LockScreenSheet.LEFT_BEVEL_RANGE,
+                    defaultValue = ModuleDefaults.LockScreenSheet.LEFT_BEVEL_WIDTH,
                     valueLabel = { if (it <= 0.5f) "Off" else String.format(Locale.US, "%.0f dp", it) },
                     enabled = sheet.enabled
                 )
@@ -75,8 +76,8 @@ fun LockScreenSheetScreen(
                     backdrop = backdrop,
                     value = sheet.bottomBevelWidth,
                     onValueChange = sheet::setBottomBevelWidth,
-                    valueRange = 0.0f..120.0f,
-                    defaultValue = 38.0f,
+                    valueRange = ModuleDefaults.LockScreenSheet.BOTTOM_BEVEL_RANGE,
+                    defaultValue = ModuleDefaults.LockScreenSheet.BOTTOM_BEVEL_WIDTH,
                     valueLabel = { if (it <= 0.5f) "Off" else String.format(Locale.US, "%.0f dp", it) },
                     enabled = sheet.enabled
                 )

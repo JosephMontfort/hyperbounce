@@ -5,6 +5,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.kyant.backdrop.Backdrop
+import dev.hyperios.app.common.ModuleDefaults
 import dev.hyperios.app.ui.components.GlassCard
 import dev.hyperios.app.ui.components.RowDivider
 import dev.hyperios.app.ui.components.SectionFooter
@@ -31,11 +32,11 @@ fun KeypadStretchPhysicsScreen(
         backdrop = backdrop,
         onBack = onBack,
         onResetPage = {
-            keypad.setDragMaxThreshold(0.16f)
-            keypad.setDragInitialStiffness(0.22f)
-            keypad.setDragResistancePower(1.8f)
-            keypad.setDragVolumeStretch(0.11f)
-            keypad.setPressLiquidScale(1.15f)
+            keypad.setDragMaxThreshold(ModuleDefaults.LockScreenKeypad.DRAG_MAX_THRESHOLD)
+            keypad.setDragInitialStiffness(ModuleDefaults.LockScreenKeypad.DRAG_INITIAL_STIFFNESS)
+            keypad.setDragResistancePower(ModuleDefaults.LockScreenKeypad.DRAG_RESISTANCE_POWER)
+            keypad.setDragVolumeStretch(ModuleDefaults.LockScreenKeypad.DRAG_VOLUME_STRETCH)
+            keypad.setPressLiquidScale(ModuleDefaults.LockScreenKeypad.PRESS_LIQUID_SCALE)
         },
         restartAppTitle = "Restart System UI",
         restartAppSubtitle = "Restart com.android.systemui",
@@ -51,8 +52,8 @@ fun KeypadStretchPhysicsScreen(
                     backdrop = backdrop,
                     value = keypad.dragMaxThreshold,
                     onValueChange = keypad::setDragMaxThreshold,
-                    valueRange = 0.10f..0.35f,
-                    defaultValue = 0.16f,
+                    valueRange = ModuleDefaults.LockScreenKeypad.DRAG_MAX_THRESHOLD_RANGE,
+                    defaultValue = ModuleDefaults.LockScreenKeypad.DRAG_MAX_THRESHOLD,
                     valueLabel = { String.format(Locale.US, "%.0f %%", it * 100f) },
                     enabled = keypad.enabled
                 )
@@ -64,8 +65,8 @@ fun KeypadStretchPhysicsScreen(
                     backdrop = backdrop,
                     value = keypad.dragInitialStiffness,
                     onValueChange = keypad::setDragInitialStiffness,
-                    valueRange = 0.10f..0.50f,
-                    defaultValue = 0.22f,
+                    valueRange = ModuleDefaults.LockScreenKeypad.DRAG_INITIAL_STIFFNESS_RANGE,
+                    defaultValue = ModuleDefaults.LockScreenKeypad.DRAG_INITIAL_STIFFNESS,
                     valueLabel = { String.format(Locale.US, "%.2f", it) },
                     enabled = keypad.enabled
                 )
@@ -77,8 +78,8 @@ fun KeypadStretchPhysicsScreen(
                     backdrop = backdrop,
                     value = keypad.dragResistancePower,
                     onValueChange = keypad::setDragResistancePower,
-                    valueRange = 1.0f..3.5f,
-                    defaultValue = 1.8f,
+                    valueRange = ModuleDefaults.LockScreenKeypad.DRAG_RESISTANCE_POWER_RANGE,
+                    defaultValue = ModuleDefaults.LockScreenKeypad.DRAG_RESISTANCE_POWER,
                     valueLabel = { String.format(Locale.US, "%.1f", it) },
                     enabled = keypad.enabled
                 )
@@ -99,8 +100,8 @@ fun KeypadStretchPhysicsScreen(
                     backdrop = backdrop,
                     value = keypad.dragVolumeStretch,
                     onValueChange = keypad::setDragVolumeStretch,
-                    valueRange = 0.05f..0.50f,
-                    defaultValue = 0.11f,
+                    valueRange = ModuleDefaults.LockScreenKeypad.DRAG_VOLUME_STRETCH_RANGE,
+                    defaultValue = ModuleDefaults.LockScreenKeypad.DRAG_VOLUME_STRETCH,
                     valueLabel = { String.format(Locale.US, "%.2f x", it) },
                     enabled = keypad.enabled
                 )
@@ -112,8 +113,8 @@ fun KeypadStretchPhysicsScreen(
                     backdrop = backdrop,
                     value = keypad.pressLiquidScale,
                     onValueChange = keypad::setPressLiquidScale,
-                    valueRange = 0.80f..1.50f,
-                    defaultValue = 1.15f,
+                    valueRange = ModuleDefaults.LockScreenKeypad.PRESS_LIQUID_SCALE_RANGE,
+                    defaultValue = ModuleDefaults.LockScreenKeypad.PRESS_LIQUID_SCALE,
                     valueLabel = { String.format(Locale.US, "%.2f x", it) },
                     enabled = keypad.enabled
                 )

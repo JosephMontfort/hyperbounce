@@ -5,6 +5,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.kyant.backdrop.Backdrop
+import dev.hyperios.app.common.ModuleDefaults
 import dev.hyperios.app.ui.components.GlassCard
 import dev.hyperios.app.ui.components.RowDivider
 import dev.hyperios.app.ui.components.SectionFooter
@@ -30,9 +31,9 @@ fun ScreenUnlockCascadeDockScreen(
         backdrop = backdrop,
         onBack = onBack,
         onResetPage = {
-            unlock.setKineticDockDamping(1.00f)
-            unlock.setKineticDockResponse(0.55f)
-            unlock.setKineticDockZDepth(800.0f)
+            unlock.setKineticDockDamping(ModuleDefaults.ScreenUnlock.KINETIC_DOCK_DAMPING)
+            unlock.setKineticDockResponse(ModuleDefaults.ScreenUnlock.KINETIC_DOCK_RESPONSE)
+            unlock.setKineticDockZDepth(ModuleDefaults.ScreenUnlock.KINETIC_DOCK_Z_DEPTH)
         },
         restartAppTitle = "Restart Launcher",
         restartAppSubtitle = "Restart com.miui.home",
@@ -48,8 +49,8 @@ fun ScreenUnlockCascadeDockScreen(
                     backdrop = backdrop,
                     value = unlock.kineticDockDamping,
                     onValueChange = unlock::setKineticDockDamping,
-                    valueRange = 0.1f..1.0f,
-                    defaultValue = 1.00f,
+                    valueRange = ModuleDefaults.ScreenUnlock.KINETIC_DOCK_DAMPING_RANGE,
+                    defaultValue = ModuleDefaults.ScreenUnlock.KINETIC_DOCK_DAMPING,
                     valueLabel = { String.format(Locale.US, "%.2f", it) },
                     enabled = unlock.enabled
                 )
@@ -61,8 +62,8 @@ fun ScreenUnlockCascadeDockScreen(
                     backdrop = backdrop,
                     value = unlock.kineticDockResponse,
                     onValueChange = unlock::setKineticDockResponse,
-                    valueRange = 0.1f..1.5f,
-                    defaultValue = 0.55f,
+                    valueRange = ModuleDefaults.ScreenUnlock.KINETIC_DOCK_RESPONSE_RANGE,
+                    defaultValue = ModuleDefaults.ScreenUnlock.KINETIC_DOCK_RESPONSE,
                     valueLabel = { String.format(Locale.US, "%.2f", it) },
                     enabled = unlock.enabled
                 )
@@ -74,8 +75,8 @@ fun ScreenUnlockCascadeDockScreen(
                     backdrop = backdrop,
                     value = unlock.kineticDockZDepth,
                     onValueChange = unlock::setKineticDockZDepth,
-                    valueRange = 0f..4000f,
-                    defaultValue = 800.0f,
+                    valueRange = ModuleDefaults.ScreenUnlock.KINETIC_DOCK_Z_DEPTH_RANGE,
+                    defaultValue = ModuleDefaults.ScreenUnlock.KINETIC_DOCK_Z_DEPTH,
                     valueLabel = { String.format(Locale.US, "%.0f dp", it) },
                     enabled = unlock.enabled
                 )

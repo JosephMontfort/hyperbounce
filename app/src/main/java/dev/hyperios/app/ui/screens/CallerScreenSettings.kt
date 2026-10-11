@@ -7,6 +7,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.kyant.backdrop.Backdrop
+import dev.hyperios.app.common.ModuleDefaults
 import dev.hyperios.app.ui.components.GlassCard
 import dev.hyperios.app.ui.components.PhoneIcon
 import dev.hyperios.app.ui.components.RowDivider
@@ -65,8 +66,8 @@ fun CallerScreenSettings(
                     backdrop = backdrop,
                     value = caller.buttonSize,
                     onValueChange = caller::setButtonSize,
-                    valueRange = 64f..86f,
-                    defaultValue = 76f,
+                    valueRange = ModuleDefaults.CallerScreen.BUTTON_SIZE_RANGE,
+                    defaultValue = ModuleDefaults.CallerScreen.BUTTON_SIZE,
                     valueLabel = { "${it.roundToInt()}dp" },
                     enabled = caller.enabled
                 )
@@ -78,8 +79,8 @@ fun CallerScreenSettings(
                     backdrop = backdrop,
                     value = caller.bottomOffset,
                     onValueChange = caller::setBottomOffset,
-                    valueRange = 30f..120f,
-                    defaultValue = 68f,
+                    valueRange = ModuleDefaults.CallerScreen.BOTTOM_OFFSET_RANGE,
+                    defaultValue = ModuleDefaults.CallerScreen.BOTTOM_OFFSET,
                     valueLabel = { "${it.roundToInt()}dp" },
                     enabled = caller.enabled
                 )

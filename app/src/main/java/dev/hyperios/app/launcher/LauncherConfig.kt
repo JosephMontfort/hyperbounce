@@ -1,70 +1,41 @@
 package dev.hyperios.app.launcher
 
 import android.content.SharedPreferences
+import dev.hyperios.app.common.ModuleDefaults
 
 object ScreenUnlockDefaults {
-    fun rowZ(row: Int, totalRows: Int = 7): Float {
-        return when (row) {
-            0 -> 650.0f
-            1 -> 600.0f
-            else -> 500.0f
-        }
-    }
-
-    fun rowBounce(row: Int, totalRows: Int = 7, isOuter: Boolean = false): Float {
-        return when (row) {
-            0 -> if (isOuter) 0.29f else 0.21f
-            1 -> if (isOuter) 0.24f else 0.24f
-            2 -> if (isOuter) 0.21f else 0.20f
-            3 -> if (isOuter) 0.13f else 0.14f
-            4 -> if (isOuter) 0.18f else 0.11f
-            5 -> 0.00f
-            6 -> 0.00f
-            else -> 0.00f
-        }
-    }
-
-    fun rowSettle(row: Int, totalRows: Int = 7, isOuter: Boolean = false): Float {
-        return when (row) {
-            0 -> if (isOuter) 0.93f else 0.70f
-            1 -> if (isOuter) 0.86f else 0.69f
-            2 -> if (isOuter) 0.80f else 0.64f
-            3 -> if (isOuter) 0.84f else 0.58f
-            4 -> if (isOuter) 0.88f else 0.75f
-            5 -> if (isOuter) 0.71f else 0.65f
-            6 -> if (isOuter) 0.78f else 0.72f
-            else -> if (isOuter) 0.75f else 0.70f
-        }
-    }
+    fun rowZ(row: Int, totalRows: Int = 6): Float = ModuleDefaults.ScreenUnlock.rowZ(row, totalRows)
+    fun rowBounce(row: Int, totalRows: Int = 6, isOuter: Boolean = false): Float = ModuleDefaults.ScreenUnlock.rowBounce(row, totalRows, isOuter)
+    fun rowSettle(row: Int, totalRows: Int = 6, isOuter: Boolean = false): Float = ModuleDefaults.ScreenUnlock.rowSettle(row, totalRows, isOuter)
 }
 
 data class ScreenUnlockConfig(
-    val enabled: Boolean = false,
-    val animMode: Int = 1, // 0 = iOS Radial Dispersion, 1 = Kinetic Y-Axis Cascade
-    val gridColumns: Int = 4,
-    val gridRows: Int = 6,
+    val enabled: Boolean = ModuleDefaults.MasterToggles.UNLOCK_ENABLED,
+    val animMode: Int = ModuleDefaults.ScreenUnlock.MODE, // 0 = iOS Radial Dispersion, 1 = Kinetic Y-Axis Cascade
+    val gridColumns: Int = ModuleDefaults.ScreenUnlock.GRID_COLUMNS,
+    val gridRows: Int = ModuleDefaults.ScreenUnlock.GRID_ROWS,
 
     // Mode 0: Classic Radial Unlock
-    val dockDamping: Float = 0.70f,
-    val dockResponse: Float = 0.40f,
-    val centerResponse: Float = 0.48f,
-    val centerDamping: Float = 0.58f,
-    val edgeResponseDelay: Float = 0.22f,
-    val edgeDampingDrop: Float = 0.10f,
-    val zDepthMultiplier: Float = 1.60f,
-    val minResponse: Float = 0.45f,
-    val maxResponse: Float = 0.75f,
-    val minDamping: Float = 0.42f,
-    val maxDamping: Float = 0.65f,
+    val dockDamping: Float = ModuleDefaults.ScreenUnlock.DOCK_DAMPING,
+    val dockResponse: Float = ModuleDefaults.ScreenUnlock.DOCK_RESPONSE,
+    val centerResponse: Float = ModuleDefaults.ScreenUnlock.CENTER_RESPONSE,
+    val centerDamping: Float = ModuleDefaults.ScreenUnlock.CENTER_DAMPING,
+    val edgeResponseDelay: Float = ModuleDefaults.ScreenUnlock.EDGE_RESPONSE_DELAY,
+    val edgeDampingDrop: Float = ModuleDefaults.ScreenUnlock.EDGE_DAMPING_DROP,
+    val zDepthMultiplier: Float = ModuleDefaults.ScreenUnlock.Z_DEPTH_MULTIPLIER,
+    val minResponse: Float = ModuleDefaults.ScreenUnlock.MIN_RESPONSE,
+    val maxResponse: Float = ModuleDefaults.ScreenUnlock.MAX_RESPONSE,
+    val minDamping: Float = ModuleDefaults.ScreenUnlock.MIN_DAMPING,
+    val maxDamping: Float = ModuleDefaults.ScreenUnlock.MAX_DAMPING,
 
     // Mode 1: Kinetic Y-Axis Cascade
-    val durationScale: Float = 1.00f,
-    val velocityInfluence: Float = 1.00f,
-    val maxVelocity: Float = 9000.0f,
-    val cascadeDamping: Float = 0.86f,
-    val kineticDockDamping: Float = 1.00f,
-    val kineticDockResponse: Float = 0.55f,
-    val kineticDockZDepth: Float = 800.0f,
+    val durationScale: Float = ModuleDefaults.ScreenUnlock.DURATION_SCALE,
+    val velocityInfluence: Float = ModuleDefaults.ScreenUnlock.VELOCITY_INFLUENCE,
+    val maxVelocity: Float = ModuleDefaults.ScreenUnlock.MAX_VELOCITY,
+    val cascadeDamping: Float = ModuleDefaults.ScreenUnlock.CASCADE_DAMPING,
+    val kineticDockDamping: Float = ModuleDefaults.ScreenUnlock.KINETIC_DOCK_DAMPING,
+    val kineticDockResponse: Float = ModuleDefaults.ScreenUnlock.KINETIC_DOCK_RESPONSE,
+    val kineticDockZDepth: Float = ModuleDefaults.ScreenUnlock.KINETIC_DOCK_Z_DEPTH,
 
     // Row-by-row dynamics (r0_z..r6_z, r0_center_bounce..r6_center_bounce, etc.)
     val dyn: Map<String, Float> = emptyMap()
@@ -73,19 +44,19 @@ data class ScreenUnlockConfig(
 }
 
 data class IOSTransitionConfig(
-    val enabled: Boolean = false,
-    val arcApexLift: Float = 1.0f,
-    val openUpliftSurge: Boolean = true,
-    val keystoneSqueeze: Boolean = true,
-    val animSpeed: Float = 1.0f,
-    val openSpringDamping: Float = 1.0f,
-    val closeSpringDamping: Float = 0.8f,
-    val folderTracking: Boolean = false,
-    val recentsCentering: Boolean = false,
-    val zeroFrictionDrag: Boolean = false,
-    val landscapeGameOpt: Boolean = true,
-    val refinedHaptics: Boolean = true,
-    val stackRecentsHaptics: Boolean = true
+    val enabled: Boolean = ModuleDefaults.MasterToggles.IOS_ANIM_ENABLED,
+    val arcApexLift: Float = ModuleDefaults.IOSTransitions.ARC_APEX_LIFT,
+    val openUpliftSurge: Boolean = ModuleDefaults.IOSTransitions.OPEN_UPLIFT_SURGE,
+    val keystoneSqueeze: Boolean = ModuleDefaults.IOSTransitions.KEYSTONE_SQUEEZE,
+    val animSpeed: Float = ModuleDefaults.IOSTransitions.ANIM_SPEED,
+    val openSpringDamping: Float = ModuleDefaults.IOSTransitions.OPEN_SPRING_DAMPING,
+    val closeSpringDamping: Float = ModuleDefaults.IOSTransitions.CLOSE_SPRING_DAMPING,
+    val folderTracking: Boolean = ModuleDefaults.IOSTransitions.FOLDER_TRACKING,
+    val recentsCentering: Boolean = ModuleDefaults.IOSTransitions.RECENTS_CENTERING,
+    val zeroFrictionDrag: Boolean = ModuleDefaults.IOSTransitions.ZERO_FRICTION_DRAG,
+    val landscapeGameOpt: Boolean = ModuleDefaults.IOSTransitions.LANDSCAPE_GAME_OPT,
+    val refinedHaptics: Boolean = ModuleDefaults.IOSTransitions.REFINED_HAPTICS,
+    val stackRecentsHaptics: Boolean = ModuleDefaults.IOSTransitions.STACK_RECENTS_HAPTICS
 )
 
 object LauncherConfigHolder {
@@ -110,8 +81,8 @@ object LauncherConfigHolder {
 
     fun update(prefs: SharedPreferences) {
         sPrefs = prefs
-        val rows = prefs.getInt("unlock_grid_rows", 6).coerceIn(1, 32)
-        val cols = prefs.getInt("unlock_grid_columns", 4).coerceIn(1, 32)
+        val rows = prefs.getInt("unlock_grid_rows", ModuleDefaults.ScreenUnlock.GRID_ROWS).coerceIn(1, 32)
+        val cols = prefs.getInt("unlock_grid_columns", ModuleDefaults.ScreenUnlock.GRID_COLUMNS).coerceIn(1, 32)
 
         val dynMap = mutableMapOf<String, Float>()
         for (i in 0 until rows) {
@@ -129,45 +100,45 @@ object LauncherConfigHolder {
         }
 
         unlockConfig = ScreenUnlockConfig(
-            enabled = prefs.getBoolean("unlock_enabled", false),
-            animMode = prefs.getInt("unlock_anim_mode", 1),
+            enabled = prefs.getBoolean("unlock_enabled", ModuleDefaults.MasterToggles.UNLOCK_ENABLED),
+            animMode = prefs.getInt("unlock_anim_mode", ModuleDefaults.ScreenUnlock.MODE),
             gridColumns = cols,
             gridRows = rows,
-            dockDamping = prefs.getFloat("unlock_dock_damping", 0.70f),
-            dockResponse = prefs.getFloat("unlock_dock_response", 0.40f),
-            centerResponse = prefs.getFloat("unlock_center_response", 0.48f),
-            centerDamping = prefs.getFloat("unlock_center_damping", 0.58f),
-            edgeResponseDelay = prefs.getFloat("unlock_edge_response_delay", 0.22f),
-            edgeDampingDrop = prefs.getFloat("unlock_edge_damping_drop", 0.10f),
-            zDepthMultiplier = prefs.getFloat("unlock_z_depth_multiplier", 1.60f),
-            minResponse = prefs.getFloat("unlock_min_response", 0.45f),
-            maxResponse = prefs.getFloat("unlock_max_response", 0.75f),
-            minDamping = prefs.getFloat("unlock_min_damping", 0.42f),
-            maxDamping = prefs.getFloat("unlock_max_damping", 0.65f),
-            durationScale = prefs.getFloat("unlock_duration_scale", 1.00f),
-            velocityInfluence = prefs.getFloat("unlock_velocity_influence", 1.00f),
-            maxVelocity = prefs.getFloat("unlock_max_velocity", 9000.0f),
-            cascadeDamping = prefs.getFloat("unlock_cascade_damping", 0.86f),
-            kineticDockDamping = prefs.getFloat("unlock_kinetic_dock_damping", 1.00f),
-            kineticDockResponse = prefs.getFloat("unlock_kinetic_dock_response", 0.55f),
-            kineticDockZDepth = prefs.getFloat("unlock_kinetic_dock_z_depth", 800.0f),
+            dockDamping = prefs.getFloat("unlock_dock_damping", ModuleDefaults.ScreenUnlock.DOCK_DAMPING),
+            dockResponse = prefs.getFloat("unlock_dock_response", ModuleDefaults.ScreenUnlock.DOCK_RESPONSE),
+            centerResponse = prefs.getFloat("unlock_center_response", ModuleDefaults.ScreenUnlock.CENTER_RESPONSE),
+            centerDamping = prefs.getFloat("unlock_center_damping", ModuleDefaults.ScreenUnlock.CENTER_DAMPING),
+            edgeResponseDelay = prefs.getFloat("unlock_edge_response_delay", ModuleDefaults.ScreenUnlock.EDGE_RESPONSE_DELAY),
+            edgeDampingDrop = prefs.getFloat("unlock_edge_damping_drop", ModuleDefaults.ScreenUnlock.EDGE_DAMPING_DROP),
+            zDepthMultiplier = prefs.getFloat("unlock_z_depth_multiplier", ModuleDefaults.ScreenUnlock.Z_DEPTH_MULTIPLIER),
+            minResponse = prefs.getFloat("unlock_min_response", ModuleDefaults.ScreenUnlock.MIN_RESPONSE),
+            maxResponse = prefs.getFloat("unlock_max_response", ModuleDefaults.ScreenUnlock.MAX_RESPONSE),
+            minDamping = prefs.getFloat("unlock_min_damping", ModuleDefaults.ScreenUnlock.MIN_DAMPING),
+            maxDamping = prefs.getFloat("unlock_max_damping", ModuleDefaults.ScreenUnlock.MAX_DAMPING),
+            durationScale = prefs.getFloat("unlock_duration_scale", ModuleDefaults.ScreenUnlock.DURATION_SCALE),
+            velocityInfluence = prefs.getFloat("unlock_velocity_influence", ModuleDefaults.ScreenUnlock.VELOCITY_INFLUENCE),
+            maxVelocity = prefs.getFloat("unlock_max_velocity", ModuleDefaults.ScreenUnlock.MAX_VELOCITY),
+            cascadeDamping = prefs.getFloat("unlock_cascade_damping", ModuleDefaults.ScreenUnlock.CASCADE_DAMPING),
+            kineticDockDamping = prefs.getFloat("unlock_kinetic_dock_damping", ModuleDefaults.ScreenUnlock.KINETIC_DOCK_DAMPING),
+            kineticDockResponse = prefs.getFloat("unlock_kinetic_dock_response", ModuleDefaults.ScreenUnlock.KINETIC_DOCK_RESPONSE),
+            kineticDockZDepth = prefs.getFloat("unlock_kinetic_dock_z_depth", ModuleDefaults.ScreenUnlock.KINETIC_DOCK_Z_DEPTH),
             dyn = dynMap
         )
 
         iosAnimConfig = IOSTransitionConfig(
-            enabled = prefs.getBoolean("ios_anim_enabled", false),
-            arcApexLift = prefs.getFloat("ios_anim_arc_apex_lift", 1.0f),
-            openUpliftSurge = prefs.getBoolean("ios_anim_open_uplift_surge", true),
-            keystoneSqueeze = prefs.getBoolean("ios_anim_keystone_squeeze", true),
-            animSpeed = prefs.getFloat("ios_anim_speed", 1.0f),
-            openSpringDamping = prefs.getFloat("ios_anim_open_spring_damping", 1.0f),
-            closeSpringDamping = prefs.getFloat("ios_anim_close_spring_damping", 0.8f),
-            folderTracking = prefs.getBoolean("ios_anim_folder_tracking", false),
-            recentsCentering = prefs.getBoolean("ios_anim_recents_centering", false),
-            zeroFrictionDrag = prefs.getBoolean("ios_anim_zero_friction_drag", false),
-            landscapeGameOpt = prefs.getBoolean("ios_anim_landscape_game_opt", true),
-            refinedHaptics = prefs.getBoolean("ios_anim_refined_haptics", true),
-            stackRecentsHaptics = prefs.getBoolean("ios_anim_stack_recents_haptics", true)
+            enabled = prefs.getBoolean("ios_anim_enabled", ModuleDefaults.MasterToggles.IOS_ANIM_ENABLED),
+            arcApexLift = prefs.getFloat("ios_anim_arc_apex_lift", ModuleDefaults.IOSTransitions.ARC_APEX_LIFT),
+            openUpliftSurge = prefs.getBoolean("ios_anim_open_uplift_surge", ModuleDefaults.IOSTransitions.OPEN_UPLIFT_SURGE),
+            keystoneSqueeze = prefs.getBoolean("ios_anim_keystone_squeeze", ModuleDefaults.IOSTransitions.KEYSTONE_SQUEEZE),
+            animSpeed = prefs.getFloat("ios_anim_speed", ModuleDefaults.IOSTransitions.ANIM_SPEED),
+            openSpringDamping = prefs.getFloat("ios_anim_open_spring_damping", ModuleDefaults.IOSTransitions.OPEN_SPRING_DAMPING),
+            closeSpringDamping = prefs.getFloat("ios_anim_close_spring_damping", ModuleDefaults.IOSTransitions.CLOSE_SPRING_DAMPING),
+            folderTracking = prefs.getBoolean("ios_anim_folder_tracking", ModuleDefaults.IOSTransitions.FOLDER_TRACKING),
+            recentsCentering = prefs.getBoolean("ios_anim_recents_centering", ModuleDefaults.IOSTransitions.RECENTS_CENTERING),
+            zeroFrictionDrag = prefs.getBoolean("ios_anim_zero_friction_drag", ModuleDefaults.IOSTransitions.ZERO_FRICTION_DRAG),
+            landscapeGameOpt = prefs.getBoolean("ios_anim_landscape_game_opt", ModuleDefaults.IOSTransitions.LANDSCAPE_GAME_OPT),
+            refinedHaptics = prefs.getBoolean("ios_anim_refined_haptics", ModuleDefaults.IOSTransitions.REFINED_HAPTICS),
+            stackRecentsHaptics = prefs.getBoolean("ios_anim_stack_recents_haptics", ModuleDefaults.IOSTransitions.STACK_RECENTS_HAPTICS)
         )
     }
 }

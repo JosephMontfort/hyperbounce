@@ -23,6 +23,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.kyant.backdrop.Backdrop
+import dev.hyperios.app.common.ModuleDefaults
 import dev.hyperios.app.ui.components.DropdownPicker
 import dev.hyperios.app.ui.components.GlassCard
 import dev.hyperios.app.ui.components.ResetArrowIcon
@@ -92,8 +93,8 @@ fun ControlCenterScreen(
                         backdrop = backdrop,
                         value = cc.landscapeRightMaxRows.toFloat().coerceIn(1f, 6f),
                         onValueChange = { cc.setLandscapeRightMaxRows(it.roundToInt()) },
-                        valueRange = 1f..6f,
-                        defaultValue = 3f,
+                        valueRange = ModuleDefaults.ControlCenter.LANDSCAPE_RIGHT_MAX_ROWS_RANGE,
+                        defaultValue = ModuleDefaults.ControlCenter.LANDSCAPE_RIGHT_MAX_ROWS.toFloat(),
                         valueLabel = { "${it.roundToInt()} Rows" },
                         enabled = cc.masterEnabled
                     )
@@ -163,15 +164,16 @@ fun ControlCenterScreen(
                 if (cc.lowEndFlashlightEnabled) {
                     val hwMax = dev.hyperios.app.controlcenter.FlashlightBrightnessHook.getHardwareMaxBrightness()
                     RowDivider(colors.separator)
+                    val minBright = ModuleDefaults.ControlCenter.FLASHLIGHT_MAX_BRIGHTNESS_RANGE.start
                     SettingsSliderRow(
                         title = "Maximum Brightness Limit",
                         subtitle = "Caps maximum brightness across the slider",
                         colors = colors,
                         backdrop = backdrop,
-                        value = cc.flashlightMaxBrightness.toFloat().coerceIn(100f, hwMax.toFloat()),
-                        onValueChange = { cc.setFlashlightMaxBrightness((it.roundToInt() / 10 * 10).coerceIn(100, hwMax)) },
-                        valueRange = 100f..hwMax.toFloat(),
-                        defaultValue = 100f,
+                        value = cc.flashlightMaxBrightness.toFloat().coerceIn(minBright, hwMax.toFloat()),
+                        onValueChange = { cc.setFlashlightMaxBrightness((it.roundToInt() / 10 * 10).coerceIn(minBright.toInt(), hwMax)) },
+                        valueRange = minBright..hwMax.toFloat(),
+                        defaultValue = ModuleDefaults.ControlCenter.FLASHLIGHT_MAX_BRIGHTNESS.toFloat().coerceIn(minBright, hwMax.toFloat()),
                         step = 10f,
                         valueLabel = { "${(it.roundToInt() / 10 * 10).coerceIn(100, hwMax)}" },
                         enabled = cc.masterEnabled
@@ -197,7 +199,7 @@ fun ControlCenterScreen(
                             confirmColor = Color(0xFFFF453A),
                             onConfirm = {
                                 try {
-                                    cc.setLandscapeRightMaxRows(3)
+                                    cc.setLandscapeRightMaxRows(ModuleDefaults.ControlCenter.LANDSCAPE_RIGHT_MAX_ROWS)
                                     context.sendBroadcast(Intent("dev.hyperios.app.RESET_CC_LAYOUT"))
                                     context.contentResolver.call(
                                         Uri.parse("content://dev.hyperios.app.provider"),

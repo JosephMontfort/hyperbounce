@@ -5,6 +5,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.kyant.backdrop.Backdrop
+import dev.hyperios.app.common.ModuleDefaults
 import dev.hyperios.app.ui.components.GlassCard
 import dev.hyperios.app.ui.components.RowDivider
 import dev.hyperios.app.ui.components.SectionFooter
@@ -39,15 +40,15 @@ fun KeypadIosBloomPhysicsScreen(
         backdrop = backdrop,
         onBack = onBack,
         onResetPage = {
-            keypad.setIosBloomDuration(900.0f)
-            keypad.setIosBloomClusterFactor(0.60f)
-            keypad.setIosBloomOvershoot(0.16f)
-            keypad.setIosBloomDamping(0.40f)
-            keypad.setIosBloomStiffness(18.0f)
-            keypad.setIosBloomRadialSquish(0.28f)
-            keypad.setIosBloomVelocityStretch(0.16f)
-            keypad.setIosBloomWaveStagger(22.0f)
-            keypad.setIosBloomDecoupleText(false)
+            keypad.setIosBloomDuration(ModuleDefaults.LockScreenKeypad.BLOOM_DURATION)
+            keypad.setIosBloomClusterFactor(ModuleDefaults.LockScreenKeypad.BLOOM_CLUSTER_FACTOR)
+            keypad.setIosBloomOvershoot(ModuleDefaults.LockScreenKeypad.BLOOM_OVERSHOOT)
+            keypad.setIosBloomDamping(ModuleDefaults.LockScreenKeypad.BLOOM_DAMPING)
+            keypad.setIosBloomStiffness(ModuleDefaults.LockScreenKeypad.BLOOM_STIFFNESS)
+            keypad.setIosBloomRadialSquish(ModuleDefaults.LockScreenKeypad.BLOOM_RADIAL_SQUISH)
+            keypad.setIosBloomVelocityStretch(ModuleDefaults.LockScreenKeypad.BLOOM_VELOCITY_STRETCH)
+            keypad.setIosBloomWaveStagger(ModuleDefaults.LockScreenKeypad.BLOOM_WAVE_STAGGER)
+            keypad.setIosBloomDecoupleText(ModuleDefaults.LockScreenKeypad.BLOOM_DECOUPLE_TEXT)
         },
         restartAppTitle = "Restart System UI",
         restartAppSubtitle = "Restart com.android.systemui",
@@ -63,8 +64,8 @@ fun KeypadIosBloomPhysicsScreen(
                     backdrop = backdrop,
                     value = keypad.iosBloomDuration,
                     onValueChange = keypad::setIosBloomDuration,
-                    valueRange = 300.0f..1200.0f,
-                    defaultValue = 900.0f,
+                    valueRange = ModuleDefaults.LockScreenKeypad.BLOOM_DURATION_RANGE,
+                    defaultValue = ModuleDefaults.LockScreenKeypad.BLOOM_DURATION,
                     valueLabel = { "${it.toInt()} ms" },
                     enabled = keypad.enabled
                 )
@@ -76,8 +77,8 @@ fun KeypadIosBloomPhysicsScreen(
                     backdrop = backdrop,
                     value = keypad.iosBloomClusterFactor,
                     onValueChange = keypad::setIosBloomClusterFactor,
-                    valueRange = 0.30f..0.95f,
-                    defaultValue = 0.60f,
+                    valueRange = ModuleDefaults.LockScreenKeypad.BLOOM_CLUSTER_FACTOR_RANGE,
+                    defaultValue = ModuleDefaults.LockScreenKeypad.BLOOM_CLUSTER_FACTOR,
                     valueLabel = { String.format(Locale.US, "%.0f%%", it * 100f) },
                     enabled = keypad.enabled
                 )
@@ -89,8 +90,8 @@ fun KeypadIosBloomPhysicsScreen(
                     backdrop = backdrop,
                     value = keypad.iosBloomDamping,
                     onValueChange = keypad::setIosBloomDamping,
-                    valueRange = 0.20f..0.85f,
-                    defaultValue = 0.40f,
+                    valueRange = ModuleDefaults.LockScreenKeypad.BLOOM_DAMPING_RANGE,
+                    defaultValue = ModuleDefaults.LockScreenKeypad.BLOOM_DAMPING,
                     valueLabel = { String.format(Locale.US, "%.2f", it) },
                     enabled = keypad.enabled
                 )
@@ -102,8 +103,8 @@ fun KeypadIosBloomPhysicsScreen(
                     backdrop = backdrop,
                     value = keypad.iosBloomStiffness,
                     onValueChange = keypad::setIosBloomStiffness,
-                    valueRange = 8.0f..25.0f,
-                    defaultValue = 18.0f,
+                    valueRange = ModuleDefaults.LockScreenKeypad.BLOOM_STIFFNESS_RANGE,
+                    defaultValue = ModuleDefaults.LockScreenKeypad.BLOOM_STIFFNESS,
                     valueLabel = { String.format(Locale.US, "%.1f rad/s", it) },
                     enabled = keypad.enabled
                 )

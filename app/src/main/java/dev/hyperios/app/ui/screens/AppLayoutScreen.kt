@@ -5,6 +5,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.kyant.backdrop.Backdrop
+import dev.hyperios.app.common.ModuleDefaults
 import dev.hyperios.app.ui.components.GlassCard
 import dev.hyperios.app.ui.components.RowDivider
 import dev.hyperios.app.ui.components.SectionHeader
@@ -25,17 +26,34 @@ fun AppLayoutScreen(
     val holder = repository.appSettings(app)
     val s = holder.snapshot()
 
-    val defaultCornerRadius = if (app == NavApp.WhatsApp) 36f else 32f
-    val defaultBarHeight = if (app == NavApp.WhatsApp) 70f else 64f
-    val defaultTabWidth = if (app == NavApp.WhatsApp) 92f else 64f
-    val defaultBottomMargin = if (app == NavApp.YouTube) 28f else 40f
+    val defaultCornerRadius = when (app) {
+        NavApp.WhatsApp -> ModuleDefaults.NavApps.WhatsApp.CORNER_RADIUS
+        NavApp.YouTube -> ModuleDefaults.NavApps.YouTube.CORNER_RADIUS
+        NavApp.Instagram -> ModuleDefaults.NavApps.Instagram.CORNER_RADIUS
+    }
+    val defaultBarHeight = when (app) {
+        NavApp.WhatsApp -> ModuleDefaults.NavApps.WhatsApp.BAR_HEIGHT
+        NavApp.YouTube -> ModuleDefaults.NavApps.YouTube.BAR_HEIGHT
+        NavApp.Instagram -> ModuleDefaults.NavApps.Instagram.BAR_HEIGHT
+    }
+    val defaultTabWidth = when (app) {
+        NavApp.WhatsApp -> ModuleDefaults.NavApps.WhatsApp.TAB_WIDTH
+        NavApp.YouTube -> ModuleDefaults.NavApps.YouTube.TAB_WIDTH
+        NavApp.Instagram -> ModuleDefaults.NavApps.Instagram.TAB_WIDTH
+    }
+    val defaultBottomMargin = when (app) {
+        NavApp.WhatsApp -> ModuleDefaults.NavApps.WhatsApp.BOTTOM_MARGIN
+        NavApp.YouTube -> ModuleDefaults.NavApps.YouTube.BOTTOM_MARGIN
+        NavApp.Instagram -> ModuleDefaults.NavApps.Instagram.BOTTOM_MARGIN
+    }
 
     ScreenScaffold(
         title = "Layout",
         subtitle = null,
         colors = colors,
         backdrop = backdrop,
-        onBack = onBack
+        onBack = onBack,
+        onResetPage = holder::reloadFromDefaults
     ) { _ ->
         item {
             SectionHeader("Shape & Size", colors)
@@ -47,7 +65,7 @@ fun AppLayoutScreen(
                     backdrop = backdrop,
                     value = s.cornerRadius,
                     onValueChange = holder::setCornerRadius,
-                    valueRange = 12f..40f,
+                    valueRange = ModuleDefaults.NavApps.CORNER_RADIUS_RANGE,
                     defaultValue = defaultCornerRadius,
                     valueLabel = { "${it.roundToInt()}dp" },
                     enabled = s.enabled
@@ -60,7 +78,7 @@ fun AppLayoutScreen(
                     backdrop = backdrop,
                     value = s.barHeight,
                     onValueChange = holder::setBarHeight,
-                    valueRange = 48f..88f,
+                    valueRange = ModuleDefaults.NavApps.BAR_HEIGHT_RANGE,
                     defaultValue = defaultBarHeight,
                     valueLabel = { "${it.roundToInt()}dp" },
                     enabled = s.enabled
@@ -73,7 +91,7 @@ fun AppLayoutScreen(
                     backdrop = backdrop,
                     value = s.tabWidth,
                     onValueChange = holder::setTabWidth,
-                    valueRange = 48f..88f,
+                    valueRange = ModuleDefaults.NavApps.TAB_WIDTH_RANGE,
                     defaultValue = defaultTabWidth,
                     valueLabel = { "${it.roundToInt()}dp" },
                     enabled = s.enabled
@@ -86,7 +104,7 @@ fun AppLayoutScreen(
                     backdrop = backdrop,
                     value = s.bottomMargin,
                     onValueChange = holder::setBottomMargin,
-                    valueRange = 0f..80f,
+                    valueRange = ModuleDefaults.NavApps.BOTTOM_MARGIN_RANGE,
                     defaultValue = defaultBottomMargin,
                     valueLabel = { "${it.roundToInt()}dp" },
                     enabled = s.enabled

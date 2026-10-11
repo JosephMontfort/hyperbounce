@@ -18,6 +18,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
 import com.kyant.backdrop.Backdrop
+import dev.hyperios.app.common.ModuleDefaults
 import dev.hyperios.app.ui.Destination
 import dev.hyperios.app.ui.components.GlassCard
 import dev.hyperios.app.ui.components.LockIcon
@@ -108,8 +109,8 @@ fun ScreenUnlockScreen(
                     backdrop = backdrop,
                     value = unlock.gridColumns.toFloat(),
                     onValueChange = { unlock.setGridColumns(it.toInt()) },
-                    valueRange = 2f..8f,
-                    defaultValue = 4f,
+                    valueRange = ModuleDefaults.ScreenUnlock.GRID_COLUMNS_RANGE,
+                    defaultValue = ModuleDefaults.ScreenUnlock.GRID_COLUMNS.toFloat(),
                     valueLabel = { String.format(Locale.US, "%.0f cols", it) },
                     enabled = unlock.enabled
                 )
@@ -121,8 +122,8 @@ fun ScreenUnlockScreen(
                     backdrop = backdrop,
                     value = unlock.gridRows.toFloat(),
                     onValueChange = { unlock.setGridRows(it.toInt()) },
-                    valueRange = 3f..12f,
-                    defaultValue = 7f,
+                    valueRange = ModuleDefaults.ScreenUnlock.GRID_ROWS_RANGE,
+                    defaultValue = ModuleDefaults.ScreenUnlock.GRID_ROWS.toFloat(),
                     valueLabel = { String.format(Locale.US, "%.0f rows", it) },
                     enabled = unlock.enabled
                 )

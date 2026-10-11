@@ -5,7 +5,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.kyant.backdrop.Backdrop
-import dev.hyperios.app.launcher.ScreenUnlockDefaults
+import dev.hyperios.app.common.ModuleDefaults
 import dev.hyperios.app.ui.components.GlassCard
 import dev.hyperios.app.ui.components.RowDivider
 import dev.hyperios.app.ui.components.SectionFooter
@@ -33,8 +33,8 @@ fun ScreenUnlockCascadeSettleScreen(
         onBack = onBack,
         onResetPage = {
             for (r in 0 until rows) {
-                unlock.setRowCenterSettle(r, ScreenUnlockDefaults.rowSettle(r, rows, false))
-                unlock.setRowOuterSettle(r, ScreenUnlockDefaults.rowSettle(r, rows, true))
+                unlock.setRowCenterSettle(r, ModuleDefaults.ScreenUnlock.rowSettle(r, rows, false))
+                unlock.setRowOuterSettle(r, ModuleDefaults.ScreenUnlock.rowSettle(r, rows, true))
             }
         },
         restartAppTitle = "Restart Launcher",
@@ -48,8 +48,8 @@ fun ScreenUnlockCascadeSettleScreen(
                     if (r > 0) RowDivider(colors.separator)
                     val cSettle = unlock.getRowCenterSettle(r)
                     val oSettle = unlock.getRowOuterSettle(r)
-                    val defCSettle = ScreenUnlockDefaults.rowSettle(r, rows, false)
-                    val defOSettle = ScreenUnlockDefaults.rowSettle(r, rows, true)
+                    val defCSettle = ModuleDefaults.ScreenUnlock.rowSettle(r, rows, false)
+                    val defOSettle = ModuleDefaults.ScreenUnlock.rowSettle(r, rows, true)
                     SettingsSliderRow(
                         title = "Row $r Center Settling",
                         subtitle = "Lower = rapid center arrival, Higher = delayed float",
@@ -57,7 +57,7 @@ fun ScreenUnlockCascadeSettleScreen(
                         backdrop = backdrop,
                         value = cSettle,
                         onValueChange = { unlock.setRowCenterSettle(r, it) },
-                        valueRange = 0.1f..1.5f,
+                        valueRange = ModuleDefaults.ScreenUnlock.ROW_SETTLE_RANGE,
                         defaultValue = defCSettle,
                         valueLabel = { String.format(Locale.US, "%.2f", it) },
                         enabled = unlock.enabled
@@ -70,7 +70,7 @@ fun ScreenUnlockCascadeSettleScreen(
                         backdrop = backdrop,
                         value = oSettle,
                         onValueChange = { unlock.setRowOuterSettle(r, it) },
-                        valueRange = 0.1f..1.5f,
+                        valueRange = ModuleDefaults.ScreenUnlock.ROW_SETTLE_RANGE,
                         defaultValue = defOSettle,
                         valueLabel = { String.format(Locale.US, "%.2f", it) },
                         enabled = unlock.enabled

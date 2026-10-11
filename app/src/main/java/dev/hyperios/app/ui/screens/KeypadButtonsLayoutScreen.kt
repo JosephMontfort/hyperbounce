@@ -6,6 +6,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.kyant.backdrop.Backdrop
+import dev.hyperios.app.common.ModuleDefaults
 import dev.hyperios.app.ui.components.GlassCard
 import dev.hyperios.app.ui.components.RowDivider
 import dev.hyperios.app.ui.components.SectionFooter
@@ -33,10 +34,10 @@ fun KeypadButtonsLayoutScreen(
         backdrop = backdrop,
         onBack = onBack,
         onResetPage = {
-            keypad.setCircleDiameter(82.0f)
-            keypad.setPressLiquidScale(1.15f)
-            keypad.setDigitTextSize(36.0f)
-            keypad.setShowKlondike(false)
+            keypad.setCircleDiameter(ModuleDefaults.LockScreenKeypad.CIRCLE_DIAMETER)
+            keypad.setPressLiquidScale(ModuleDefaults.LockScreenKeypad.PRESS_LIQUID_SCALE)
+            keypad.setDigitTextSize(ModuleDefaults.LockScreenKeypad.DIGIT_TEXT_SIZE)
+            keypad.setShowKlondike(ModuleDefaults.LockScreenKeypad.SHOW_KLONDIKE)
         },
         restartAppTitle = "Restart System UI",
         restartAppSubtitle = "Restart com.android.systemui",
@@ -52,8 +53,8 @@ fun KeypadButtonsLayoutScreen(
                     backdrop = backdrop,
                     value = keypad.circleDiameter,
                     onValueChange = keypad::setCircleDiameter,
-                    valueRange = 60.0f..96.0f,
-                    defaultValue = 82.0f,
+                    valueRange = ModuleDefaults.LockScreenKeypad.CIRCLE_DIAMETER_RANGE,
+                    defaultValue = ModuleDefaults.LockScreenKeypad.CIRCLE_DIAMETER,
                     valueLabel = { String.format(Locale.US, "%.0f dp", it) },
                     enabled = keypad.enabled
                 )
@@ -65,8 +66,8 @@ fun KeypadButtonsLayoutScreen(
                     backdrop = backdrop,
                     value = keypad.pressLiquidScale,
                     onValueChange = keypad::setPressLiquidScale,
-                    valueRange = 0.80f..1.50f,
-                    defaultValue = 1.15f,
+                    valueRange = ModuleDefaults.LockScreenKeypad.PRESS_LIQUID_SCALE_RANGE,
+                    defaultValue = ModuleDefaults.LockScreenKeypad.PRESS_LIQUID_SCALE,
                     valueLabel = { String.format(Locale.US, "%.2f x", it) },
                     enabled = keypad.enabled
                 )
@@ -78,8 +79,8 @@ fun KeypadButtonsLayoutScreen(
                     backdrop = backdrop,
                     value = keypad.digitTextSize,
                     onValueChange = keypad::setDigitTextSize,
-                    valueRange = 18.0f..48.0f,
-                    defaultValue = 36.0f,
+                    valueRange = ModuleDefaults.LockScreenKeypad.DIGIT_TEXT_SIZE_RANGE,
+                    defaultValue = ModuleDefaults.LockScreenKeypad.DIGIT_TEXT_SIZE,
                     valueLabel = { String.format(Locale.US, "%.0f sp", it) },
                     enabled = keypad.enabled
                 )

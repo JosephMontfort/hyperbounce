@@ -27,6 +27,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
 import com.kyant.backdrop.Backdrop
 import com.kyant.backdrop.backdrops.rememberCombinedBackdrop
+import dev.hyperios.app.common.ModuleDefaults
 import dev.hyperios.app.ui.Destination
 import dev.hyperios.app.ui.components.AppsIcon
 import dev.hyperios.app.ui.components.CheckmarkIcon
@@ -74,16 +75,16 @@ fun EngineScreen(
         backdrop = backdrop,
         onBack = onBack,
         onResetPage = {
-            repository.setTogglesSlidersHookEnabled(true)
+            repository.setTogglesSlidersHookEnabled(ModuleDefaults.MasterToggles.MASTER_HOOKS_ENABLED)
             repository.toggleGlass.reloadFromDefaults()
             repository.sliderGlass.reloadFromDefaults()
-            repository.setToggleEngine(RenderEngine.LiquidGlass)
-            repository.setSliderEngine(RenderEngine.LiquidGlass)
-            repository.setToggleAccent(AccentPreset.Green)
-            repository.setToggleCustomColor(0xFF30D158L)
-            repository.setSliderAccent(AccentPreset.Green)
-            repository.setSliderCustomColor(0xFF30D158L)
-            repository.setMiuixAppsHookingEnabled(false)
+            repository.setToggleEngine(RenderEngine.valueOf(ModuleDefaults.Engine.TOGGLE_ENGINE))
+            repository.setSliderEngine(RenderEngine.valueOf(ModuleDefaults.Engine.SLIDER_ENGINE))
+            repository.setToggleAccent(AccentPreset.valueOf(ModuleDefaults.Engine.TOGGLE_ACCENT))
+            repository.setToggleCustomColor(ModuleDefaults.Engine.TOGGLE_CUSTOM_COLOR)
+            repository.setSliderAccent(AccentPreset.valueOf(ModuleDefaults.Engine.SLIDER_ACCENT))
+            repository.setSliderCustomColor(ModuleDefaults.Engine.SLIDER_CUSTOM_COLOR)
+            repository.setMiuixAppsHookingEnabled(ModuleDefaults.MasterToggles.MIUIX_APPS_HOOKING_ENABLED)
         },
         restartAppTitle = "Restart All Scoped Apps",
         restartAppSubtitle = "Restart all apps in active scope",

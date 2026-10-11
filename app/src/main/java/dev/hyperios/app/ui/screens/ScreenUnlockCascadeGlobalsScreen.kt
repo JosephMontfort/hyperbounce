@@ -5,6 +5,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.kyant.backdrop.Backdrop
+import dev.hyperios.app.common.ModuleDefaults
 import dev.hyperios.app.ui.components.GlassCard
 import dev.hyperios.app.ui.components.RowDivider
 import dev.hyperios.app.ui.components.SectionFooter
@@ -30,10 +31,10 @@ fun ScreenUnlockCascadeGlobalsScreen(
         backdrop = backdrop,
         onBack = onBack,
         onResetPage = {
-            unlock.setDurationScale(1.00f)
-            unlock.setVelocityInfluence(2.00f)
-            unlock.setMaxVelocity(8288.0f)
-            unlock.setCascadeDamping(0.86f)
+            unlock.setDurationScale(ModuleDefaults.ScreenUnlock.DURATION_SCALE)
+            unlock.setVelocityInfluence(ModuleDefaults.ScreenUnlock.VELOCITY_INFLUENCE)
+            unlock.setMaxVelocity(ModuleDefaults.ScreenUnlock.MAX_VELOCITY)
+            unlock.setCascadeDamping(ModuleDefaults.ScreenUnlock.CASCADE_DAMPING)
         },
         restartAppTitle = "Restart Launcher",
         restartAppSubtitle = "Restart com.miui.home",
@@ -49,8 +50,8 @@ fun ScreenUnlockCascadeGlobalsScreen(
                     backdrop = backdrop,
                     value = unlock.durationScale,
                     onValueChange = unlock::setDurationScale,
-                    valueRange = 0.1f..3.0f,
-                    defaultValue = 1.0f,
+                    valueRange = ModuleDefaults.ScreenUnlock.DURATION_SCALE_RANGE,
+                    defaultValue = ModuleDefaults.ScreenUnlock.DURATION_SCALE,
                     valueLabel = { String.format(Locale.US, "%.2fx", it) },
                     enabled = unlock.enabled
                 )
@@ -62,8 +63,8 @@ fun ScreenUnlockCascadeGlobalsScreen(
                     backdrop = backdrop,
                     value = unlock.velocityInfluence,
                     onValueChange = unlock::setVelocityInfluence,
-                    valueRange = 0.0f..5.0f,
-                    defaultValue = 2.00f,
+                    valueRange = ModuleDefaults.ScreenUnlock.VELOCITY_INFLUENCE_RANGE,
+                    defaultValue = ModuleDefaults.ScreenUnlock.VELOCITY_INFLUENCE,
                     valueLabel = { String.format(Locale.US, "%.2f", it) },
                     enabled = unlock.enabled
                 )
@@ -75,8 +76,8 @@ fun ScreenUnlockCascadeGlobalsScreen(
                     backdrop = backdrop,
                     value = unlock.maxVelocity,
                     onValueChange = unlock::setMaxVelocity,
-                    valueRange = 1000f..25000f,
-                    defaultValue = 8288.0f,
+                    valueRange = ModuleDefaults.ScreenUnlock.MAX_VELOCITY_RANGE,
+                    defaultValue = ModuleDefaults.ScreenUnlock.MAX_VELOCITY,
                     valueLabel = { String.format(Locale.US, "%.0f px/s", it) },
                     enabled = unlock.enabled
                 )
@@ -88,8 +89,8 @@ fun ScreenUnlockCascadeGlobalsScreen(
                     backdrop = backdrop,
                     value = unlock.cascadeDamping,
                     onValueChange = unlock::setCascadeDamping,
-                    valueRange = 0.5f..1.0f,
-                    defaultValue = 0.86f,
+                    valueRange = ModuleDefaults.ScreenUnlock.CASCADE_DAMPING_RANGE,
+                    defaultValue = ModuleDefaults.ScreenUnlock.CASCADE_DAMPING,
                     valueLabel = { String.format(Locale.US, "%.2f", it) },
                     enabled = unlock.enabled
                 )

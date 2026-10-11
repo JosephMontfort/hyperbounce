@@ -5,6 +5,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.kyant.backdrop.Backdrop
+import dev.hyperios.app.common.ModuleDefaults
 import dev.hyperios.app.ui.components.GlassCard
 import dev.hyperios.app.ui.components.RowDivider
 import dev.hyperios.app.ui.components.SectionFooter
@@ -30,10 +31,10 @@ fun KeypadPadLayoutScreen(
         backdrop = backdrop,
         onBack = onBack,
         onResetPage = {
-            keypad.setPinpadLift(0.0f)
-            keypad.setRow0Offset(-115.0f)
-            keypad.setRowSpacing(30.0f)
-            keypad.setColumnSpacing(0.0f)
+            keypad.setPinpadLift(ModuleDefaults.LockScreenKeypad.PAD_LIFT)
+            keypad.setRow0Offset(ModuleDefaults.LockScreenKeypad.ROW0_OFFSET)
+            keypad.setRowSpacing(ModuleDefaults.LockScreenKeypad.ROW_SPACING)
+            keypad.setColumnSpacing(ModuleDefaults.LockScreenKeypad.COL_SPACING)
         },
         restartAppTitle = "Restart System UI",
         restartAppSubtitle = "Restart com.android.systemui",
@@ -49,8 +50,8 @@ fun KeypadPadLayoutScreen(
                     backdrop = backdrop,
                     value = keypad.pinpadLift,
                     onValueChange = keypad::setPinpadLift,
-                    valueRange = 0.0f..200.0f,
-                    defaultValue = 0.0f,
+                    valueRange = ModuleDefaults.LockScreenKeypad.PAD_LIFT_RANGE,
+                    defaultValue = ModuleDefaults.LockScreenKeypad.PAD_LIFT,
                     valueLabel = { String.format(Locale.US, "%.0f dp", it) },
                     enabled = keypad.enabled
                 )
@@ -62,8 +63,8 @@ fun KeypadPadLayoutScreen(
                     backdrop = backdrop,
                     value = keypad.row0Offset,
                     onValueChange = keypad::setRow0Offset,
-                    valueRange = -180.0f..0.0f,
-                    defaultValue = -115.0f,
+                    valueRange = ModuleDefaults.LockScreenKeypad.ROW0_OFFSET_RANGE,
+                    defaultValue = ModuleDefaults.LockScreenKeypad.ROW0_OFFSET,
                     valueLabel = { String.format(Locale.US, "%.0f dp", it) },
                     enabled = keypad.enabled
                 )
@@ -75,8 +76,8 @@ fun KeypadPadLayoutScreen(
                     backdrop = backdrop,
                     value = keypad.rowSpacing,
                     onValueChange = keypad::setRowSpacing,
-                    valueRange = 0.0f..60.0f,
-                    defaultValue = 30.0f,
+                    valueRange = ModuleDefaults.LockScreenKeypad.ROW_SPACING_RANGE,
+                    defaultValue = ModuleDefaults.LockScreenKeypad.ROW_SPACING,
                     valueLabel = { String.format(Locale.US, "%.0f dp", it) },
                     enabled = keypad.enabled
                 )
@@ -88,9 +89,9 @@ fun KeypadPadLayoutScreen(
                     backdrop = backdrop,
                     value = keypad.columnSpacing,
                     onValueChange = keypad::setColumnSpacing,
-                    valueRange = -30.0f..60.0f,
-                    defaultValue = 0.0f,
-                    valueLabel = { if (it > 0f) String.format(Locale.US, "+%.0f dp", it) else String.format(Locale.US, "%.0f dp", it) },
+                    valueRange = ModuleDefaults.LockScreenKeypad.COL_SPACING_RANGE,
+                    defaultValue = ModuleDefaults.LockScreenKeypad.COL_SPACING,
+                    valueLabel = { String.format(Locale.US, "%.1f dp", it) },
                     enabled = keypad.enabled
                 )
             }

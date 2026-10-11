@@ -7,6 +7,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.kyant.backdrop.Backdrop
+import dev.hyperios.app.common.ModuleDefaults
 import dev.hyperios.app.ui.components.GlassCard
 import dev.hyperios.app.ui.components.RowDivider
 import dev.hyperios.app.ui.components.SectionHeader
@@ -48,8 +49,8 @@ fun MorphPhysicsScreen(
                     backdrop = backdrop,
                     value = morph.morphSpeedMultiplier,
                     onValueChange = morph::setMorphSpeedMultiplier,
-                    valueRange = 0.10f..2.00f,
-                    defaultValue = 0.78f,
+                    valueRange = ModuleDefaults.MorphPhysics.MORPH_SPEED_RANGE,
+                    defaultValue = ModuleDefaults.MorphPhysics.MORPH_SPEED_MULTIPLIER,
                     valueLabel = { String.format("%.2fx", it) }
                 )
                 RowDivider(colors.separator, insetStart = 16.dp)
@@ -60,8 +61,8 @@ fun MorphPhysicsScreen(
                     backdrop = backdrop,
                     value = morph.circleCollapseRatio,
                     onValueChange = morph::setCircleCollapseRatio,
-                    valueRange = 0.15f..0.60f,
-                    defaultValue = 0.35f,
+                    valueRange = ModuleDefaults.MorphPhysics.CIRCLE_COLLAPSE_RANGE,
+                    defaultValue = ModuleDefaults.MorphPhysics.CIRCLE_COLLAPSE_RATIO,
                     valueLabel = { String.format("%.0f%%", it * 100f) }
                 )
                 RowDivider(colors.separator, insetStart = 16.dp)
@@ -72,8 +73,8 @@ fun MorphPhysicsScreen(
                     backdrop = backdrop,
                     value = morph.springStiffness,
                     onValueChange = morph::setSpringStiffness,
-                    valueRange = 20f..600f,
-                    defaultValue = 220f,
+                    valueRange = ModuleDefaults.MorphPhysics.SPRING_STIFFNESS_RANGE,
+                    defaultValue = ModuleDefaults.MorphPhysics.SPRING_STIFFNESS,
                     valueLabel = { "${it.roundToInt()}f" }
                 )
                 RowDivider(colors.separator, insetStart = 16.dp)
@@ -84,8 +85,8 @@ fun MorphPhysicsScreen(
                     backdrop = backdrop,
                     value = morph.springDamping,
                     onValueChange = morph::setSpringDamping,
-                    valueRange = 0.40f..1.00f,
-                    defaultValue = 0.70f,
+                    valueRange = ModuleDefaults.MorphPhysics.SPRING_DAMPING_RANGE,
+                    defaultValue = ModuleDefaults.MorphPhysics.SPRING_DAMPING,
                     valueLabel = { String.format("%.2f", it) }
                 )
             }
@@ -101,8 +102,8 @@ fun MorphPhysicsScreen(
                     backdrop = backdrop,
                     value = morph.circleDiameterDp,
                     onValueChange = morph::setCircleDiameterDp,
-                    valueRange = 28f..64f,
-                    defaultValue = 44f,
+                    valueRange = ModuleDefaults.MorphPhysics.CIRCLE_DIAMETER_RANGE,
+                    defaultValue = ModuleDefaults.MorphPhysics.CIRCLE_DIAMETER_DP,
                     valueLabel = { "${it.roundToInt()}dp" }
                 )
                 RowDivider(colors.separator, insetStart = 16.dp)
@@ -113,8 +114,8 @@ fun MorphPhysicsScreen(
                     backdrop = backdrop,
                     value = morph.zPlungeDepth,
                     onValueChange = morph::setZPlungeDepth,
-                    valueRange = 0.00f..0.50f,
-                    defaultValue = 0.50f,
+                    valueRange = ModuleDefaults.MorphPhysics.Z_PLUNGE_RANGE,
+                    defaultValue = ModuleDefaults.MorphPhysics.Z_PLUNGE_DEPTH,
                     valueLabel = { String.format("%.0f%%", it * 100f) }
                 )
                 RowDivider(colors.separator, insetStart = 16.dp)
@@ -125,8 +126,8 @@ fun MorphPhysicsScreen(
                     backdrop = backdrop,
                     value = morph.gravitySwoopDp,
                     onValueChange = morph::setGravitySwoopDp,
-                    valueRange = 0f..60f,
-                    defaultValue = 60f,
+                    valueRange = ModuleDefaults.MorphPhysics.GRAVITY_SWOOP_RANGE,
+                    defaultValue = ModuleDefaults.MorphPhysics.GRAVITY_SWOOP_DP,
                     valueLabel = { "${it.roundToInt()}dp" }
                 )
                 RowDivider(colors.separator, insetStart = 16.dp)
@@ -137,8 +138,8 @@ fun MorphPhysicsScreen(
                     backdrop = backdrop,
                     value = morph.yBounceAmountDp,
                     onValueChange = morph::setYBounceAmountDp,
-                    valueRange = 0f..40f,
-                    defaultValue = 0f,
+                    valueRange = ModuleDefaults.MorphPhysics.Y_BOUNCE_RANGE,
+                    defaultValue = ModuleDefaults.MorphPhysics.Y_BOUNCE_AMOUNT_DP,
                     valueLabel = { "${it.roundToInt()}dp" }
                 )
             }
@@ -154,8 +155,8 @@ fun MorphPhysicsScreen(
                     backdrop = backdrop,
                     value = morph.jellyOvershoot,
                     onValueChange = morph::setJellyOvershoot,
-                    valueRange = 0.00f..0.15f,
-                    defaultValue = 0.00f,
+                    valueRange = ModuleDefaults.MorphPhysics.JELLY_OVERSHOOT_RANGE,
+                    defaultValue = ModuleDefaults.MorphPhysics.JELLY_OVERSHOOT,
                     valueLabel = { String.format("%.1f%%", it * 100f) }
                 )
                 RowDivider(colors.separator, insetStart = 16.dp)
@@ -166,8 +167,8 @@ fun MorphPhysicsScreen(
                     backdrop = backdrop,
                     value = morph.contentStretch,
                     onValueChange = morph::setContentStretch,
-                    valueRange = 0.00f..0.15f,
-                    defaultValue = 0.00f,
+                    valueRange = ModuleDefaults.MorphPhysics.CONTENT_STRETCH_RANGE,
+                    defaultValue = ModuleDefaults.MorphPhysics.CONTENT_STRETCH,
                     valueLabel = { String.format("%.1f%%", it * 100f) }
                 )
                 RowDivider(colors.separator, insetStart = 16.dp)
@@ -178,8 +179,8 @@ fun MorphPhysicsScreen(
                     backdrop = backdrop,
                     value = morph.lensSurgeDp,
                     onValueChange = morph::setLensSurgeDp,
-                    valueRange = 0f..20f,
-                    defaultValue = 20f,
+                    valueRange = ModuleDefaults.MorphPhysics.LENS_SURGE_RANGE,
+                    defaultValue = ModuleDefaults.MorphPhysics.LENS_SURGE_DP,
                     valueLabel = { "${it.roundToInt()}dp" }
                 )
                 RowDivider(colors.separator, insetStart = 16.dp)
@@ -190,8 +191,8 @@ fun MorphPhysicsScreen(
                     backdrop = backdrop,
                     value = morph.motionBlurSurgeDp,
                     onValueChange = morph::setMotionBlurSurgeDp,
-                    valueRange = 0f..30f,
-                    defaultValue = 30f,
+                    valueRange = ModuleDefaults.MorphPhysics.MOTION_BLUR_RANGE,
+                    defaultValue = ModuleDefaults.MorphPhysics.MOTION_BLUR_SURGE_DP,
                     valueLabel = { "${it.roundToInt()}dp" }
                 )
             }

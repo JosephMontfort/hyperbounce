@@ -5,6 +5,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.kyant.backdrop.Backdrop
+import dev.hyperios.app.common.ModuleDefaults
 import dev.hyperios.app.ui.components.GlassCard
 import dev.hyperios.app.ui.components.RowDivider
 import dev.hyperios.app.ui.components.SectionFooter
@@ -30,8 +31,8 @@ fun ScreenUnlockRadialDockScreen(
         backdrop = backdrop,
         onBack = onBack,
         onResetPage = {
-            unlock.setDockDamping(0.70f)
-            unlock.setDockResponse(0.40f)
+            unlock.setDockDamping(ModuleDefaults.ScreenUnlock.DOCK_DAMPING)
+            unlock.setDockResponse(ModuleDefaults.ScreenUnlock.DOCK_RESPONSE)
         },
         restartAppTitle = "Restart Launcher",
         restartAppSubtitle = "Restart com.miui.home",
@@ -47,8 +48,8 @@ fun ScreenUnlockRadialDockScreen(
                     backdrop = backdrop,
                     value = unlock.dockDamping,
                     onValueChange = unlock::setDockDamping,
-                    valueRange = 0.1f..1.0f,
-                    defaultValue = 0.70f,
+                    valueRange = ModuleDefaults.ScreenUnlock.DOCK_DAMPING_RANGE,
+                    defaultValue = ModuleDefaults.ScreenUnlock.DOCK_DAMPING,
                     valueLabel = { String.format(Locale.US, "%.2f", it) },
                     enabled = unlock.enabled
                 )
@@ -60,8 +61,8 @@ fun ScreenUnlockRadialDockScreen(
                     backdrop = backdrop,
                     value = unlock.dockResponse,
                     onValueChange = unlock::setDockResponse,
-                    valueRange = 0.1f..1.5f,
-                    defaultValue = 0.40f,
+                    valueRange = ModuleDefaults.ScreenUnlock.DOCK_RESPONSE_RANGE,
+                    defaultValue = ModuleDefaults.ScreenUnlock.DOCK_RESPONSE,
                     valueLabel = { String.format(Locale.US, "%.2f", it) },
                     enabled = unlock.enabled
                 )

@@ -5,6 +5,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.kyant.backdrop.Backdrop
+import dev.hyperios.app.common.ModuleDefaults
 import dev.hyperios.app.ui.components.GlassCard
 import dev.hyperios.app.ui.components.RowDivider
 import dev.hyperios.app.ui.components.SectionFooter
@@ -30,12 +31,12 @@ fun NotificationCenterSheetGlassTuningScreen(
         backdrop = backdrop,
         onBack = onBack,
         onResetPage = {
-            sheet.setSideRefraction(20.0f)
-            sheet.setBottomRefraction(18.0f)
-            sheet.setDispersionStrength(0.030f)
-            sheet.setRimSoftness(2.0f)
-            sheet.setSaturationFactor(120.0f)
-            sheet.setBlurRadius(0.0f)
+            sheet.setSideRefraction(ModuleDefaults.NotificationSheet.SIDE_REFRACTION)
+            sheet.setBottomRefraction(ModuleDefaults.NotificationSheet.BOTTOM_REFRACTION)
+            sheet.setDispersionStrength(ModuleDefaults.NotificationSheet.DISPERSION_STRENGTH)
+            sheet.setRimSoftness(ModuleDefaults.NotificationSheet.RIM_SOFTNESS)
+            sheet.setSaturationFactor(ModuleDefaults.NotificationSheet.SATURATION_FACTOR)
+            sheet.setBlurRadius(ModuleDefaults.NotificationSheet.BLUR_RADIUS)
         },
         restartAppTitle = "Restart System UI",
         restartAppSubtitle = "Restart com.android.systemui",
@@ -51,8 +52,8 @@ fun NotificationCenterSheetGlassTuningScreen(
                     backdrop = backdrop,
                     value = sheet.sideRefraction,
                     onValueChange = sheet::setSideRefraction,
-                    valueRange = 0.0f..120.0f,
-                    defaultValue = 20.0f,
+                    valueRange = ModuleDefaults.NotificationSheet.SIDE_REFRACTION_RANGE,
+                    defaultValue = ModuleDefaults.NotificationSheet.SIDE_REFRACTION,
                     valueLabel = { String.format(Locale.US, "%.0f dp", it) },
                     enabled = sheet.enabled && sheet.lockWallpaperEnabled && sheet.glassEffectsEnabled
                 )
@@ -64,8 +65,8 @@ fun NotificationCenterSheetGlassTuningScreen(
                     backdrop = backdrop,
                     value = sheet.bottomRefraction,
                     onValueChange = sheet::setBottomRefraction,
-                    valueRange = 0.0f..80.0f,
-                    defaultValue = 18.0f,
+                    valueRange = ModuleDefaults.NotificationSheet.BOTTOM_REFRACTION_RANGE,
+                    defaultValue = ModuleDefaults.NotificationSheet.BOTTOM_REFRACTION,
                     valueLabel = { String.format(Locale.US, "%.0f dp", it) },
                     enabled = sheet.enabled && sheet.lockWallpaperEnabled && sheet.glassEffectsEnabled
                 )
@@ -77,8 +78,8 @@ fun NotificationCenterSheetGlassTuningScreen(
                     backdrop = backdrop,
                     value = sheet.dispersionStrength,
                     onValueChange = sheet::setDispersionStrength,
-                    valueRange = 0.0f..0.30f,
-                    defaultValue = 0.030f,
+                    valueRange = ModuleDefaults.NotificationSheet.DISPERSION_RANGE,
+                    defaultValue = ModuleDefaults.NotificationSheet.DISPERSION_STRENGTH,
                     valueLabel = { String.format(Locale.US, "%.2f", it) },
                     enabled = sheet.enabled && sheet.lockWallpaperEnabled && sheet.glassEffectsEnabled
                 )
@@ -90,8 +91,8 @@ fun NotificationCenterSheetGlassTuningScreen(
                     backdrop = backdrop,
                     value = sheet.rimSoftness,
                     onValueChange = sheet::setRimSoftness,
-                    valueRange = 0.0f..8.0f,
-                    defaultValue = 2.0f,
+                    valueRange = ModuleDefaults.NotificationSheet.RIM_SOFTNESS_RANGE,
+                    defaultValue = ModuleDefaults.NotificationSheet.RIM_SOFTNESS,
                     valueLabel = { String.format(Locale.US, "%.1f dp", it) },
                     enabled = sheet.enabled && sheet.lockWallpaperEnabled && sheet.glassEffectsEnabled
                 )
@@ -103,8 +104,8 @@ fun NotificationCenterSheetGlassTuningScreen(
                     backdrop = backdrop,
                     value = sheet.saturationFactor,
                     onValueChange = sheet::setSaturationFactor,
-                    valueRange = 50.0f..200.0f,
-                    defaultValue = 120.0f,
+                    valueRange = ModuleDefaults.NotificationSheet.SATURATION_RANGE,
+                    defaultValue = ModuleDefaults.NotificationSheet.SATURATION_FACTOR,
                     valueLabel = { String.format(Locale.US, "%.0f%%", it) },
                     enabled = sheet.enabled && sheet.lockWallpaperEnabled && sheet.glassEffectsEnabled
                 )
@@ -116,8 +117,8 @@ fun NotificationCenterSheetGlassTuningScreen(
                     backdrop = backdrop,
                     value = sheet.blurRadius,
                     onValueChange = sheet::setBlurRadius,
-                    valueRange = 0.0f..60.0f,
-                    defaultValue = 0.0f,
+                    valueRange = ModuleDefaults.NotificationSheet.BLUR_RADIUS_RANGE,
+                    defaultValue = ModuleDefaults.NotificationSheet.BLUR_RADIUS,
                     valueLabel = { String.format(Locale.US, "%.0f dp", it) },
                     enabled = sheet.enabled && sheet.lockWallpaperEnabled && sheet.glassEffectsEnabled
                 )

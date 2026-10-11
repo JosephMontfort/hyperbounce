@@ -5,6 +5,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.kyant.backdrop.Backdrop
+import dev.hyperios.app.common.ModuleDefaults
 import dev.hyperios.app.ui.components.GlassCard
 import dev.hyperios.app.ui.components.RowDivider
 import dev.hyperios.app.ui.components.SectionFooter
@@ -29,6 +30,7 @@ fun GlassOpticsSection(
     enabled: Boolean
 ) {
     val feel = holder.snapshot()
+    val isSlider = holder.prefix == "slider_glass"
 
     SectionHeader(sectionTitle, colors)
     GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
@@ -39,7 +41,7 @@ fun GlassOpticsSection(
             backdrop = backdrop,
             value = feel.blurDp,
             onValueChange = holder::setBlurDp,
-            valueRange = 0f..16f,
+            valueRange = if (isSlider) ModuleDefaults.Engine.SLIDER_GLASS_BLUR_RANGE else ModuleDefaults.Engine.TOGGLE_GLASS_BLUR_RANGE,
             defaultValue = holder.defaults.blurDp,
             valueLabel = { "${it.roundToInt()}dp" },
             enabled = enabled
@@ -52,7 +54,7 @@ fun GlassOpticsSection(
             backdrop = backdrop,
             value = feel.lensSizeDp,
             onValueChange = holder::setLensSizeDp,
-            valueRange = 0f..18f,
+            valueRange = if (isSlider) ModuleDefaults.Engine.SLIDER_GLASS_LENS_SIZE_RANGE else ModuleDefaults.Engine.TOGGLE_GLASS_LENS_SIZE_RANGE,
             defaultValue = holder.defaults.lensSizeDp,
             valueLabel = { "${it.roundToInt()}dp" },
             enabled = enabled
@@ -65,7 +67,7 @@ fun GlassOpticsSection(
             backdrop = backdrop,
             value = feel.lensDepthDp,
             onValueChange = holder::setLensDepthDp,
-            valueRange = 0f..26f,
+            valueRange = if (isSlider) ModuleDefaults.Engine.SLIDER_GLASS_LENS_DEPTH_RANGE else ModuleDefaults.Engine.TOGGLE_GLASS_LENS_DEPTH_RANGE,
             defaultValue = holder.defaults.lensDepthDp,
             valueLabel = { "${it.roundToInt()}dp" },
             enabled = enabled
@@ -78,7 +80,7 @@ fun GlassOpticsSection(
             backdrop = backdrop,
             value = feel.highlightStrength,
             onValueChange = holder::setHighlightStrength,
-            valueRange = 0f..1f,
+            valueRange = if (isSlider) ModuleDefaults.Engine.SLIDER_GLASS_HIGHLIGHT_RANGE else ModuleDefaults.Engine.TOGGLE_GLASS_HIGHLIGHT_RANGE,
             defaultValue = holder.defaults.highlightStrength,
             valueLabel = { "${(it * 100).roundToInt()}%" },
             enabled = enabled
@@ -91,7 +93,7 @@ fun GlassOpticsSection(
             backdrop = backdrop,
             value = feel.shadowRadiusDp,
             onValueChange = holder::setShadowRadiusDp,
-            valueRange = 0f..10f,
+            valueRange = if (isSlider) ModuleDefaults.Engine.SLIDER_GLASS_SHADOW_RANGE else ModuleDefaults.Engine.TOGGLE_GLASS_SHADOW_RANGE,
             defaultValue = holder.defaults.shadowRadiusDp,
             valueLabel = { "${it.roundToInt()}dp" },
             enabled = enabled
@@ -108,6 +110,7 @@ fun DragPhysicsSection(
     enabled: Boolean
 ) {
     val feel = holder.snapshot()
+    val isSlider = holder.prefix == "slider_glass"
 
     if (!sectionTitle.isNullOrEmpty()) {
         SectionHeader(sectionTitle, colors)
@@ -120,7 +123,7 @@ fun DragPhysicsSection(
             backdrop = backdrop,
             value = feel.dragSensitivity,
             onValueChange = holder::setDragSensitivity,
-            valueRange = 0.2f..1.5f,
+            valueRange = if (isSlider) ModuleDefaults.Engine.SLIDER_GLASS_DRAG_SENSITIVITY_RANGE else ModuleDefaults.Engine.TOGGLE_GLASS_DRAG_SENSITIVITY_RANGE,
             defaultValue = holder.defaults.dragSensitivity,
             valueLabel = { String.format("%.2f", it) },
             enabled = enabled
@@ -133,7 +136,7 @@ fun DragPhysicsSection(
             backdrop = backdrop,
             value = feel.springDamping,
             onValueChange = holder::setSpringDamping,
-            valueRange = 0.3f..1.0f,
+            valueRange = if (isSlider) ModuleDefaults.Engine.SLIDER_GLASS_SPRING_DAMPING_RANGE else ModuleDefaults.Engine.TOGGLE_GLASS_SPRING_DAMPING_RANGE,
             defaultValue = holder.defaults.springDamping,
             valueLabel = { String.format("%.2f", it) },
             enabled = enabled
@@ -146,7 +149,7 @@ fun DragPhysicsSection(
             backdrop = backdrop,
             value = feel.springStiffness,
             onValueChange = holder::setSpringStiffness,
-            valueRange = 100f..1000f,
+            valueRange = if (isSlider) ModuleDefaults.Engine.SLIDER_GLASS_SPRING_STIFFNESS_RANGE else ModuleDefaults.Engine.TOGGLE_GLASS_SPRING_STIFFNESS_RANGE,
             defaultValue = holder.defaults.springStiffness,
             valueLabel = { "${it.roundToInt()}" },
             enabled = enabled

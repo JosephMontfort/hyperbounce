@@ -2,93 +2,96 @@ package dev.hyperios.app.lockscreen
 
 import android.content.Intent
 import android.content.SharedPreferences
+import dev.hyperios.app.common.ModuleDefaults
 
 data class LockScreenSheetConfig(
-    var enabled: Boolean = false,
-    var enableOptimization: Boolean = true,
+    var enabled: Boolean = ModuleDefaults.MasterToggles.LOCK_SHEET_ENABLED,
+    var enableOptimization: Boolean = ModuleDefaults.LockScreenSheet.ENABLE_OPTIMIZATION,
     // Optics (Liquid Glass 2.0)
-    var refractionHeight: Float = 77.0f,
-    var sideRefraction: Float = 80.0f,
-    var bottomRefraction: Float = 80.0f,
-    var bevelWidth: Float = 25.0f,
-    var leftBevelWidth: Float = 25.0f,
-    var rightBevelWidth: Float = 25.0f,
-    var bottomBevelWidth: Float = 30.0f,
-    var dispersionStrength: Float = 1.0f,
-    var specularStrength: Float = 0.0f,
-    var hairlineStrength: Float = 2.0f,
-    var innerGlowStrength: Float = 0.20f,
-    var innerShadow: Float = 0.45f,
-    var saturationFactor: Float = 125.0f,
-    var rimSoftness: Float = 2.0f,
-    var blurRadius: Float = 0.0f,
-    var cornerRadius: Float = 38.0f,
-    var edgeStretch: Float = 28.0f,
+    var refractionHeight: Float = ModuleDefaults.LockScreenSheet.REFRACTION_HEIGHT,
+    var sideRefraction: Float = ModuleDefaults.LockScreenSheet.SIDE_REFRACTION,
+    var bottomRefraction: Float = ModuleDefaults.LockScreenSheet.BOTTOM_REFRACTION,
+    var bevelWidth: Float = ModuleDefaults.LockScreenSheet.BEVEL_WIDTH,
+    var leftBevelWidth: Float = ModuleDefaults.LockScreenSheet.LEFT_BEVEL_WIDTH,
+    var rightBevelWidth: Float = ModuleDefaults.LockScreenSheet.RIGHT_BEVEL_WIDTH,
+    var bottomBevelWidth: Float = ModuleDefaults.LockScreenSheet.BOTTOM_BEVEL_WIDTH,
+    var dispersionStrength: Float = ModuleDefaults.LockScreenSheet.DISPERSION_STRENGTH,
+    var specularStrength: Float = ModuleDefaults.LockScreenSheet.SPECULAR_STRENGTH,
+    var hairlineStrength: Float = ModuleDefaults.LockScreenSheet.HAIRLINE_STRENGTH,
+    var innerGlowStrength: Float = ModuleDefaults.LockScreenSheet.INNER_GLOW_STRENGTH,
+    var innerShadow: Float = ModuleDefaults.LockScreenSheet.INNER_SHADOW,
+    var saturationFactor: Float = ModuleDefaults.LockScreenSheet.SATURATION_FACTOR,
+    var rimSoftness: Float = ModuleDefaults.LockScreenSheet.RIM_SOFTNESS,
+    var blurRadius: Float = ModuleDefaults.LockScreenSheet.BLUR_RADIUS,
+    var cornerRadius: Float = ModuleDefaults.LockScreenSheet.CORNER_RADIUS,
+    var edgeStretch: Float = ModuleDefaults.LockScreenSheet.EDGE_STRESTH_OR_DEFAULT,
     // Home indicator pill
-    var pillEnabled: Boolean = true,
-    var pillWidth: Float = 156.0f,
-    var pillHeight: Float = 6.0f,
-    var pillBottomMargin: Float = 9.0f
-)
+    var pillEnabled: Boolean = ModuleDefaults.LockScreenSheet.PILL_ENABLED,
+    var pillWidth: Float = ModuleDefaults.LockScreenSheet.PILL_WIDTH,
+    var pillHeight: Float = ModuleDefaults.LockScreenSheet.PILL_HEIGHT,
+    var pillBottomMargin: Float = ModuleDefaults.LockScreenSheet.PILL_BOTTOM_MARGIN
+) {
+    companion object {
+        private const val EDGE_STRESTH_OR_DEFAULT = 28.0f
+    }
+}
 
 data class LockScreenKeypadConfig(
-    var enabled: Boolean = false,
+    var enabled: Boolean = ModuleDefaults.MasterToggles.ENGINE_KEYPAD_ENABLED,
     // Liquid Glass 2.0 Button Optics
-    var buttonRefraction: Float = 48.0f,
-    var buttonBevel: Float = 24.0f,
-    var buttonDispersion: Float = 0.09f,
-    var buttonSpecular: Float = 0.0f,
-    var buttonInnerShadow: Float = 1.0f,
-    var buttonBlur: Float = 0.0f,
-    var buttonSaturation: Float = 150.0f,
-    var circleDiameter: Float = 100.0f,
-    var digitTextSize: Float = 40.0f,
-    var showKlondike: Boolean = false,
-    var pressLiquidScale: Float = 1.15f,
-    var pressLiquidAmp: Float = 0.60f,
+    var buttonRefraction: Float = ModuleDefaults.LockScreenKeypad.BTN_REFRACTION,
+    var buttonBevel: Float = ModuleDefaults.LockScreenKeypad.BTN_BEVEL,
+    var buttonDispersion: Float = ModuleDefaults.LockScreenKeypad.BTN_DISPERSION,
+    var buttonSpecular: Float = ModuleDefaults.LockScreenKeypad.BTN_SPECULAR,
+    var buttonInnerShadow: Float = ModuleDefaults.LockScreenKeypad.BTN_INNER_SHADOW,
+    var buttonBlur: Float = ModuleDefaults.LockScreenKeypad.BTN_BLUR,
+    var buttonSaturation: Float = ModuleDefaults.LockScreenKeypad.BTN_SATURATION,
+    var circleDiameter: Float = ModuleDefaults.LockScreenKeypad.CIRCLE_DIAMETER,
+    var digitTextSize: Float = ModuleDefaults.LockScreenKeypad.DIGIT_TEXT_SIZE,
+    var showKlondike: Boolean = ModuleDefaults.LockScreenKeypad.SHOW_KLONDIKE,
+    var pressLiquidScale: Float = ModuleDefaults.LockScreenKeypad.PRESS_LIQUID_SCALE,
+    var pressLiquidAmp: Float = ModuleDefaults.LockScreenKeypad.PRESS_LIQUID_AMP,
     // PIN Pad Grid Layout & Spacing
-    var pinpadLift: Float = 65.0f,
-    var row0Offset: Float = -155.0f,
-    var rowSpacing: Float = 40.0f,
-    var columnSpacing: Float = 3.3f,
+    var pinpadLift: Float = ModuleDefaults.LockScreenKeypad.PAD_LIFT,
+    var row0Offset: Float = ModuleDefaults.LockScreenKeypad.ROW0_OFFSET,
+    var rowSpacing: Float = ModuleDefaults.LockScreenKeypad.ROW_SPACING,
+    var columnSpacing: Float = ModuleDefaults.LockScreenKeypad.COL_SPACING,
     // Legacy fine-tune offsets
-    var row1Offset: Float = -150.0f,
-    var row2Offset: Float = -100.0f,
-    var row3Offset: Float = -50.0f,
-    var col1Offset: Float = 15.0f,
-    var col3Offset: Float = 15.0f,
-    // Per-Key Custom Delays (ms) - Calibrated values from user profile (preserved in backend)
-    // Key 1: 0ms, Key 2: 25ms, Key 3: 50ms, Key 4: 55ms, Key 5: 80ms, Key 6: 105ms
-    // Key 7: 110ms, Key 8: 135ms, Key 9: 160ms, Key 0: 215ms, Emergency/Cancel: 270ms
-    var delayKey1: Float = 0f,
-    var delayKey2: Float = 25f,
-    var delayKey3: Float = 50f,
-    var delayKey4: Float = 55f,
-    var delayKey5: Float = 80f,
-    var delayKey6: Float = 105f,
-    var delayKey7: Float = 110f,
-    var delayKey8: Float = 135f,
-    var delayKey9: Float = 160f,
-    var delayKey0: Float = 215f,
-    var delayEmergency: Float = 270f,
-    var delayCancel: Float = 270f,
+    var row1Offset: Float = ModuleDefaults.LockScreenKeypad.ROW1_OFFSET,
+    var row2Offset: Float = ModuleDefaults.LockScreenKeypad.ROW2_OFFSET,
+    var row3Offset: Float = ModuleDefaults.LockScreenKeypad.ROW3_OFFSET,
+    var col1Offset: Float = ModuleDefaults.LockScreenKeypad.COL1_OFFSET,
+    var col3Offset: Float = ModuleDefaults.LockScreenKeypad.COL3_OFFSET,
+    // Per-Key Custom Delays (ms)
+    var delayKey1: Float = ModuleDefaults.LockScreenKeypad.DELAY_KEY1,
+    var delayKey2: Float = ModuleDefaults.LockScreenKeypad.DELAY_KEY2,
+    var delayKey3: Float = ModuleDefaults.LockScreenKeypad.DELAY_KEY3,
+    var delayKey4: Float = ModuleDefaults.LockScreenKeypad.DELAY_KEY4,
+    var delayKey5: Float = ModuleDefaults.LockScreenKeypad.DELAY_KEY5,
+    var delayKey6: Float = ModuleDefaults.LockScreenKeypad.DELAY_KEY6,
+    var delayKey7: Float = ModuleDefaults.LockScreenKeypad.DELAY_KEY7,
+    var delayKey8: Float = ModuleDefaults.LockScreenKeypad.DELAY_KEY8,
+    var delayKey9: Float = ModuleDefaults.LockScreenKeypad.DELAY_KEY9,
+    var delayKey0: Float = ModuleDefaults.LockScreenKeypad.DELAY_KEY0,
+    var delayEmergency: Float = ModuleDefaults.LockScreenKeypad.DELAY_EMERGENCY,
+    var delayCancel: Float = ModuleDefaults.LockScreenKeypad.DELAY_CANCEL,
     // Liquid Dynamics & Physics Tuning
-    var dragMaxThreshold: Float = 0.16f,
-    var dragInitialStiffness: Float = 0.22f,
-    var dragResistancePower: Float = 1.8f,
-    var dragVolumeStretch: Float = 0.11f,
-    var releaseDuration: Float = 600.0f,
-    var releaseSquishAmp: Float = 0.35f,
-    var releaseOvershoot: Float = 2.0f,
-    var iosBloomDuration: Float = 900.0f,
-    var iosBloomClusterFactor: Float = 0.60f,
-    var iosBloomOvershoot: Float = 0.16f,
-    var iosBloomDamping: Float = 0.40f,
-    var iosBloomStiffness: Float = 18.0f,
-    var iosBloomRadialSquish: Float = 0.28f,
-    var iosBloomVelocityStretch: Float = 0.16f,
-    var iosBloomWaveStagger: Float = 22.0f,
-    var iosBloomDecoupleText: Boolean = false
+    var dragMaxThreshold: Float = ModuleDefaults.LockScreenKeypad.DRAG_MAX_THRESHOLD,
+    var dragInitialStiffness: Float = ModuleDefaults.LockScreenKeypad.DRAG_INITIAL_STIFFNESS,
+    var dragResistancePower: Float = ModuleDefaults.LockScreenKeypad.DRAG_RESISTANCE_POWER,
+    var dragVolumeStretch: Float = ModuleDefaults.LockScreenKeypad.DRAG_VOLUME_STRETCH,
+    var releaseDuration: Float = ModuleDefaults.LockScreenKeypad.RELEASE_DURATION,
+    var releaseSquishAmp: Float = ModuleDefaults.LockScreenKeypad.RELEASE_SQUISH_AMP,
+    var releaseOvershoot: Float = ModuleDefaults.LockScreenKeypad.RELEASE_OVERSHOOT,
+    var iosBloomDuration: Float = ModuleDefaults.LockScreenKeypad.BLOOM_DURATION,
+    var iosBloomClusterFactor: Float = ModuleDefaults.LockScreenKeypad.BLOOM_CLUSTER_FACTOR,
+    var iosBloomOvershoot: Float = ModuleDefaults.LockScreenKeypad.BLOOM_OVERSHOOT,
+    var iosBloomDamping: Float = ModuleDefaults.LockScreenKeypad.BLOOM_DAMPING,
+    var iosBloomStiffness: Float = ModuleDefaults.LockScreenKeypad.BLOOM_STIFFNESS,
+    var iosBloomRadialSquish: Float = ModuleDefaults.LockScreenKeypad.BLOOM_RADIAL_SQUISH,
+    var iosBloomVelocityStretch: Float = ModuleDefaults.LockScreenKeypad.BLOOM_VELOCITY_STRETCH,
+    var iosBloomWaveStagger: Float = ModuleDefaults.LockScreenKeypad.BLOOM_WAVE_STAGGER,
+    var iosBloomDecoupleText: Boolean = ModuleDefaults.LockScreenKeypad.BLOOM_DECOUPLE_TEXT
 ) {
     fun getKeyDelay(keyName: String): Long {
         val delay = when (keyName) {
@@ -116,86 +119,86 @@ object LockScreenConfigHolder {
 
     fun updateFromPrefs(prefs: SharedPreferences) {
         // Sheet configs (Liquid Glass 2.0)
-        sheet.enabled = prefs.getBoolean("lock_sheet_enabled", false)
-        sheet.enableOptimization = prefs.getBoolean("lock_sheet_enable_optimization", true)
-        sheet.refractionHeight = prefs.getFloat("lock_card_refraction_height", 77.0f)
-        sheet.sideRefraction = prefs.getFloat("lock_card_side_refraction", 80.0f)
-        sheet.bottomRefraction = prefs.getFloat("lock_card_bottom_refraction", 80.0f)
-        sheet.bevelWidth = prefs.getFloat("lock_card_bevel_width", 25.0f)
-        sheet.leftBevelWidth = prefs.getFloat("lock_card_left_bevel", 25.0f)
-        sheet.rightBevelWidth = prefs.getFloat("lock_card_right_bevel", 25.0f)
-        sheet.bottomBevelWidth = prefs.getFloat("lock_card_bottom_bevel", 30.0f)
-        sheet.dispersionStrength = prefs.getFloat("lock_card_dispersion", 1.0f)
-        sheet.specularStrength = prefs.getFloat("lock_card_specular", 0.0f)
-        sheet.hairlineStrength = prefs.getFloat("lock_card_hairline", 2.0f)
-        sheet.innerGlowStrength = prefs.getFloat("lock_card_inner_glow", 0.20f)
-        sheet.innerShadow = prefs.getFloat("lock_card_inner_shadow", 0.45f)
-        sheet.saturationFactor = prefs.getFloat("lock_card_saturation", 125.0f)
-        sheet.rimSoftness = prefs.getFloat("lock_card_rim_softness", 2.0f)
-        sheet.blurRadius = prefs.getFloat("lock_card_blur_radius", 0.0f)
-        sheet.cornerRadius = prefs.getFloat("lock_card_corner_radius", 38.0f)
+        sheet.enabled = prefs.getBoolean("lock_sheet_enabled", ModuleDefaults.MasterToggles.LOCK_SHEET_ENABLED)
+        sheet.enableOptimization = prefs.getBoolean("lock_sheet_enable_optimization", ModuleDefaults.LockScreenSheet.ENABLE_OPTIMIZATION)
+        sheet.refractionHeight = prefs.getFloat("lock_card_refraction_height", ModuleDefaults.LockScreenSheet.REFRACTION_HEIGHT)
+        sheet.sideRefraction = prefs.getFloat("lock_card_side_refraction", ModuleDefaults.LockScreenSheet.SIDE_REFRACTION)
+        sheet.bottomRefraction = prefs.getFloat("lock_card_bottom_refraction", ModuleDefaults.LockScreenSheet.BOTTOM_REFRACTION)
+        sheet.bevelWidth = prefs.getFloat("lock_card_bevel_width", ModuleDefaults.LockScreenSheet.BEVEL_WIDTH)
+        sheet.leftBevelWidth = prefs.getFloat("lock_card_left_bevel", ModuleDefaults.LockScreenSheet.LEFT_BEVEL_WIDTH)
+        sheet.rightBevelWidth = prefs.getFloat("lock_card_right_bevel", ModuleDefaults.LockScreenSheet.RIGHT_BEVEL_WIDTH)
+        sheet.bottomBevelWidth = prefs.getFloat("lock_card_bottom_bevel", ModuleDefaults.LockScreenSheet.BOTTOM_BEVEL_WIDTH)
+        sheet.dispersionStrength = prefs.getFloat("lock_card_dispersion", ModuleDefaults.LockScreenSheet.DISPERSION_STRENGTH)
+        sheet.specularStrength = prefs.getFloat("lock_card_specular", ModuleDefaults.LockScreenSheet.SPECULAR_STRENGTH)
+        sheet.hairlineStrength = prefs.getFloat("lock_card_hairline", ModuleDefaults.LockScreenSheet.HAIRLINE_STRENGTH)
+        sheet.innerGlowStrength = prefs.getFloat("lock_card_inner_glow", ModuleDefaults.LockScreenSheet.INNER_GLOW_STRENGTH)
+        sheet.innerShadow = prefs.getFloat("lock_card_inner_shadow", ModuleDefaults.LockScreenSheet.INNER_SHADOW)
+        sheet.saturationFactor = prefs.getFloat("lock_card_saturation", ModuleDefaults.LockScreenSheet.SATURATION_FACTOR)
+        sheet.rimSoftness = prefs.getFloat("lock_card_rim_softness", ModuleDefaults.LockScreenSheet.RIM_SOFTNESS)
+        sheet.blurRadius = prefs.getFloat("lock_card_blur_radius", ModuleDefaults.LockScreenSheet.BLUR_RADIUS)
+        sheet.cornerRadius = prefs.getFloat("lock_card_corner_radius", ModuleDefaults.LockScreenSheet.CORNER_RADIUS)
         sheet.edgeStretch = prefs.getFloat("lock_card_edge_stretch", 28.0f)
-        sheet.pillEnabled = prefs.getBoolean("lock_pill_enabled", true)
-        sheet.pillWidth = prefs.getFloat("lock_pill_width", 156.0f)
-        sheet.pillHeight = prefs.getFloat("lock_pill_height", 6.0f)
-        sheet.pillBottomMargin = prefs.getFloat("lock_pill_bottom_margin", 9.0f)
+        sheet.pillEnabled = prefs.getBoolean("lock_pill_enabled", ModuleDefaults.LockScreenSheet.PILL_ENABLED)
+        sheet.pillWidth = prefs.getFloat("lock_pill_width", ModuleDefaults.LockScreenSheet.PILL_WIDTH)
+        sheet.pillHeight = prefs.getFloat("lock_pill_height", ModuleDefaults.LockScreenSheet.PILL_HEIGHT)
+        sheet.pillBottomMargin = prefs.getFloat("lock_pill_bottom_margin", ModuleDefaults.LockScreenSheet.PILL_BOTTOM_MARGIN)
 
         // Keypad configs (Liquid Glass 2.0 Buttons)
-        keypad.enabled = prefs.getBoolean("engine_keypad_enabled", false)
-        keypad.buttonRefraction = prefs.getFloat("pin_btn_refraction", 48.0f)
-        keypad.buttonBevel = prefs.getFloat("pin_btn_bevel", 24.0f)
-        keypad.buttonDispersion = prefs.getFloat("pin_btn_dispersion", 0.09f)
-        keypad.buttonSpecular = prefs.getFloat("pin_btn_specular", 0.0f)
-        keypad.buttonInnerShadow = prefs.getFloat("pin_btn_inner_shadow", 1.0f)
-        keypad.buttonBlur = prefs.getFloat("pin_btn_blur", 0.0f)
-        keypad.buttonSaturation = prefs.getFloat("pin_btn_saturation", 150.0f)
-        keypad.circleDiameter = prefs.getFloat("pin_circle_diameter", 100.0f)
-        keypad.digitTextSize = prefs.getFloat("pin_digit_text_size", 40.0f)
-        keypad.showKlondike = prefs.getBoolean("pin_show_klondike", false)
-        keypad.pressLiquidScale = prefs.getFloat("pin_press_liquid_scale", 1.15f)
-        keypad.pressLiquidAmp = prefs.getFloat("pin_press_liquid_amp", 0.60f)
+        keypad.enabled = prefs.getBoolean("engine_keypad_enabled", ModuleDefaults.MasterToggles.ENGINE_KEYPAD_ENABLED)
+        keypad.buttonRefraction = prefs.getFloat("pin_btn_refraction", ModuleDefaults.LockScreenKeypad.BTN_REFRACTION)
+        keypad.buttonBevel = prefs.getFloat("pin_btn_bevel", ModuleDefaults.LockScreenKeypad.BTN_BEVEL)
+        keypad.buttonDispersion = prefs.getFloat("pin_btn_dispersion", ModuleDefaults.LockScreenKeypad.BTN_DISPERSION)
+        keypad.buttonSpecular = prefs.getFloat("pin_btn_specular", ModuleDefaults.LockScreenKeypad.BTN_SPECULAR)
+        keypad.buttonInnerShadow = prefs.getFloat("pin_btn_inner_shadow", ModuleDefaults.LockScreenKeypad.BTN_INNER_SHADOW)
+        keypad.buttonBlur = prefs.getFloat("pin_btn_blur", ModuleDefaults.LockScreenKeypad.BTN_BLUR)
+        keypad.buttonSaturation = prefs.getFloat("pin_btn_saturation", ModuleDefaults.LockScreenKeypad.BTN_SATURATION)
+        keypad.circleDiameter = prefs.getFloat("pin_circle_diameter", ModuleDefaults.LockScreenKeypad.CIRCLE_DIAMETER)
+        keypad.digitTextSize = prefs.getFloat("pin_digit_text_size", ModuleDefaults.LockScreenKeypad.DIGIT_TEXT_SIZE)
+        keypad.showKlondike = prefs.getBoolean("pin_show_klondike", ModuleDefaults.LockScreenKeypad.SHOW_KLONDIKE)
+        keypad.pressLiquidScale = prefs.getFloat("pin_press_liquid_scale", ModuleDefaults.LockScreenKeypad.PRESS_LIQUID_SCALE)
+        keypad.pressLiquidAmp = prefs.getFloat("pin_press_liquid_amp", ModuleDefaults.LockScreenKeypad.PRESS_LIQUID_AMP)
 
-        keypad.pinpadLift = prefs.getFloat("pin_pad_lift", 65.0f)
-        keypad.row0Offset = prefs.getFloat("pin_row0_offset", -155.0f)
-        keypad.rowSpacing = prefs.getFloat("pin_row_spacing", 40.0f)
-        keypad.columnSpacing = prefs.getFloat("pin_col_spacing", 3.3f)
-        keypad.row1Offset = prefs.getFloat("pin_row1_offset", -150.0f)
-        keypad.row2Offset = prefs.getFloat("pin_row2_offset", -100.0f)
-        keypad.row3Offset = prefs.getFloat("pin_row3_offset", -50.0f)
-        keypad.col1Offset = prefs.getFloat("pin_col1_offset", 15.0f)
-        keypad.col3Offset = prefs.getFloat("pin_col3_offset", 15.0f)
+        keypad.pinpadLift = prefs.getFloat("pin_pad_lift", ModuleDefaults.LockScreenKeypad.PAD_LIFT)
+        keypad.row0Offset = prefs.getFloat("pin_row0_offset", ModuleDefaults.LockScreenKeypad.ROW0_OFFSET)
+        keypad.rowSpacing = prefs.getFloat("pin_row_spacing", ModuleDefaults.LockScreenKeypad.ROW_SPACING)
+        keypad.columnSpacing = prefs.getFloat("pin_col_spacing", ModuleDefaults.LockScreenKeypad.COL_SPACING)
+        keypad.row1Offset = prefs.getFloat("pin_row1_offset", ModuleDefaults.LockScreenKeypad.ROW1_OFFSET)
+        keypad.row2Offset = prefs.getFloat("pin_row2_offset", ModuleDefaults.LockScreenKeypad.ROW2_OFFSET)
+        keypad.row3Offset = prefs.getFloat("pin_row3_offset", ModuleDefaults.LockScreenKeypad.ROW3_OFFSET)
+        keypad.col1Offset = prefs.getFloat("pin_col1_offset", ModuleDefaults.LockScreenKeypad.COL1_OFFSET)
+        keypad.col3Offset = prefs.getFloat("pin_col3_offset", ModuleDefaults.LockScreenKeypad.COL3_OFFSET)
 
-        // Per-Key Custom Entrance Delays (ms) - Calibrated values from user profile
-        keypad.delayKey1 = prefs.getFloat("pin_delay_key1", 0f)
-        keypad.delayKey2 = prefs.getFloat("pin_delay_key2", 25f)
-        keypad.delayKey3 = prefs.getFloat("pin_delay_key3", 50f)
-        keypad.delayKey4 = prefs.getFloat("pin_delay_key4", 55f)
-        keypad.delayKey5 = prefs.getFloat("pin_delay_key5", 80f)
-        keypad.delayKey6 = prefs.getFloat("pin_delay_key6", 105f)
-        keypad.delayKey7 = prefs.getFloat("pin_delay_key7", 110f)
-        keypad.delayKey8 = prefs.getFloat("pin_delay_key8", 135f)
-        keypad.delayKey9 = prefs.getFloat("pin_delay_key9", 160f)
-        keypad.delayKey0 = prefs.getFloat("pin_delay_key0", 215f)
-        keypad.delayEmergency = prefs.getFloat("pin_delay_emergency", 270f)
-        keypad.delayCancel = prefs.getFloat("pin_delay_cancel", 270f)
+        // Per-Key Custom Entrance Delays (ms)
+        keypad.delayKey1 = prefs.getFloat("pin_delay_key1", ModuleDefaults.LockScreenKeypad.DELAY_KEY1)
+        keypad.delayKey2 = prefs.getFloat("pin_delay_key2", ModuleDefaults.LockScreenKeypad.DELAY_KEY2)
+        keypad.delayKey3 = prefs.getFloat("pin_delay_key3", ModuleDefaults.LockScreenKeypad.DELAY_KEY3)
+        keypad.delayKey4 = prefs.getFloat("pin_delay_key4", ModuleDefaults.LockScreenKeypad.DELAY_KEY4)
+        keypad.delayKey5 = prefs.getFloat("pin_delay_key5", ModuleDefaults.LockScreenKeypad.DELAY_KEY5)
+        keypad.delayKey6 = prefs.getFloat("pin_delay_key6", ModuleDefaults.LockScreenKeypad.DELAY_KEY6)
+        keypad.delayKey7 = prefs.getFloat("pin_delay_key7", ModuleDefaults.LockScreenKeypad.DELAY_KEY7)
+        keypad.delayKey8 = prefs.getFloat("pin_delay_key8", ModuleDefaults.LockScreenKeypad.DELAY_KEY8)
+        keypad.delayKey9 = prefs.getFloat("pin_delay_key9", ModuleDefaults.LockScreenKeypad.DELAY_KEY9)
+        keypad.delayKey0 = prefs.getFloat("pin_delay_key0", ModuleDefaults.LockScreenKeypad.DELAY_KEY0)
+        keypad.delayEmergency = prefs.getFloat("pin_delay_emergency", ModuleDefaults.LockScreenKeypad.DELAY_EMERGENCY)
+        keypad.delayCancel = prefs.getFloat("pin_delay_cancel", ModuleDefaults.LockScreenKeypad.DELAY_CANCEL)
 
         // Liquid Dynamics & Physics Tuning
-        keypad.dragMaxThreshold = prefs.getFloat("pin_drag_max_threshold", 0.16f)
-        keypad.dragInitialStiffness = prefs.getFloat("pin_drag_initial_stiffness", 0.22f)
-        keypad.dragResistancePower = prefs.getFloat("pin_drag_resistance_power", 1.8f)
-        keypad.dragVolumeStretch = prefs.getFloat("pin_drag_volume_stretch", 0.11f)
-        keypad.releaseDuration = prefs.getFloat("pin_release_duration", 600.0f)
-        keypad.releaseSquishAmp = prefs.getFloat("pin_release_squish_amp", 0.35f)
-        keypad.releaseOvershoot = prefs.getFloat("pin_release_overshoot", 2.0f)
-        keypad.iosBloomDuration = prefs.getFloat("pin_ios_bloom_duration", 900.0f)
-        keypad.iosBloomClusterFactor = prefs.getFloat("pin_ios_bloom_cluster_factor", 0.60f)
-        keypad.iosBloomOvershoot = prefs.getFloat("pin_ios_bloom_overshoot", 0.16f)
-        keypad.iosBloomDamping = prefs.getFloat("pin_ios_bloom_damping", 0.40f)
-        keypad.iosBloomStiffness = prefs.getFloat("pin_ios_bloom_stiffness", 18.0f)
-        keypad.iosBloomRadialSquish = prefs.getFloat("pin_ios_bloom_radial_squish", 0.28f)
-        keypad.iosBloomVelocityStretch = prefs.getFloat("pin_ios_bloom_velocity_stretch", 0.16f)
-        keypad.iosBloomWaveStagger = prefs.getFloat("pin_ios_bloom_wave_stagger", 22.0f)
-        keypad.iosBloomDecoupleText = prefs.getBoolean("pin_ios_bloom_decouple_text", false)
+        keypad.dragMaxThreshold = prefs.getFloat("pin_drag_max_threshold", ModuleDefaults.LockScreenKeypad.DRAG_MAX_THRESHOLD)
+        keypad.dragInitialStiffness = prefs.getFloat("pin_drag_initial_stiffness", ModuleDefaults.LockScreenKeypad.DRAG_INITIAL_STIFFNESS)
+        keypad.dragResistancePower = prefs.getFloat("pin_drag_resistance_power", ModuleDefaults.LockScreenKeypad.DRAG_RESISTANCE_POWER)
+        keypad.dragVolumeStretch = prefs.getFloat("pin_drag_volume_stretch", ModuleDefaults.LockScreenKeypad.DRAG_VOLUME_STRETCH)
+        keypad.releaseDuration = prefs.getFloat("pin_release_duration", ModuleDefaults.LockScreenKeypad.RELEASE_DURATION)
+        keypad.releaseSquishAmp = prefs.getFloat("pin_release_squish_amp", ModuleDefaults.LockScreenKeypad.RELEASE_SQUISH_AMP)
+        keypad.releaseOvershoot = prefs.getFloat("pin_release_overshoot", ModuleDefaults.LockScreenKeypad.RELEASE_OVERSHOOT)
+        keypad.iosBloomDuration = prefs.getFloat("pin_ios_bloom_duration", ModuleDefaults.LockScreenKeypad.BLOOM_DURATION)
+        keypad.iosBloomClusterFactor = prefs.getFloat("pin_ios_bloom_cluster_factor", ModuleDefaults.LockScreenKeypad.BLOOM_CLUSTER_FACTOR)
+        keypad.iosBloomOvershoot = prefs.getFloat("pin_ios_bloom_overshoot", ModuleDefaults.LockScreenKeypad.BLOOM_OVERSHOOT)
+        keypad.iosBloomDamping = prefs.getFloat("pin_ios_bloom_damping", ModuleDefaults.LockScreenKeypad.BLOOM_DAMPING)
+        keypad.iosBloomStiffness = prefs.getFloat("pin_ios_bloom_stiffness", ModuleDefaults.LockScreenKeypad.BLOOM_STIFFNESS)
+        keypad.iosBloomRadialSquish = prefs.getFloat("pin_ios_bloom_radial_squish", ModuleDefaults.LockScreenKeypad.BLOOM_RADIAL_SQUISH)
+        keypad.iosBloomVelocityStretch = prefs.getFloat("pin_ios_bloom_velocity_stretch", ModuleDefaults.LockScreenKeypad.BLOOM_VELOCITY_STRETCH)
+        keypad.iosBloomWaveStagger = prefs.getFloat("pin_ios_bloom_wave_stagger", ModuleDefaults.LockScreenKeypad.BLOOM_WAVE_STAGGER)
+        keypad.iosBloomDecoupleText = prefs.getBoolean("pin_ios_bloom_decouple_text", ModuleDefaults.LockScreenKeypad.BLOOM_DECOUPLE_TEXT)
     }
 
     fun updateKey(key: String, intent: Intent) {

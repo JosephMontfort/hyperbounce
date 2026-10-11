@@ -5,6 +5,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.kyant.backdrop.Backdrop
+import dev.hyperios.app.common.ModuleDefaults
 import dev.hyperios.app.ui.components.GlassCard
 import dev.hyperios.app.ui.components.RowDivider
 import dev.hyperios.app.ui.components.SectionFooter
@@ -31,9 +32,9 @@ fun KeypadReleasePhysicsScreen(
         backdrop = backdrop,
         onBack = onBack,
         onResetPage = {
-            keypad.setReleaseDuration(600.0f)
-            keypad.setReleaseSquishAmp(0.35f)
-            keypad.setReleaseOvershoot(2.0f)
+            keypad.setReleaseDuration(ModuleDefaults.LockScreenKeypad.RELEASE_DURATION)
+            keypad.setReleaseSquishAmp(ModuleDefaults.LockScreenKeypad.RELEASE_SQUISH_AMP)
+            keypad.setReleaseOvershoot(ModuleDefaults.LockScreenKeypad.RELEASE_OVERSHOOT)
         },
         restartAppTitle = "Restart System UI",
         restartAppSubtitle = "Restart com.android.systemui",
@@ -49,8 +50,8 @@ fun KeypadReleasePhysicsScreen(
                     backdrop = backdrop,
                     value = keypad.releaseSquishAmp,
                     onValueChange = keypad::setReleaseSquishAmp,
-                    valueRange = 0.0f..0.70f,
-                    defaultValue = 0.35f,
+                    valueRange = ModuleDefaults.LockScreenKeypad.RELEASE_SQUISH_AMP_RANGE,
+                    defaultValue = ModuleDefaults.LockScreenKeypad.RELEASE_SQUISH_AMP,
                     valueLabel = { String.format(Locale.US, "%.2f x", it) },
                     enabled = keypad.enabled
                 )
@@ -62,8 +63,8 @@ fun KeypadReleasePhysicsScreen(
                     backdrop = backdrop,
                     value = keypad.releaseDuration,
                     onValueChange = keypad::setReleaseDuration,
-                    valueRange = 150.0f..800.0f,
-                    defaultValue = 600.0f,
+                    valueRange = ModuleDefaults.LockScreenKeypad.RELEASE_DURATION_RANGE,
+                    defaultValue = ModuleDefaults.LockScreenKeypad.RELEASE_DURATION,
                     valueLabel = { String.format(Locale.US, "%.0f ms", it) },
                     enabled = keypad.enabled
                 )
@@ -75,8 +76,8 @@ fun KeypadReleasePhysicsScreen(
                     backdrop = backdrop,
                     value = keypad.releaseOvershoot,
                     onValueChange = keypad::setReleaseOvershoot,
-                    valueRange = 1.0f..3.5f,
-                    defaultValue = 2.0f,
+                    valueRange = ModuleDefaults.LockScreenKeypad.RELEASE_OVERSHOOT_RANGE,
+                    defaultValue = ModuleDefaults.LockScreenKeypad.RELEASE_OVERSHOOT,
                     valueLabel = { String.format(Locale.US, "%.1f", it) },
                     enabled = keypad.enabled
                 )

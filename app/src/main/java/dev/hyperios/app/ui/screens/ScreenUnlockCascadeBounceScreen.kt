@@ -5,7 +5,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.kyant.backdrop.Backdrop
-import dev.hyperios.app.launcher.ScreenUnlockDefaults
+import dev.hyperios.app.common.ModuleDefaults
 import dev.hyperios.app.ui.components.GlassCard
 import dev.hyperios.app.ui.components.RowDivider
 import dev.hyperios.app.ui.components.SectionFooter
@@ -33,8 +33,8 @@ fun ScreenUnlockCascadeBounceScreen(
         onBack = onBack,
         onResetPage = {
             for (r in 0 until rows) {
-                unlock.setRowCenterBounce(r, ScreenUnlockDefaults.rowBounce(r, rows, false))
-                unlock.setRowOuterBounce(r, ScreenUnlockDefaults.rowBounce(r, rows, true))
+                unlock.setRowCenterBounce(r, ModuleDefaults.ScreenUnlock.rowBounce(r, rows, false))
+                unlock.setRowOuterBounce(r, ModuleDefaults.ScreenUnlock.rowBounce(r, rows, true))
             }
         },
         restartAppTitle = "Restart Launcher",
@@ -48,8 +48,8 @@ fun ScreenUnlockCascadeBounceScreen(
                     if (r > 0) RowDivider(colors.separator)
                     val cBounce = unlock.getRowCenterBounce(r)
                     val oBounce = unlock.getRowOuterBounce(r)
-                    val defCBounce = ScreenUnlockDefaults.rowBounce(r, rows, false)
-                    val defOBounce = ScreenUnlockDefaults.rowBounce(r, rows, true)
+                    val defCBounce = ModuleDefaults.ScreenUnlock.rowBounce(r, rows, false)
+                    val defOBounce = ModuleDefaults.ScreenUnlock.rowBounce(r, rows, true)
                     SettingsSliderRow(
                         title = "Row $r Center Bounce",
                         subtitle = "Lower = subtle overshoot, Higher = pronounced center bounce",
@@ -57,7 +57,7 @@ fun ScreenUnlockCascadeBounceScreen(
                         backdrop = backdrop,
                         value = cBounce,
                         onValueChange = { unlock.setRowCenterBounce(r, it) },
-                        valueRange = 0.0f..1.0f,
+                        valueRange = ModuleDefaults.ScreenUnlock.ROW_BOUNCE_RANGE,
                         defaultValue = defCBounce,
                         valueLabel = { String.format(Locale.US, "%.2f", it) },
                         enabled = unlock.enabled
@@ -70,7 +70,7 @@ fun ScreenUnlockCascadeBounceScreen(
                         backdrop = backdrop,
                         value = oBounce,
                         onValueChange = { unlock.setRowOuterBounce(r, it) },
-                        valueRange = 0.0f..1.0f,
+                        valueRange = ModuleDefaults.ScreenUnlock.ROW_BOUNCE_RANGE,
                         defaultValue = defOBounce,
                         valueLabel = { String.format(Locale.US, "%.2f", it) },
                         enabled = unlock.enabled

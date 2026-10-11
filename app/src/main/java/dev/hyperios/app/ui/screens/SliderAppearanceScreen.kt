@@ -15,6 +15,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.kyant.backdrop.Backdrop
+import dev.hyperios.app.common.ModuleDefaults
 import dev.hyperios.app.ui.components.ColorPickerDialog
 import dev.hyperios.app.ui.components.GlassCard
 import dev.hyperios.app.ui.components.SectionHeader
@@ -56,8 +57,8 @@ fun SliderAppearanceScreen(
         backdrop = backdrop,
         onBack = onBack,
         onResetPage = {
-            repository.setSliderAccent(AccentPreset.Green)
-            repository.setSliderCustomColor(0xFF30D158L)
+            repository.setSliderAccent(AccentPreset.valueOf(ModuleDefaults.Engine.SLIDER_ACCENT))
+            repository.setSliderCustomColor(ModuleDefaults.Engine.SLIDER_CUSTOM_COLOR)
             repository.sliderGlass.reloadFromDefaults()
         },
         restartAppTitle = "Restart All Scoped Apps",

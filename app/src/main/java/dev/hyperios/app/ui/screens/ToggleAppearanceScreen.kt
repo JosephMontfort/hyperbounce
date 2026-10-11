@@ -15,6 +15,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.kyant.backdrop.Backdrop
+import dev.hyperios.app.common.ModuleDefaults
 import dev.hyperios.app.ui.components.ColorPickerDialog
 import dev.hyperios.app.ui.components.GlassCard
 import dev.hyperios.app.ui.components.SectionHeader
@@ -56,8 +57,8 @@ fun ToggleAppearanceScreen(
         backdrop = backdrop,
         onBack = onBack,
         onResetPage = {
-            repository.setToggleAccent(AccentPreset.Green)
-            repository.setToggleCustomColor(0xFF30D158L)
+            repository.setToggleAccent(AccentPreset.valueOf(ModuleDefaults.Engine.TOGGLE_ACCENT))
+            repository.setToggleCustomColor(ModuleDefaults.Engine.TOGGLE_CUSTOM_COLOR)
             repository.toggleGlass.reloadFromDefaults()
         },
         restartAppTitle = "Restart All Scoped Apps",

@@ -5,6 +5,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.kyant.backdrop.Backdrop
+import dev.hyperios.app.common.ModuleDefaults
 import dev.hyperios.app.ui.components.GlassCard
 import dev.hyperios.app.ui.components.RowDivider
 import dev.hyperios.app.ui.components.SectionFooter
@@ -30,10 +31,10 @@ fun LockScreenSheetLightingScreen(
         backdrop = backdrop,
         onBack = onBack,
         onResetPage = {
-            sheet.setSpecularStrength(0.95f)
-            sheet.setHairlineStrength(0.75f)
-            sheet.setInnerGlowStrength(0.20f)
-            sheet.setInnerShadow(0.45f)
+            sheet.setSpecularStrength(ModuleDefaults.LockScreenSheet.SPECULAR_STRENGTH)
+            sheet.setHairlineStrength(ModuleDefaults.LockScreenSheet.HAIRLINE_STRENGTH)
+            sheet.setInnerGlowStrength(ModuleDefaults.LockScreenSheet.INNER_GLOW_STRENGTH)
+            sheet.setInnerShadow(ModuleDefaults.LockScreenSheet.INNER_SHADOW)
         },
         restartAppTitle = "Restart System UI",
         restartAppSubtitle = "Restart com.android.systemui",
@@ -49,8 +50,8 @@ fun LockScreenSheetLightingScreen(
                     backdrop = backdrop,
                     value = sheet.specularStrength,
                     onValueChange = sheet::setSpecularStrength,
-                    valueRange = 0.0f..2.0f,
-                    defaultValue = 0.95f,
+                    valueRange = ModuleDefaults.LockScreenSheet.SPECULAR_RANGE,
+                    defaultValue = ModuleDefaults.LockScreenSheet.SPECULAR_STRENGTH,
                     valueLabel = { String.format(Locale.US, "%.2f", it) },
                     enabled = sheet.enabled
                 )
@@ -62,8 +63,8 @@ fun LockScreenSheetLightingScreen(
                     backdrop = backdrop,
                     value = sheet.hairlineStrength,
                     onValueChange = sheet::setHairlineStrength,
-                    valueRange = 0.0f..2.0f,
-                    defaultValue = 0.75f,
+                    valueRange = ModuleDefaults.LockScreenSheet.HAIRLINE_RANGE,
+                    defaultValue = ModuleDefaults.LockScreenSheet.HAIRLINE_STRENGTH,
                     valueLabel = { String.format(Locale.US, "%.2f", it) },
                     enabled = sheet.enabled
                 )
@@ -75,8 +76,8 @@ fun LockScreenSheetLightingScreen(
                     backdrop = backdrop,
                     value = sheet.innerGlowStrength,
                     onValueChange = sheet::setInnerGlowStrength,
-                    valueRange = 0.0f..1.0f,
-                    defaultValue = 0.20f,
+                    valueRange = ModuleDefaults.LockScreenSheet.INNER_GLOW_RANGE,
+                    defaultValue = ModuleDefaults.LockScreenSheet.INNER_GLOW_STRENGTH,
                     valueLabel = { String.format(Locale.US, "%.2f", it) },
                     enabled = sheet.enabled
                 )
@@ -88,8 +89,8 @@ fun LockScreenSheetLightingScreen(
                     backdrop = backdrop,
                     value = sheet.innerShadow,
                     onValueChange = sheet::setInnerShadow,
-                    valueRange = 0.0f..1.0f,
-                    defaultValue = 0.45f,
+                    valueRange = ModuleDefaults.LockScreenSheet.INNER_SHADOW_RANGE,
+                    defaultValue = ModuleDefaults.LockScreenSheet.INNER_SHADOW,
                     valueLabel = { String.format(Locale.US, "%.2f", it) },
                     enabled = sheet.enabled
                 )

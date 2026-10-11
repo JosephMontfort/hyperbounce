@@ -5,6 +5,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.kyant.backdrop.Backdrop
+import dev.hyperios.app.common.ModuleDefaults
 import dev.hyperios.app.ui.components.GlassCard
 import dev.hyperios.app.ui.components.RowDivider
 import dev.hyperios.app.ui.components.SectionFooter
@@ -30,13 +31,13 @@ fun KeypadGlassTuningScreen(
         backdrop = backdrop,
         onBack = onBack,
         onResetPage = {
-            keypad.setButtonRefraction(48.0f)
-            keypad.setButtonBevel(24.0f)
-            keypad.setButtonDispersion(0.09f)
-            keypad.setButtonSpecular(0.95f)
-            keypad.setButtonInnerShadow(0.40f)
-            keypad.setButtonSaturation(125.0f)
-            keypad.setButtonBlur(0.0f)
+            keypad.setButtonRefraction(ModuleDefaults.LockScreenKeypad.BTN_REFRACTION)
+            keypad.setButtonBevel(ModuleDefaults.LockScreenKeypad.BTN_BEVEL)
+            keypad.setButtonDispersion(ModuleDefaults.LockScreenKeypad.BTN_DISPERSION)
+            keypad.setButtonSpecular(ModuleDefaults.LockScreenKeypad.BTN_SPECULAR)
+            keypad.setButtonInnerShadow(ModuleDefaults.LockScreenKeypad.BTN_INNER_SHADOW)
+            keypad.setButtonSaturation(ModuleDefaults.LockScreenKeypad.BTN_SATURATION)
+            keypad.setButtonBlur(ModuleDefaults.LockScreenKeypad.BTN_BLUR)
         },
         restartAppTitle = "Restart System UI",
         restartAppSubtitle = "Restart com.android.systemui",
@@ -52,8 +53,8 @@ fun KeypadGlassTuningScreen(
                     backdrop = backdrop,
                     value = keypad.buttonRefraction,
                     onValueChange = keypad::setButtonRefraction,
-                    valueRange = 0.0f..120.0f,
-                    defaultValue = 48.0f,
+                    valueRange = ModuleDefaults.LockScreenKeypad.BTN_REFRACTION_RANGE,
+                    defaultValue = ModuleDefaults.LockScreenKeypad.BTN_REFRACTION,
                     valueLabel = { String.format(Locale.US, "%.0f dp", it) },
                     enabled = keypad.enabled
                 )
@@ -65,8 +66,8 @@ fun KeypadGlassTuningScreen(
                     backdrop = backdrop,
                     value = keypad.buttonBevel,
                     onValueChange = keypad::setButtonBevel,
-                    valueRange = 4.0f..50.0f,
-                    defaultValue = 24.0f,
+                    valueRange = ModuleDefaults.LockScreenKeypad.BTN_BEVEL_RANGE,
+                    defaultValue = ModuleDefaults.LockScreenKeypad.BTN_BEVEL,
                     valueLabel = { String.format(Locale.US, "%.0f dp", it) },
                     enabled = keypad.enabled
                 )
@@ -78,8 +79,8 @@ fun KeypadGlassTuningScreen(
                     backdrop = backdrop,
                     value = keypad.buttonDispersion,
                     onValueChange = keypad::setButtonDispersion,
-                    valueRange = 0.0f..0.30f,
-                    defaultValue = 0.09f,
+                    valueRange = ModuleDefaults.LockScreenKeypad.BTN_DISPERSION_RANGE,
+                    defaultValue = ModuleDefaults.LockScreenKeypad.BTN_DISPERSION,
                     valueLabel = { String.format(Locale.US, "%.2f", it) },
                     enabled = keypad.enabled
                 )
@@ -91,8 +92,8 @@ fun KeypadGlassTuningScreen(
                     backdrop = backdrop,
                     value = keypad.buttonSpecular,
                     onValueChange = keypad::setButtonSpecular,
-                    valueRange = 0.0f..2.0f,
-                    defaultValue = 0.95f,
+                    valueRange = ModuleDefaults.LockScreenKeypad.BTN_SPECULAR_RANGE,
+                    defaultValue = ModuleDefaults.LockScreenKeypad.BTN_SPECULAR,
                     valueLabel = { String.format(Locale.US, "%.2f", it) },
                     enabled = keypad.enabled
                 )
@@ -104,8 +105,8 @@ fun KeypadGlassTuningScreen(
                     backdrop = backdrop,
                     value = keypad.buttonInnerShadow,
                     onValueChange = keypad::setButtonInnerShadow,
-                    valueRange = 0.0f..1.0f,
-                    defaultValue = 0.40f,
+                    valueRange = ModuleDefaults.LockScreenKeypad.BTN_INNER_SHADOW_RANGE,
+                    defaultValue = ModuleDefaults.LockScreenKeypad.BTN_INNER_SHADOW,
                     valueLabel = { String.format(Locale.US, "%.2f", it) },
                     enabled = keypad.enabled
                 )
@@ -117,8 +118,8 @@ fun KeypadGlassTuningScreen(
                     backdrop = backdrop,
                     value = keypad.buttonSaturation,
                     onValueChange = keypad::setButtonSaturation,
-                    valueRange = 50.0f..250.0f,
-                    defaultValue = 125.0f,
+                    valueRange = ModuleDefaults.LockScreenKeypad.BTN_SATURATION_RANGE,
+                    defaultValue = ModuleDefaults.LockScreenKeypad.BTN_SATURATION,
                     valueLabel = { String.format(Locale.US, "%.0f %%", it) },
                     enabled = keypad.enabled
                 )
@@ -130,8 +131,8 @@ fun KeypadGlassTuningScreen(
                     backdrop = backdrop,
                     value = keypad.buttonBlur,
                     onValueChange = keypad::setButtonBlur,
-                    valueRange = 0.0f..30.0f,
-                    defaultValue = 0.0f,
+                    valueRange = ModuleDefaults.LockScreenKeypad.BTN_BLUR_RANGE,
+                    defaultValue = ModuleDefaults.LockScreenKeypad.BTN_BLUR,
                     valueLabel = { String.format(Locale.US, "%.1f dp", it) },
                     enabled = keypad.enabled
                 )

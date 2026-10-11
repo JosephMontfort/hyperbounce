@@ -5,7 +5,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.kyant.backdrop.Backdrop
-import dev.hyperios.app.launcher.ScreenUnlockDefaults
+import dev.hyperios.app.common.ModuleDefaults
 import dev.hyperios.app.ui.components.GlassCard
 import dev.hyperios.app.ui.components.RowDivider
 import dev.hyperios.app.ui.components.SectionFooter
@@ -33,7 +33,7 @@ fun ScreenUnlockCascadeZDepthScreen(
         onBack = onBack,
         onResetPage = {
             for (r in 0 until rows) {
-                unlock.setRowZ(r, ScreenUnlockDefaults.rowZ(r, rows))
+                unlock.setRowZ(r, ModuleDefaults.ScreenUnlock.rowZ(r, rows))
             }
         },
         restartAppTitle = "Restart Launcher",
@@ -46,7 +46,7 @@ fun ScreenUnlockCascadeZDepthScreen(
                 for (r in 0 until rows) {
                     if (r > 0) RowDivider(colors.separator)
                     val currentZ = unlock.getRowZ(r)
-                    val defZ = ScreenUnlockDefaults.rowZ(r, rows)
+                    val defZ = ModuleDefaults.ScreenUnlock.rowZ(r, rows)
                     SettingsSliderRow(
                         title = "Row $r Z-Depth",
                         subtitle = "Starting 3D perspective depth for row $r",
@@ -54,7 +54,7 @@ fun ScreenUnlockCascadeZDepthScreen(
                         backdrop = backdrop,
                         value = currentZ,
                         onValueChange = { unlock.setRowZ(r, it) },
-                        valueRange = 100f..4000f,
+                        valueRange = ModuleDefaults.ScreenUnlock.ROW_Z_RANGE,
                         defaultValue = defZ,
                         valueLabel = { String.format(Locale.US, "%.0f dp", it) },
                         enabled = unlock.enabled

@@ -5,6 +5,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.kyant.backdrop.Backdrop
+import dev.hyperios.app.common.ModuleDefaults
 import dev.hyperios.app.ui.components.GlassCard
 import dev.hyperios.app.ui.components.RowDivider
 import dev.hyperios.app.ui.components.SectionFooter
@@ -30,11 +31,11 @@ fun ScreenUnlockRadialKineticsScreen(
         backdrop = backdrop,
         onBack = onBack,
         onResetPage = {
-            unlock.setCenterDamping(0.58f)
-            unlock.setCenterResponse(0.48f)
-            unlock.setEdgeDampingDrop(0.10f)
-            unlock.setEdgeResponseDelay(0.22f)
-            unlock.setZDepthMultiplier(1.60f)
+            unlock.setCenterDamping(ModuleDefaults.ScreenUnlock.CENTER_DAMPING)
+            unlock.setCenterResponse(ModuleDefaults.ScreenUnlock.CENTER_RESPONSE)
+            unlock.setEdgeDampingDrop(ModuleDefaults.ScreenUnlock.EDGE_DAMPING_DROP)
+            unlock.setEdgeResponseDelay(ModuleDefaults.ScreenUnlock.EDGE_RESPONSE_DELAY)
+            unlock.setZDepthMultiplier(ModuleDefaults.ScreenUnlock.Z_DEPTH_MULTIPLIER)
         },
         restartAppTitle = "Restart Launcher",
         restartAppSubtitle = "Restart com.miui.home",
@@ -50,8 +51,8 @@ fun ScreenUnlockRadialKineticsScreen(
                     backdrop = backdrop,
                     value = unlock.centerDamping,
                     onValueChange = unlock::setCenterDamping,
-                    valueRange = 0.1f..1.0f,
-                    defaultValue = 0.58f,
+                    valueRange = ModuleDefaults.ScreenUnlock.CENTER_DAMPING_RANGE,
+                    defaultValue = ModuleDefaults.ScreenUnlock.CENTER_DAMPING,
                     valueLabel = { String.format(Locale.US, "%.2f", it) },
                     enabled = unlock.enabled
                 )
@@ -63,8 +64,8 @@ fun ScreenUnlockRadialKineticsScreen(
                     backdrop = backdrop,
                     value = unlock.centerResponse,
                     onValueChange = unlock::setCenterResponse,
-                    valueRange = 0.1f..1.5f,
-                    defaultValue = 0.48f,
+                    valueRange = ModuleDefaults.ScreenUnlock.CENTER_RESPONSE_RANGE,
+                    defaultValue = ModuleDefaults.ScreenUnlock.CENTER_RESPONSE,
                     valueLabel = { String.format(Locale.US, "%.2f", it) },
                     enabled = unlock.enabled
                 )
@@ -76,8 +77,8 @@ fun ScreenUnlockRadialKineticsScreen(
                     backdrop = backdrop,
                     value = unlock.edgeDampingDrop,
                     onValueChange = unlock::setEdgeDampingDrop,
-                    valueRange = 0.0f..0.5f,
-                    defaultValue = 0.10f,
+                    valueRange = ModuleDefaults.ScreenUnlock.EDGE_DAMPING_DROP_RANGE,
+                    defaultValue = ModuleDefaults.ScreenUnlock.EDGE_DAMPING_DROP,
                     valueLabel = { String.format(Locale.US, "%.2f", it) },
                     enabled = unlock.enabled
                 )
@@ -89,8 +90,8 @@ fun ScreenUnlockRadialKineticsScreen(
                     backdrop = backdrop,
                     value = unlock.edgeResponseDelay,
                     onValueChange = unlock::setEdgeResponseDelay,
-                    valueRange = 0.0f..1.0f,
-                    defaultValue = 0.22f,
+                    valueRange = ModuleDefaults.ScreenUnlock.EDGE_RESPONSE_DELAY_RANGE,
+                    defaultValue = ModuleDefaults.ScreenUnlock.EDGE_RESPONSE_DELAY,
                     valueLabel = { String.format(Locale.US, "%.2f", it) },
                     enabled = unlock.enabled
                 )
@@ -102,8 +103,8 @@ fun ScreenUnlockRadialKineticsScreen(
                     backdrop = backdrop,
                     value = unlock.zDepthMultiplier,
                     onValueChange = unlock::setZDepthMultiplier,
-                    valueRange = 1.0f..4.0f,
-                    defaultValue = 1.60f,
+                    valueRange = ModuleDefaults.ScreenUnlock.Z_DEPTH_MULTIPLIER_RANGE,
+                    defaultValue = ModuleDefaults.ScreenUnlock.Z_DEPTH_MULTIPLIER,
                     valueLabel = { String.format(Locale.US, "%.2fx", it) },
                     enabled = unlock.enabled
                 )

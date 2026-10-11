@@ -17,6 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.kyant.backdrop.Backdrop
+import dev.hyperios.app.common.ModuleDefaults
 import dev.hyperios.app.notification.glass.CustomWallpaperHelper
 import dev.hyperios.app.notification.glass.DepthWallpaperHelper
 import dev.hyperios.app.ui.components.AppGridIcon
@@ -184,8 +185,8 @@ fun NotificationCenterSheetScreen(
                         backdrop = backdrop,
                         value = sheet.iosHunDurationMs,
                         onValueChange = sheet::setIosHunDurationMs,
-                        valueRange = 200.0f..1000.0f,
-                        defaultValue = 600.0f,
+                        valueRange = ModuleDefaults.NotificationSheet.IOS_HUN_DURATION_RANGE,
+                        defaultValue = ModuleDefaults.NotificationSheet.IOS_HUN_DURATION_MS,
                         valueLabel = { String.format(Locale.US, "%.0f ms", it) },
                         enabled = sheet.masterEnabled && sheet.iosHunAnimationEnabled
                     )
@@ -197,8 +198,8 @@ fun NotificationCenterSheetScreen(
                         backdrop = backdrop,
                         value = sheet.iosHunStartScale,
                         onValueChange = sheet::setIosHunStartScale,
-                        valueRange = 0.20f..0.70f,
-                        defaultValue = 0.25f,
+                        valueRange = ModuleDefaults.NotificationSheet.IOS_HUN_START_SCALE_RANGE,
+                        defaultValue = ModuleDefaults.NotificationSheet.IOS_HUN_START_SCALE,
                         valueLabel = { String.format(Locale.US, "%.0f%%", it * 100.0f) },
                         enabled = sheet.masterEnabled && sheet.iosHunAnimationEnabled
                     )
@@ -210,8 +211,8 @@ fun NotificationCenterSheetScreen(
                         backdrop = backdrop,
                         value = sheet.iosHunSqueezeStrength,
                         onValueChange = sheet::setIosHunSqueezeStrength,
-                        valueRange = 0.0f..4.0f,
-                        defaultValue = 1.0f,
+                        valueRange = ModuleDefaults.NotificationSheet.IOS_HUN_SQUEEZE_RANGE,
+                        defaultValue = ModuleDefaults.NotificationSheet.IOS_HUN_SQUEEZE_STRENGTH,
                         valueLabel = { String.format(Locale.US, "%.0f%%", it * 100.0f) },
                         enabled = sheet.masterEnabled && sheet.iosHunAnimationEnabled
                     )
@@ -448,8 +449,8 @@ fun NotificationCenterSheetScreen(
                             sheet.setLeftBevelWidth(it)
                             sheet.setRightBevelWidth(it)
                         },
-                        valueRange = 0.0f..80.0f,
-                        defaultValue = 32.0f,
+                        valueRange = ModuleDefaults.NotificationSheet.LEFT_BEVEL_RANGE,
+                        defaultValue = ModuleDefaults.NotificationSheet.LEFT_BEVEL_WIDTH,
                         valueLabel = { String.format(Locale.US, "%.0f dp", it) },
                         enabled = sheetActive && sheet.lockWallpaperEnabled && sheet.glassEffectsEnabled
                     )
@@ -461,8 +462,8 @@ fun NotificationCenterSheetScreen(
                         backdrop = backdrop,
                         value = sheet.bottomBevelWidth,
                         onValueChange = sheet::setBottomBevelWidth,
-                        valueRange = 0.0f..80.0f,
-                        defaultValue = 45.0f,
+                        valueRange = ModuleDefaults.NotificationSheet.BOTTOM_BEVEL_RANGE,
+                        defaultValue = ModuleDefaults.NotificationSheet.BOTTOM_BEVEL_WIDTH,
                         valueLabel = { String.format(Locale.US, "%.0f dp", it) },
                         enabled = sheetActive && sheet.lockWallpaperEnabled && sheet.glassEffectsEnabled
                     )
@@ -474,8 +475,8 @@ fun NotificationCenterSheetScreen(
                         backdrop = backdrop,
                         value = sheet.cornerRadius,
                         onValueChange = sheet::setCornerRadius,
-                        valueRange = 0.0f..64.0f,
-                        defaultValue = 36.0f,
+                        valueRange = ModuleDefaults.NotificationSheet.CORNER_RADIUS_RANGE,
+                        defaultValue = ModuleDefaults.NotificationSheet.CORNER_RADIUS,
                         valueLabel = { String.format(Locale.US, "%.0f dp", it) },
                         enabled = sheetActive
                     )
@@ -497,9 +498,9 @@ fun NotificationCenterSheetScreen(
                     backdrop = backdrop,
                     value = sheet.sideMargin,
                     onValueChange = sheet::setSideMargin,
-                    valueRange = 0.0f..32.0f,
-                    defaultValue = 10.0f,
-                    valueLabel = { String.format(Locale.US, "%.0f dp", it) },
+                    valueRange = ModuleDefaults.NotificationSheet.SIDE_MARGIN_RANGE,
+                    defaultValue = ModuleDefaults.NotificationSheet.SIDE_MARGIN,
+                    valueLabel = { String.format(Locale.US, "%.1f dp", it) },
                     enabled = sheetActive
                 )
                 RowDivider(colors.separator)
@@ -510,8 +511,8 @@ fun NotificationCenterSheetScreen(
                     backdrop = backdrop,
                     value = sheet.notifStartMarginTop,
                     onValueChange = sheet::setNotifStartMarginTop,
-                    valueRange = 0.0f..300.0f,
-                    defaultValue = 250.0f,
+                    valueRange = ModuleDefaults.NotificationSheet.NOTIF_START_MARGIN_TOP_RANGE,
+                    defaultValue = ModuleDefaults.NotificationSheet.NOTIF_START_MARGIN_TOP,
                     valueLabel = { String.format(Locale.US, "%.0f dp", it) },
                     enabled = sheetActive && sheet.lockScreenAsNotifCenterEnabled
                 )
@@ -523,8 +524,8 @@ fun NotificationCenterSheetScreen(
                     backdrop = backdrop,
                     value = sheet.notifClockScale,
                     onValueChange = sheet::setNotifClockScale,
-                    valueRange = 0.50f..1.0f,
-                    defaultValue = 0.60f,
+                    valueRange = ModuleDefaults.NotificationSheet.NOTIF_CLOCK_SCALE_RANGE,
+                    defaultValue = ModuleDefaults.NotificationSheet.NOTIF_CLOCK_SCALE,
                     valueLabel = { String.format(Locale.US, "%.0f%%", it * 100.0f) },
                     enabled = sheetActive && sheet.lockScreenAsNotifCenterEnabled
                 )

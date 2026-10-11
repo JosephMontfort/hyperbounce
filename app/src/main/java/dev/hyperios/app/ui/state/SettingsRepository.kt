@@ -31,6 +31,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import dev.hyperios.app.common.ModuleDefaults
 import dev.hyperios.app.launcher.ScreenUnlockDefaults
 import dev.hyperios.app.ui.utils.AppIconManager
 import kotlin.jvm.JvmName
@@ -94,7 +95,7 @@ class SettingsRepository(context: Context) {
         editor.apply()
     }
 
-    var moduleEnabled by prefsBooleanState("module_enabled", true)
+    var moduleEnabled by prefsBooleanState("module_enabled", ModuleDefaults.MasterToggles.MODULE_ENABLED)
         private set
 
     var hotReloadEnabled by prefsBooleanState("hot_reload_enabled", false)
@@ -121,7 +122,7 @@ class SettingsRepository(context: Context) {
         componentStyle = style
     }
 
-    var appIconStyle by prefsEnumState("app_icon_style", AppIconStyle.Monet)
+    var appIconStyle by prefsEnumState("app_icon_style", AppIconStyle.Flat)
         private set
 
     @JvmName("setAppIconStyleExplicit")
@@ -259,13 +260,13 @@ class SettingsRepository(context: Context) {
     var miuixAppsHookingEnabled by prefsBooleanState("miuix_apps_hooking_enabled", false)
         private set
 
-    var toggleAccent by prefsEnumState("toggle_accent", AccentPreset.Green)
+    var toggleAccent by prefsEnumState("toggle_accent", AccentPreset.valueOf(ModuleDefaults.Engine.TOGGLE_ACCENT))
         private set
-    var toggleCustomColor by prefsLongState("toggle_custom_color", 0xFF30D158L)
+    var toggleCustomColor by prefsLongState("toggle_custom_color", ModuleDefaults.Engine.TOGGLE_CUSTOM_COLOR)
         private set
-    var sliderAccent by prefsEnumState("slider_accent", AccentPreset.Blue)
+    var sliderAccent by prefsEnumState("slider_accent", AccentPreset.valueOf(ModuleDefaults.Engine.SLIDER_ACCENT))
         private set
-    var sliderCustomColor by prefsLongState("slider_custom_color", 0xFF30D158L)
+    var sliderCustomColor by prefsLongState("slider_custom_color", ModuleDefaults.Engine.SLIDER_CUSTOM_COLOR)
         private set
 
     val toggleGlass = GlassFeelHolder("toggle_glass", EngineSettings().toggleGlass)
@@ -376,30 +377,40 @@ class SettingsRepository(context: Context) {
         // (70/92/36) than Instagram and YouTube's shared defaults (64/64/32).
         private val defaults = when (app) {
             NavApp.WhatsApp -> NavBarAppSettings(
-                barHeight = 70f,
-                tabWidth = 92f,
-                cornerRadius = 36f,
-                bottomMargin = 40f,
-                autoShrinkScale = 0.70f,
-                accent = AccentPreset.Green
+                barHeight = ModuleDefaults.NavApps.WhatsApp.BAR_HEIGHT,
+                tabWidth = ModuleDefaults.NavApps.WhatsApp.TAB_WIDTH,
+                cornerRadius = ModuleDefaults.NavApps.WhatsApp.CORNER_RADIUS,
+                bottomMargin = ModuleDefaults.NavApps.WhatsApp.BOTTOM_MARGIN,
+                autoShrink = ModuleDefaults.NavApps.WhatsApp.AUTO_SHRINK,
+                autoShrinkScale = ModuleDefaults.NavApps.WhatsApp.AUTO_SHRINK_SCALE,
+                liquidGlass = ModuleDefaults.NavApps.WhatsApp.LIQUID_GLASS,
+                accent = AccentPreset.Green,
+                themeMode = ThemeMode.System,
+                pillGlassIntensity = ModuleDefaults.NavApps.WhatsApp.PILL_GLASS_INTENSITY
             )
             NavApp.YouTube -> NavBarAppSettings(
-                barHeight = 50f,
-                tabWidth = 75f,
-                cornerRadius = 32f,
-                bottomMargin = 20f,
-                autoShrinkScale = 0.90f,
+                barHeight = ModuleDefaults.NavApps.YouTube.BAR_HEIGHT,
+                tabWidth = ModuleDefaults.NavApps.YouTube.TAB_WIDTH,
+                cornerRadius = ModuleDefaults.NavApps.YouTube.CORNER_RADIUS,
+                bottomMargin = ModuleDefaults.NavApps.YouTube.BOTTOM_MARGIN,
+                containerOpacity = ModuleDefaults.NavApps.YouTube.CONTAINER_OPACITY,
+                autoShrink = ModuleDefaults.NavApps.YouTube.AUTO_SHRINK,
+                autoShrinkScale = ModuleDefaults.NavApps.YouTube.AUTO_SHRINK_SCALE,
                 accent = AccentPreset.Auto
             )
             NavApp.Instagram -> NavBarAppSettings(
-                barHeight = 50f,
-                tabWidth = 75f,
-                cornerRadius = 32f,
-                bottomMargin = 20f,
-                autoShrinkScale = 0.85f,
+                barHeight = ModuleDefaults.NavApps.Instagram.BAR_HEIGHT,
+                tabWidth = ModuleDefaults.NavApps.Instagram.TAB_WIDTH,
+                cornerRadius = ModuleDefaults.NavApps.Instagram.CORNER_RADIUS,
+                bottomMargin = ModuleDefaults.NavApps.Instagram.BOTTOM_MARGIN,
+                containerOpacity = ModuleDefaults.NavApps.Instagram.CONTAINER_OPACITY,
+                pillContainerOpacity = ModuleDefaults.NavApps.Instagram.PILL_CONTAINER_OPACITY,
+                autoShrink = ModuleDefaults.NavApps.Instagram.AUTO_SHRINK,
+                autoShrinkScale = ModuleDefaults.NavApps.Instagram.AUTO_SHRINK_SCALE,
                 accent = AccentPreset.Auto,
+                customAccentColor = ModuleDefaults.NavApps.Instagram.CUSTOM_ACCENT_COLOR,
                 pillShadow = false,
-                reelsFullscreenZoom = true
+                reelsFullscreenZoom = ModuleDefaults.NavApps.Instagram.REELS_FULLSCREEN_ZOOM
             )
         }
 
@@ -1489,17 +1500,17 @@ class SettingsRepository(context: Context) {
     }
 
     inner class CallerScreenHolder {
-        var enabled by prefsBooleanState("caller_screen_enabled", false)
+        var enabled by prefsBooleanState("caller_screen_enabled", ModuleDefaults.MasterToggles.CALLER_SCREEN_ENABLED)
             private set
-        var buttonSize by prefsFloatState("caller_button_size", 85.4f)
+        var buttonSize by prefsFloatState("caller_button_size", ModuleDefaults.CallerScreen.BUTTON_SIZE)
             private set
-        var bottomOffset by prefsFloatState("caller_bottom_offset", 55.0f)
+        var bottomOffset by prefsFloatState("caller_bottom_offset", ModuleDefaults.CallerScreen.BOTTOM_OFFSET)
             private set
         var hapticsEnabled by prefsBooleanState("caller_haptics_enabled", true)
             private set
         var shimmerEnabled by prefsBooleanState("caller_shimmer_enabled", true)
             private set
-        var danceEnabled by prefsBooleanState("caller_dance_enabled", true)
+        var danceEnabled by prefsBooleanState("caller_dance_enabled", ModuleDefaults.CallerScreen.DANCE_ENABLED)
             private set
 
         @JvmName("setCallerEnabledPref")
@@ -1521,27 +1532,27 @@ class SettingsRepository(context: Context) {
         fun setDanceEnabled(v: Boolean) { danceEnabled = v }
 
         fun reloadFromDefaults() {
-            enabled = false
-            buttonSize = 85.4f
-            bottomOffset = 55.0f
+            enabled = ModuleDefaults.MasterToggles.CALLER_SCREEN_ENABLED
+            buttonSize = ModuleDefaults.CallerScreen.BUTTON_SIZE
+            bottomOffset = ModuleDefaults.CallerScreen.BOTTOM_OFFSET
             hapticsEnabled = true
             shimmerEnabled = true
-            danceEnabled = true
+            danceEnabled = ModuleDefaults.CallerScreen.DANCE_ENABLED
         }
     }
 
     inner class DialerRecentsHolder {
-        var enabled by prefsBooleanState("dialer_recents_swipe_enabled", false)
+        var enabled by prefsBooleanState("dialer_recents_swipe_enabled", ModuleDefaults.MasterToggles.DIALER_RECENTS_SWIPE_ENABLED)
             private set
-        var callThreshold by prefsFloatState("dialer_call_threshold", 96f)
+        var callThreshold by prefsFloatState("dialer_call_threshold", ModuleDefaults.DialerRecents.CALL_THRESHOLD)
             private set
-        var deleteWidth by prefsFloatState("dialer_delete_width", 84f)
+        var deleteWidth by prefsFloatState("dialer_delete_width", ModuleDefaults.DialerRecents.DELETE_WIDTH)
             private set
-        var confirmDelete by prefsBooleanState("dialer_confirm_delete", true)
+        var confirmDelete by prefsBooleanState("dialer_confirm_delete", ModuleDefaults.DialerRecents.CONFIRM_DELETE)
             private set
         var hapticsEnabled by prefsBooleanState("dialer_haptics_enabled", true)
             private set
-        var morphDuration by prefsFloatState("dialer_morph_duration", 480f)
+        var morphDuration by prefsFloatState("dialer_morph_duration", ModuleDefaults.DialerRecents.MORPH_DURATION)
             private set
 
         @JvmName("setDialerRecentsEnabledPref")
@@ -1563,12 +1574,12 @@ class SettingsRepository(context: Context) {
         fun setMorphDuration(v: Float) { morphDuration = v }
 
         fun reloadFromDefaults() {
-            enabled = false
-            callThreshold = 96f
-            deleteWidth = 84f
-            confirmDelete = true
+            enabled = ModuleDefaults.MasterToggles.DIALER_RECENTS_SWIPE_ENABLED
+            callThreshold = ModuleDefaults.DialerRecents.CALL_THRESHOLD
+            deleteWidth = ModuleDefaults.DialerRecents.DELETE_WIDTH
+            confirmDelete = ModuleDefaults.DialerRecents.CONFIRM_DELETE
             hapticsEnabled = true
-            morphDuration = 480f
+            morphDuration = ModuleDefaults.DialerRecents.MORPH_DURATION
         }
     }
 
@@ -1675,10 +1686,10 @@ class SettingsRepository(context: Context) {
 
     inner class AudioHapticsHolder {
         var realTimeEnabled by prefsBooleanState("audio_haptics_realtime_enabled", false)
-        var sensitivity by prefsFloatState("audio_haptics_sensitivity", 0.3f)
-        var refractoryMs by prefsLongState("audio_haptics_refractory_ms", 80L)
-        var activePipeline by prefsStringState("active_haptic_pipeline", "XiaomiMelodicCrisp")
-        var resonantFrequencyHz by prefsFloatState("active_haptic_freq", 160.0f)
+        var sensitivity by prefsFloatState("audio_haptics_sensitivity", ModuleDefaults.Haptics.AUDIO_SENSITIVITY)
+        var refractoryMs by prefsLongState("audio_haptics_refractory_ms", ModuleDefaults.Haptics.AUDIO_REFRACTORY_MS)
+        var activePipeline by prefsStringState("active_haptic_pipeline", ModuleDefaults.Haptics.ACTIVE_PIPELINE)
+        var resonantFrequencyHz by prefsFloatState("active_haptic_freq", ModuleDefaults.Haptics.ACTIVE_FREQ)
 
         fun setRealTimeEnabledPref(v: Boolean) { realTimeEnabled = v }
         fun setSensitivityPref(v: Float) { sensitivity = v }

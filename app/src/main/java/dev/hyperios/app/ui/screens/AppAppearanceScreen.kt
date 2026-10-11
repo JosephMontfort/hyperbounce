@@ -15,6 +15,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.kyant.backdrop.Backdrop
+import dev.hyperios.app.common.ModuleDefaults
 import dev.hyperios.app.ui.components.ColorPickerDialog
 import dev.hyperios.app.ui.components.DropdownPicker
 import dev.hyperios.app.ui.components.GlassCard
@@ -63,7 +64,8 @@ fun AppAppearanceScreen(
         subtitle = null,
         colors = colors,
         backdrop = backdrop,
-        onBack = onBack
+        onBack = onBack,
+        onResetPage = holder::reloadFromDefaults
     ) { _ ->
         item {
             SectionHeader("Liquid Glass Engine", colors)
@@ -86,8 +88,8 @@ fun AppAppearanceScreen(
                         backdrop = backdrop,
                         value = s.glassIntensity,
                         onValueChange = holder::setGlassIntensity,
-                        valueRange = 0f..2.0f,
-                        defaultValue = 1.0f,
+                        valueRange = ModuleDefaults.NavApps.GLASS_INTENSITY_RANGE,
+                        defaultValue = ModuleDefaults.NavApps.GLASS_INTENSITY,
                         valueLabel = { "${(it * 100).roundToInt()}%" },
                         enabled = s.enabled && s.liquidGlass
                     )
@@ -99,8 +101,8 @@ fun AppAppearanceScreen(
                         backdrop = backdrop,
                         value = s.barBlurIntensity,
                         onValueChange = holder::setBarBlurIntensity,
-                        valueRange = 0f..2.0f,
-                        defaultValue = 1.0f,
+                        valueRange = ModuleDefaults.NavApps.BAR_BLUR_INTENSITY_RANGE,
+                        defaultValue = ModuleDefaults.NavApps.BAR_BLUR_INTENSITY,
                         valueLabel = { "${(it * 100).roundToInt()}%" },
                         enabled = s.enabled && s.liquidGlass
                     )
@@ -112,8 +114,8 @@ fun AppAppearanceScreen(
                         backdrop = backdrop,
                         value = s.pillGlassIntensity,
                         onValueChange = holder::setPillGlassIntensity,
-                        valueRange = 0f..2.0f,
-                        defaultValue = 1.0f,
+                        valueRange = ModuleDefaults.NavApps.PILL_GLASS_INTENSITY_RANGE,
+                        defaultValue = ModuleDefaults.NavApps.PILL_GLASS_INTENSITY,
                         valueLabel = { "${(it * 100).roundToInt()}%" },
                         enabled = s.enabled && s.liquidGlass
                     )
@@ -151,8 +153,8 @@ fun AppAppearanceScreen(
                     backdrop = backdrop,
                     value = s.containerOpacity,
                     onValueChange = holder::setContainerOpacity,
-                    valueRange = 0f..1f,
-                    defaultValue = 0.4f,
+                    valueRange = ModuleDefaults.NavApps.CONTAINER_OPACITY_RANGE,
+                    defaultValue = ModuleDefaults.NavApps.CONTAINER_OPACITY,
                     valueLabel = { "${(it * 100).roundToInt()}%" },
                     enabled = s.enabled
                 )
@@ -164,8 +166,8 @@ fun AppAppearanceScreen(
                     backdrop = backdrop,
                     value = s.pillContainerOpacity,
                     onValueChange = holder::setPillContainerOpacity,
-                    valueRange = 0f..1f,
-                    defaultValue = 1.0f,
+                    valueRange = ModuleDefaults.NavApps.PILL_CONTAINER_OPACITY_RANGE,
+                    defaultValue = ModuleDefaults.NavApps.PILL_CONTAINER_OPACITY,
                     valueLabel = { "${(it * 100).roundToInt()}%" },
                     enabled = s.enabled
                 )

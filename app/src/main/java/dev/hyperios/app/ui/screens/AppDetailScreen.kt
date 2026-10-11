@@ -17,6 +17,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.kyant.backdrop.Backdrop
+import dev.hyperios.app.common.ModuleDefaults
 import dev.hyperios.app.ui.Destination
 import dev.hyperios.app.ui.components.CheckmarkIcon
 import dev.hyperios.app.ui.components.GlassCard
@@ -120,8 +121,8 @@ fun AppDetailScreen(
                                 backdrop = backdrop,
                                 value = s.autoShrinkScale,
                                 onValueChange = holder::setAutoShrinkScale,
-                                valueRange = 0.50f..0.90f,
-                                defaultValue = 0.70f,
+                                valueRange = ModuleDefaults.NavApps.AUTO_SHRINK_SCALE_RANGE,
+                                defaultValue = ModuleDefaults.NavApps.Instagram.AUTO_SHRINK_SCALE,
                                 valueLabel = { "${(it * 100).roundToInt()}%" },
                                 enabled = s.enabled && s.autoShrink
                             )
@@ -167,8 +168,8 @@ fun AppDetailScreen(
                                 backdrop = backdrop,
                                 value = s.autoShrinkScale,
                                 onValueChange = holder::setAutoShrinkScale,
-                                valueRange = 0.50f..0.90f,
-                                defaultValue = 0.70f,
+                                valueRange = ModuleDefaults.NavApps.AUTO_SHRINK_SCALE_RANGE,
+                                defaultValue = ModuleDefaults.NavApps.YouTube.AUTO_SHRINK_SCALE,
                                 valueLabel = { "${(it * 100).roundToInt()}%" },
                                 enabled = s.enabled && s.autoShrink
                             )

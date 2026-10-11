@@ -14,6 +14,7 @@ import android.view.ViewTreeObserver
 import android.view.animation.DecelerateInterpolator
 import android.widget.FrameLayout
 import android.widget.ImageView
+import dev.hyperios.app.common.ModuleDefaults
 import dev.hyperios.app.prefs.PREFS_GROUP
 import org.json.JSONObject
 import java.lang.ref.WeakReference
@@ -26,33 +27,33 @@ import java.util.concurrent.CopyOnWriteArrayList
  * Configuration data class for Control Center Modular Layout, Motion Dynamics, and Jelly Physics.
  */
 data class ControlCenterConfig(
-    var masterEnabled: Boolean = false,
-    var modularEditEnabled: Boolean = true,
-    var animEnabled: Boolean = false,
-    var jellyEnabled: Boolean = true,
-    var animEngineMode: Int = DevicePipelineDetector.getDefaultAnimEngineMode(),
-    var entryInitialScale: Float = 0.10f,
-    var entryTranslationY: Float = 0.0f,
-    var waterfallEnabled: Boolean = true,
-    var waterfallDelayStep: Float = 0.04f,
-    var spreadRatio: Float = 0.02f,
-    var spreadResponse: Float = 0.20f,
-    var spreadDamping: Float = 0.10f,
-    var spreadReleaseResponse: Float = 0.20f,
-    var spreadReleaseDamping: Float = 1.50f,
-    var tileShowResponse: Float = 0.20f,
-    var tileShowDamping: Float = 0.10f,
-    var tileHideResponse: Float = 0.20f,
-    var tileHideDamping: Float = 0.30f,
-    var tileShrinkResponse: Float = 0.85f,
-    var tileShrinkDamping: Float = 0.85f,
-    var tileDelayScale: Float = 60.0f,
-    var frictionMultiplier: Float = 0.40f,
-    var lowEndFlashlightEnabled: Boolean = true,
-    var flashlightMaxBrightness: Int = 500,
-    var true2dGridEnabled: Boolean = true,
-    var fluidResizeEnabled: Boolean = true,
-    var landscapeRightMaxRows: Int = 3
+    var masterEnabled: Boolean = ModuleDefaults.MasterToggles.CC_MASTER_ENABLED,
+    var modularEditEnabled: Boolean = ModuleDefaults.ControlCenter.MODULAR_EDIT_ENABLED,
+    var animEnabled: Boolean = ModuleDefaults.ControlCenter.ANIM_ENABLED,
+    var jellyEnabled: Boolean = ModuleDefaults.ControlCenter.JELLY_ENABLED,
+    var animEngineMode: Int = ModuleDefaults.ControlCenter.ANIM_ENGINE_MODE,
+    var entryInitialScale: Float = ModuleDefaults.ControlCenter.ENTRY_INITIAL_SCALE,
+    var entryTranslationY: Float = ModuleDefaults.ControlCenter.ENTRY_TRANSLATION_Y,
+    var waterfallEnabled: Boolean = ModuleDefaults.ControlCenter.WATERFALL_ENABLED,
+    var waterfallDelayStep: Float = ModuleDefaults.ControlCenter.WATERFALL_DELAY_STEP,
+    var spreadRatio: Float = ModuleDefaults.ControlCenter.SPREAD_RATIO,
+    var spreadResponse: Float = ModuleDefaults.ControlCenter.SPREAD_RESPONSE,
+    var spreadDamping: Float = ModuleDefaults.ControlCenter.SPREAD_DAMPING,
+    var spreadReleaseResponse: Float = ModuleDefaults.ControlCenter.SPREAD_RELEASE_RESPONSE,
+    var spreadReleaseDamping: Float = ModuleDefaults.ControlCenter.SPREAD_RELEASE_DAMPING,
+    var tileShowResponse: Float = ModuleDefaults.ControlCenter.TILE_SHOW_RESPONSE,
+    var tileShowDamping: Float = ModuleDefaults.ControlCenter.TILE_SHOW_DAMPING,
+    var tileHideResponse: Float = ModuleDefaults.ControlCenter.TILE_HIDE_RESPONSE,
+    var tileHideDamping: Float = ModuleDefaults.ControlCenter.TILE_HIDE_DAMPING,
+    var tileShrinkResponse: Float = ModuleDefaults.ControlCenter.TILE_SHRINK_RESPONSE,
+    var tileShrinkDamping: Float = ModuleDefaults.ControlCenter.TILE_SHRINK_DAMPING,
+    var tileDelayScale: Float = ModuleDefaults.ControlCenter.TILE_DELAY_SCALE,
+    var frictionMultiplier: Float = ModuleDefaults.ControlCenter.FRICTION_MULTIPLIER,
+    var lowEndFlashlightEnabled: Boolean = ModuleDefaults.ControlCenter.LOW_END_FLASHLIGHT_ENABLED,
+    var flashlightMaxBrightness: Int = ModuleDefaults.ControlCenter.FLASHLIGHT_MAX_BRIGHTNESS,
+    var true2dGridEnabled: Boolean = ModuleDefaults.ControlCenter.TRUE_2D_GRID_ENABLED,
+    var fluidResizeEnabled: Boolean = ModuleDefaults.ControlCenter.FLUID_RESIZE_ENABLED,
+    var landscapeRightMaxRows: Int = ModuleDefaults.ControlCenter.LANDSCAPE_RIGHT_MAX_ROWS
 ) {
     val isModularEditActive: Boolean get() = masterEnabled && modularEditEnabled
     val isAnimActive: Boolean get() = masterEnabled && animEnabled
@@ -322,35 +323,35 @@ object ControlCenterConfigHolder {
         } else {
             defaultMode
         }
-        pendingResetLayout = prefs.getBoolean("cc_pending_reset_layout", false)
+        pendingResetLayout = prefs.getBoolean("cc_pending_reset_layout", ModuleDefaults.ControlCenter.PENDING_RESET_LAYOUT)
         config = ControlCenterConfig(
-            masterEnabled = prefs.getBoolean("cc_master_enabled", false),
-            modularEditEnabled = prefs.getBoolean("cc_modular_edit_enabled", true),
-            animEnabled = prefs.getBoolean("cc_anim_enabled", false),
-            jellyEnabled = prefs.getBoolean("cc_jelly_enabled", true),
+            masterEnabled = prefs.getBoolean("cc_master_enabled", ModuleDefaults.MasterToggles.CC_MASTER_ENABLED),
+            modularEditEnabled = prefs.getBoolean("cc_modular_edit_enabled", ModuleDefaults.ControlCenter.MODULAR_EDIT_ENABLED),
+            animEnabled = prefs.getBoolean("cc_anim_enabled", ModuleDefaults.ControlCenter.ANIM_ENABLED),
+            jellyEnabled = prefs.getBoolean("cc_jelly_enabled", ModuleDefaults.ControlCenter.JELLY_ENABLED),
             animEngineMode = engineMode,
-            entryInitialScale = prefs.getFloat("cc_entry_initial_scale", 0.10f),
-            entryTranslationY = prefs.getFloat("cc_entry_translation_y", 0.0f),
-            waterfallEnabled = prefs.getBoolean("cc_waterfall_enabled", true),
-            waterfallDelayStep = prefs.getFloat("cc_waterfall_delay_step", 0.04f),
-            spreadRatio = prefs.getFloat("cc_spread_ratio", 0.02f),
-            spreadResponse = prefs.getFloat("cc_spread_response", 0.20f),
-            spreadDamping = prefs.getFloat("cc_spread_damping", 0.10f),
-            spreadReleaseResponse = prefs.getFloat("cc_spread_release_response", 0.20f),
-            spreadReleaseDamping = prefs.getFloat("cc_spread_release_damping", 1.50f),
-            tileShowResponse = prefs.getFloat("cc_tile_show_response", 0.20f),
-            tileShowDamping = prefs.getFloat("cc_tile_show_damping", 0.10f),
-            tileHideResponse = prefs.getFloat("cc_tile_hide_response", 0.20f),
-            tileHideDamping = prefs.getFloat("cc_tile_hide_damping", 0.30f),
-            tileShrinkResponse = prefs.getFloat("cc_tile_shrink_response", 0.85f),
-            tileShrinkDamping = prefs.getFloat("cc_tile_shrink_damping", 0.85f),
-            tileDelayScale = prefs.getFloat("cc_tile_delay_scale", 60.0f),
-            frictionMultiplier = prefs.getFloat("cc_friction_multiplier", 0.40f),
-            lowEndFlashlightEnabled = prefs.getBoolean("cc_low_end_flashlight_enabled", true),
-            flashlightMaxBrightness = prefs.getInt("cc_flashlight_max_brightness", 500),
-            true2dGridEnabled = prefs.getBoolean("cc_true_2d_grid_enabled", true),
-            fluidResizeEnabled = prefs.getBoolean("cc_fluid_resize_enabled", true),
-            landscapeRightMaxRows = prefs.getInt("cc_landscape_right_max_rows", 3)
+            entryInitialScale = prefs.getFloat("cc_entry_initial_scale", ModuleDefaults.ControlCenter.ENTRY_INITIAL_SCALE),
+            entryTranslationY = prefs.getFloat("cc_entry_translation_y", ModuleDefaults.ControlCenter.ENTRY_TRANSLATION_Y),
+            waterfallEnabled = prefs.getBoolean("cc_waterfall_enabled", ModuleDefaults.ControlCenter.WATERFALL_ENABLED),
+            waterfallDelayStep = prefs.getFloat("cc_waterfall_delay_step", ModuleDefaults.ControlCenter.WATERFALL_DELAY_STEP),
+            spreadRatio = prefs.getFloat("cc_spread_ratio", ModuleDefaults.ControlCenter.SPREAD_RATIO),
+            spreadResponse = prefs.getFloat("cc_spread_response", ModuleDefaults.ControlCenter.SPREAD_RESPONSE),
+            spreadDamping = prefs.getFloat("cc_spread_damping", ModuleDefaults.ControlCenter.SPREAD_DAMPING),
+            spreadReleaseResponse = prefs.getFloat("cc_spread_release_response", ModuleDefaults.ControlCenter.SPREAD_RELEASE_RESPONSE),
+            spreadReleaseDamping = prefs.getFloat("cc_spread_release_damping", ModuleDefaults.ControlCenter.SPREAD_RELEASE_DAMPING),
+            tileShowResponse = prefs.getFloat("cc_tile_show_response", ModuleDefaults.ControlCenter.TILE_SHOW_RESPONSE),
+            tileShowDamping = prefs.getFloat("cc_tile_show_damping", ModuleDefaults.ControlCenter.TILE_SHOW_DAMPING),
+            tileHideResponse = prefs.getFloat("cc_tile_hide_response", ModuleDefaults.ControlCenter.TILE_HIDE_RESPONSE),
+            tileHideDamping = prefs.getFloat("cc_tile_hide_damping", ModuleDefaults.ControlCenter.TILE_HIDE_DAMPING),
+            tileShrinkResponse = prefs.getFloat("cc_tile_shrink_response", ModuleDefaults.ControlCenter.TILE_SHRINK_RESPONSE),
+            tileShrinkDamping = prefs.getFloat("cc_tile_shrink_damping", ModuleDefaults.ControlCenter.TILE_SHRINK_DAMPING),
+            tileDelayScale = prefs.getFloat("cc_tile_delay_scale", ModuleDefaults.ControlCenter.TILE_DELAY_SCALE),
+            frictionMultiplier = prefs.getFloat("cc_friction_multiplier", ModuleDefaults.ControlCenter.FRICTION_MULTIPLIER),
+            lowEndFlashlightEnabled = prefs.getBoolean("cc_low_end_flashlight_enabled", ModuleDefaults.ControlCenter.LOW_END_FLASHLIGHT_ENABLED),
+            flashlightMaxBrightness = prefs.getInt("cc_flashlight_max_brightness", ModuleDefaults.ControlCenter.FLASHLIGHT_MAX_BRIGHTNESS),
+            true2dGridEnabled = prefs.getBoolean("cc_true_2d_grid_enabled", ModuleDefaults.ControlCenter.TRUE_2D_GRID_ENABLED),
+            fluidResizeEnabled = prefs.getBoolean("cc_fluid_resize_enabled", ModuleDefaults.ControlCenter.FLUID_RESIZE_ENABLED),
+            landscapeRightMaxRows = prefs.getInt("cc_landscape_right_max_rows", ModuleDefaults.ControlCenter.LANDSCAPE_RIGHT_MAX_ROWS)
         )
     }
 

@@ -24,6 +24,7 @@ package dev.hyperios.app.prefs
  */
 
 import android.content.SharedPreferences
+import dev.hyperios.app.common.ModuleDefaults
 import io.github.libxposed.api.XposedInterface
 
 const val PREFS_GROUP = "hyperbounce_settings"
@@ -35,34 +36,34 @@ class HyperBouncePrefs(module: XposedInterface) {
     // --- module-wide ----------------------------------------------------------------------
 
     val moduleEnabled: Boolean
-        get() = prefs.getBoolean("module_enabled", true)
+        get() = prefs.getBoolean("module_enabled", ModuleDefaults.MasterToggles.MODULE_ENABLED)
 
     val hotReloadEnabled: Boolean
         get() = prefs.getBoolean("hot_reload_enabled", false)
 
     val callerScreenEnabled: Boolean
-        get() = prefs.getBoolean("caller_screen_enabled", false)
+        get() = prefs.getBoolean("caller_screen_enabled", ModuleDefaults.MasterToggles.CALLER_SCREEN_ENABLED)
 
     val callerButtonSize: Float
-        get() = prefs.getFloat("caller_button_size", 85.4f)
+        get() = prefs.getFloat("caller_button_size", ModuleDefaults.CallerScreen.BUTTON_SIZE)
 
     val callerBottomOffset: Float
-        get() = prefs.getFloat("caller_bottom_offset", 55.0f)
+        get() = prefs.getFloat("caller_bottom_offset", ModuleDefaults.CallerScreen.BOTTOM_OFFSET)
 
     val callerDanceEnabled: Boolean
-        get() = prefs.getBoolean("caller_dance_enabled", true)
+        get() = prefs.getBoolean("caller_dance_enabled", ModuleDefaults.CallerScreen.DANCE_ENABLED)
 
     val dialerRecentsSwipeEnabled: Boolean
-        get() = prefs.getBoolean("dialer_recents_swipe_enabled", false)
+        get() = prefs.getBoolean("dialer_recents_swipe_enabled", ModuleDefaults.MasterToggles.DIALER_RECENTS_SWIPE_ENABLED)
 
     val dialerCallThreshold: Float
-        get() = prefs.getFloat("dialer_call_threshold", 96f)
+        get() = prefs.getFloat("dialer_call_threshold", ModuleDefaults.DialerRecents.CALL_THRESHOLD)
 
     val dialerDeleteWidth: Float
-        get() = prefs.getFloat("dialer_delete_width", 84f)
+        get() = prefs.getFloat("dialer_delete_width", ModuleDefaults.DialerRecents.DELETE_WIDTH)
 
     val dialerConfirmDelete: Boolean
-        get() = prefs.getBoolean("dialer_confirm_delete", true)
+        get() = prefs.getBoolean("dialer_confirm_delete", ModuleDefaults.DialerRecents.CONFIRM_DELETE)
 
     val dialerHapticsEnabled: Boolean
         get() = prefs.getBoolean("dialer_haptics_enabled", true)
@@ -85,16 +86,21 @@ class HyperBouncePrefs(module: XposedInterface) {
         prefs.getFloat("app_${appKey}_container_opacity", if (!appLiquidGlass(appKey)) 0.90f else 0.4f)
 
     fun appCornerRadius(appKey: String): Float =
-        prefs.getFloat("app_${appKey}_corner_radius", if (appKey == "whatsapp") 36f else 32f)
+        prefs.getFloat("app_${appKey}_corner_radius", if (appKey == "whatsapp") 36f else ModuleDefaults.NavApps.Instagram.CORNER_RADIUS)
 
     fun appBarHeight(appKey: String): Float =
         prefs.getFloat("app_${appKey}_bar_height", if (appKey == "whatsapp") 70f else 50f)
 
     fun appTabWidth(appKey: String): Float =
-        prefs.getFloat("app_${appKey}_tab_width", if (appKey == "whatsapp") 92f else 75f)
+        prefs.getFloat("app_${appKey}_tab_width", when (appKey) {
+            "whatsapp" -> 92f
+            "instagram" -> ModuleDefaults.NavApps.Instagram.TAB_WIDTH
+            "youtube" -> ModuleDefaults.NavApps.YouTube.TAB_WIDTH
+            else -> 75f
+        })
 
     fun appBottomMargin(appKey: String): Float =
-        prefs.getFloat("app_${appKey}_bottom_margin", if (appKey == "whatsapp") 40f else 20f)
+        prefs.getFloat("app_${appKey}_bottom_margin", if (appKey == "whatsapp") 40f else ModuleDefaults.NavApps.Instagram.BOTTOM_MARGIN)
 
     /** One of "System" | "Light" | "Dark" — matches ui.state.ThemeMode's enum names. */
     fun appThemeMode(appKey: String): String =
@@ -103,7 +109,7 @@ class HyperBouncePrefs(module: XposedInterface) {
     /** One of "Auto" | "Blue" | "Pink" | "Purple" | "Orange" | "Green" | "Custom" — matches
      *  ui.state.AccentPreset's enum names. */
     fun appAccent(appKey: String): String =
-        prefs.getString("app_${appKey}_accent", "Auto") ?: "Auto"
+        prefs.getString("app_${appKey}_accent", if (appKey == "whatsapp") ModuleDefaults.NavApps.WhatsApp.ACCENT else "Auto") ?: "Auto"
 
     fun appCustomAccentColor(appKey: String): Long =
         prefs.getLong("app_${appKey}_custom_accent_color", 0xFF0088FFL)
@@ -118,30 +124,30 @@ class HyperBouncePrefs(module: XposedInterface) {
         prefs.getBoolean("app_${appKey}_pill_chromatic_aberration", true)
 
     fun appPillShadow(appKey: String): Boolean =
-        prefs.getBoolean("app_${appKey}_pill_shadow", true)
+        prefs.getBoolean("app_${appKey}_pill_shadow", false)
 
     fun appAutoShrink(appKey: String): Boolean =
-        prefs.getBoolean("app_${appKey}_auto_shrink", true)
+        prefs.getBoolean("app_${appKey}_auto_shrink", if (appKey == "whatsapp") false else true)
 
     fun appAutoShrinkScale(appKey: String): Float =
-        prefs.getFloat("app_${appKey}_auto_shrink_scale", if (appKey == "whatsapp") 0.70f else 0.85f)
+        prefs.getFloat("app_${appKey}_auto_shrink_scale", if (appKey == "whatsapp") 0.70f else ModuleDefaults.NavApps.YouTube.AUTO_SHRINK_SCALE)
 
     fun appAutoShrinkSensitivity(appKey: String): Float =
         prefs.getFloat("app_${appKey}_auto_shrink_sensitivity", 1.0f)
 
     val reelsFullscreenZoom: Boolean
-        get() = prefs.getBoolean("app_instagram_reels_fullscreen_zoom", prefs.getBoolean("reels_fullscreen_zoom", false))
+        get() = prefs.getBoolean("app_instagram_reels_fullscreen_zoom", prefs.getBoolean("reels_fullscreen_zoom", ModuleDefaults.NavApps.Instagram.REELS_FULLSCREEN_ZOOM))
 
     // --- toggle/slider engine --------------------------------------------------------------
 
     val togglesSlidersHookEnabled: Boolean
-        get() = prefs.getBoolean("toggles_sliders_hook_enabled", false)
+        get() = prefs.getBoolean("toggles_sliders_hook_enabled", ModuleDefaults.MasterToggles.MASTER_HOOKS_ENABLED)
 
     val toggleEngine: String
-        get() = prefs.getString("engine_toggle_render", "LiquidGlass") ?: "LiquidGlass"
+        get() = prefs.getString("engine_toggle_render", ModuleDefaults.Engine.TOGGLE_ENGINE) ?: ModuleDefaults.Engine.TOGGLE_ENGINE
 
     val sliderEngine: String
-        get() = prefs.getString("engine_slider_render", "LiquidGlass") ?: "LiquidGlass"
+        get() = prefs.getString("engine_slider_render", ModuleDefaults.Engine.SLIDER_ENGINE) ?: ModuleDefaults.Engine.SLIDER_ENGINE
 
     val toggleEnabled: Boolean
         get() = togglesSlidersHookEnabled && toggleEngine != "Disabled"
@@ -157,13 +163,13 @@ class HyperBouncePrefs(module: XposedInterface) {
         get() = sliderEngine == "LiquidGlass"
 
     val keypadEnabled: Boolean
-        get() = prefs.getBoolean("engine_keypad_enabled", false)
+        get() = prefs.getBoolean("engine_keypad_enabled", ModuleDefaults.MasterToggles.ENGINE_KEYPAD_ENABLED)
 
     val miuixAppsHookingEnabled: Boolean
-        get() = prefs.getBoolean("miuix_apps_hooking_enabled", false)
+        get() = prefs.getBoolean("miuix_apps_hooking_enabled", ModuleDefaults.MasterToggles.MIUIX_APPS_HOOKING_ENABLED)
 
     fun toggleAccentColor(): Long {
-        val presetName = prefs.getString("toggle_accent", "Green") ?: "Green"
+        val presetName = prefs.getString("toggle_accent", ModuleDefaults.Engine.TOGGLE_ACCENT) ?: ModuleDefaults.Engine.TOGGLE_ACCENT
         val customColor = prefs.getLong("toggle_custom_color", 0xFF30D158L)
         return when (presetName) {
             "Blue" -> 0xFF0088FFL
@@ -191,14 +197,14 @@ class HyperBouncePrefs(module: XposedInterface) {
     }
 
     fun glassFeel(prefix: String): GlassFeelValues = GlassFeelValues(
-        blurDp = prefs.getFloat("${prefix}_blur", if (prefix == "toggle_glass") 8f else 8f),
-        lensSizeDp = prefs.getFloat("${prefix}_lens_size", if (prefix == "toggle_glass") 5f else 10f),
-        lensDepthDp = prefs.getFloat("${prefix}_lens_depth", if (prefix == "toggle_glass") 10f else 14f),
-        highlightStrength = prefs.getFloat("${prefix}_highlight", 0.67f),
-        shadowRadiusDp = prefs.getFloat("${prefix}_shadow", 4f),
-        dragSensitivity = prefs.getFloat("${prefix}_drag_sensitivity", if (prefix == "toggle_glass") 0.72f else 1.0f),
-        springDamping = prefs.getFloat("${prefix}_spring_damping", if (prefix == "toggle_glass") 0.82f else 0.7f),
-        springStiffness = prefs.getFloat("${prefix}_spring_stiffness", if (prefix == "toggle_glass") 400f else 800f)
+        blurDp = prefs.getFloat("${prefix}_blur", if (prefix == "toggle_glass") ModuleDefaults.Engine.TOGGLE_GLASS_BLUR else ModuleDefaults.Engine.SLIDER_GLASS_BLUR),
+        lensSizeDp = prefs.getFloat("${prefix}_lens_size", if (prefix == "toggle_glass") ModuleDefaults.Engine.TOGGLE_GLASS_LENS_SIZE else ModuleDefaults.Engine.SLIDER_GLASS_LENS_SIZE),
+        lensDepthDp = prefs.getFloat("${prefix}_lens_depth", if (prefix == "toggle_glass") ModuleDefaults.Engine.TOGGLE_GLASS_LENS_DEPTH else ModuleDefaults.Engine.SLIDER_GLASS_LENS_DEPTH),
+        highlightStrength = prefs.getFloat("${prefix}_highlight", if (prefix == "toggle_glass") ModuleDefaults.Engine.TOGGLE_GLASS_HIGHLIGHT else ModuleDefaults.Engine.SLIDER_GLASS_HIGHLIGHT),
+        shadowRadiusDp = prefs.getFloat("${prefix}_shadow", if (prefix == "toggle_glass") ModuleDefaults.Engine.TOGGLE_GLASS_SHADOW else ModuleDefaults.Engine.SLIDER_GLASS_SHADOW),
+        dragSensitivity = prefs.getFloat("${prefix}_drag_sensitivity", if (prefix == "toggle_glass") ModuleDefaults.Engine.TOGGLE_GLASS_DRAG_SENSITIVITY else ModuleDefaults.Engine.SLIDER_GLASS_DRAG_SENSITIVITY),
+        springDamping = prefs.getFloat("${prefix}_spring_damping", if (prefix == "toggle_glass") ModuleDefaults.Engine.TOGGLE_GLASS_SPRING_DAMPING else ModuleDefaults.Engine.SLIDER_GLASS_SPRING_DAMPING),
+        springStiffness = prefs.getFloat("${prefix}_spring_stiffness", if (prefix == "toggle_glass") ModuleDefaults.Engine.TOGGLE_GLASS_SPRING_STIFFNESS else ModuleDefaults.Engine.SLIDER_GLASS_SPRING_STIFFNESS)
     )
 
     val toggleGlassFeel: GlassFeelValues get() = glassFeel("toggle_glass")
