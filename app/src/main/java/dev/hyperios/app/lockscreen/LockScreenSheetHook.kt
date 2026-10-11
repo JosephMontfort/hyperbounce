@@ -318,7 +318,7 @@ object LockScreenSheetHook {
         kpvc: Any?,
         rootView: ViewGroup,
         swipeProgress: Float,
-        cfg: LockScreenConfigHolder.SheetConfig = LockScreenConfigHolder.sheet
+        cfg: LockScreenSheetConfig = LockScreenConfigHolder.sheet
     ) {
         if (swipeProgress <= 0.001f) {
             val existingSheet = cachedLockGlassSheetRef?.get() ?: rootView.findViewWithTag<LockScreenGlassSheetOptimizedView>(TAG_LOCK_GLASS_SHEET)
