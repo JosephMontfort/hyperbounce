@@ -213,7 +213,7 @@ fun TuningScreen(
                     Spacer(Modifier.height(4.dp))
                     BasicText(
                         text = "Please enable this module in LSPosed and restart this app.",
-                        style = HyperBounceType.subheadline.copy(color = colors.secondaryLabel)
+                        style = HyperBounceType.subhead.copy(color = colors.secondaryLabel)
                     )
                 }
             }
