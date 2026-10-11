@@ -312,10 +312,13 @@ object NotificationStackScrollerHelper {
                 // Card is above stack threshold: render at normal scale & stock spacing
                 cachedScaleXField = setFloat(vs, "mScaleX", cachedScaleXField, 1.0f)
                 cachedScaleYField = setFloat(vs, "mScaleY", cachedScaleYField, 1.0f)
+                val cardTop: Float
                 if (prevBottom < 0f || rowY >= prevBottom) {
+                    cardTop = rowY
                     prevBottom = rowY + rowHeight
                 } else {
-                    cachedYTranslationField = setFloat(vs, "mYTranslation", cachedYTranslationField, prevBottom)
+                    cardTop = prevBottom
+                    cachedYTranslationField = setFloat(vs, "mYTranslation", cachedYTranslationField, cardTop)
                     prevBottom += rowHeight
                 }
             } else {
@@ -334,7 +337,14 @@ object NotificationStackScrollerHelper {
 
                 val targetBottom = prevBottom + compressedGap
                 val scaledHeight = rowHeight * scale
-                val newY = (((targetBottom - scaledHeight) - rowY) * gDepth) + rowY
+                var newY = (((targetBottom - scaledHeight) - rowY) * gDepth) + rowY
+
+                // Ensure monotonic progression: a card in the stack must never roll backward
+                // behind the previous card's top or below minimum gap
+                val minAllowedY = prevBottom - (scaledHeight * 0.85f)
+                if (newY < minAllowedY) {
+                    newY = minAllowedY
+                }
 
                 cachedYTranslationField = setFloat(vs, "mYTranslation", cachedYTranslationField, newY)
 

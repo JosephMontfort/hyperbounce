@@ -339,11 +339,12 @@ class NotificationGlassSheetView @JvmOverloads constructor(
         val cfg = NotificationSheetConfigHolder.sheet
         val isHomescreenAllowed = !cfg.lockWallpaperHomescreenOnly || dev.joseph.hyperbounce.notification.NotificationSheetHook.isHomeScreenCached
         val isLockScreenActive = cfg.isLockScreenActive && !isLandscape && isUnlocked && isHomescreenAllowed
-        if (!isLockScreenActive) return
+        val canDrawSubject = isDepthActive && subjectBmp != null && !subjectBmp.isRecycled
+
+        if (!isLockScreenActive && !canDrawSubject) return
 
         val isClosing = isClosingMode || isClosingFromFullOpen
         val clockAlpha = if (isClosing) 1f else ((expansionFraction - 0.05f) / 0.55f).coerceIn(0f, 1f)
-        if (clockAlpha <= 0.01f) return
 
         val count = targetCanvas.save()
         sheetClipPath.reset()
@@ -360,7 +361,7 @@ class NotificationGlassSheetView @JvmOverloads constructor(
         val clockOverSubject = isDepthActive && (expansionFraction >= 0.95f || dev.joseph.hyperbounce.notification.NotificationSheetHook.hasFullyOpened)
 
         // [Layer 1] Replicated Lock Screen Clock (BEHIND subject cutout during pulldown if depth active)
-        if (!clockOverSubject) {
+        if (isLockScreenActive && clockAlpha > 0.01f && !clockOverSubject) {
             LockScreenCoverSheetController.drawClock(
                 canvas = targetCanvas,
                 rootView = this.rootView,
@@ -375,12 +376,25 @@ class NotificationGlassSheetView @JvmOverloads constructor(
         }
 
         // [Layer 2] iOS 27 Depth Subject Cutout (occludes clock numbers!)
-        if (isDepthActive && subjectBmp != null && !subjectBmp.isRecycled) {
-            targetCanvas.drawBitmap(subjectBmp, null, subjectDstRect, subjectPaint)
+        if (canDrawSubject) {
+            targetCanvas.drawBitmap(subjectBmp!!, null, subjectDstRect, subjectPaint)
         }
 
         // [Layer 3] Foreground Clock Layer (and background clock when fully open so subject doesn't occlude)
-        if (clockOverSubject) {
+        if (isLockScreenActive && clockAlpha > 0.01f) {
+            if (clockOverSubject) {
+                LockScreenCoverSheetController.drawClock(
+                    canvas = targetCanvas,
+                    rootView = this.rootView,
+                    context = context,
+                    w = w,
+                    h = h,
+                    density = density,
+                    layer = LockScreenCoverSheetController.ClockLayer.BACKGROUND,
+                    alpha = clockAlpha,
+                    translationY = 0f
+                )
+            }
             LockScreenCoverSheetController.drawClock(
                 canvas = targetCanvas,
                 rootView = this.rootView,
@@ -388,22 +402,11 @@ class NotificationGlassSheetView @JvmOverloads constructor(
                 w = w,
                 h = h,
                 density = density,
-                layer = LockScreenCoverSheetController.ClockLayer.BACKGROUND,
+                layer = LockScreenCoverSheetController.ClockLayer.FOREGROUND,
                 alpha = clockAlpha,
                 translationY = 0f
             )
         }
-        LockScreenCoverSheetController.drawClock(
-            canvas = targetCanvas,
-            rootView = this.rootView,
-            context = context,
-            w = w,
-            h = h,
-            density = density,
-            layer = LockScreenCoverSheetController.ClockLayer.FOREGROUND,
-            alpha = clockAlpha,
-            translationY = 0f
-        )
 
         targetCanvas.restoreToCount(count)
     }

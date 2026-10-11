@@ -2356,13 +2356,20 @@ object NotificationSheetHook {
             MotionEvent.ACTION_MOVE -> {
                 isUserTouchingShade = true
                 val dyFromDown = event.rawY - touchDownY
+                val nssl = getNsslView(container)
+                val nsslCanScrollDown = nssl != null && nssl.canScrollVertically(1)
+                val fromBottomArea = touchDownY >= (container.resources.displayMetrics.heightPixels - 120f * density)
+
                 if (dyFromDown > 15f * density) {
                     isOpeningGesture = true
                     isClosingMode = false
                     hasTriggeredUnlockForCurrentOpen = true
                 } else if (dyFromDown < -20f * density && isShadeFullyOpen) {
-                    isOpeningGesture = false
-                    isClosingMode = true
+                    // Do not steal upward drag to close if user is scrolling through stacked notifications
+                    if (fromBottomArea || !nsslCanScrollDown) {
+                        isOpeningGesture = false
+                        isClosingMode = true
+                    }
                 }
                 lastTouchDy = event.rawY - lastTouchY
                 lastTouchY = event.rawY
@@ -2405,8 +2412,12 @@ object NotificationSheetHook {
                         hasTriggeredUnlockForCurrentOpen = false
                     }
 
+                    val nssl = getNsslView(container)
+                    val nsslCanScrollDown = nssl != null && nssl.canScrollVertically(1)
+                    val fromBottomArea = touchDownY >= (dm.heightPixels - 120f * density)
+
                     if (!isOpeningGesture && hasFullyOpenedForCurrentSession && isShadeFullyOpen && !hasTriggeredUnlockForCurrentOpen &&
-                        !isLaunchingNotificationActivity && isUpwardSwipe
+                        !isLaunchingNotificationActivity && isUpwardSwipe && (fromBottomArea || !nsslCanScrollDown)
                     ) {
                         isClosingMode = true
                         val curSheet = container.findViewWithTag<NotificationGlassSheetView>(TAG_GLASS_SHEET)
