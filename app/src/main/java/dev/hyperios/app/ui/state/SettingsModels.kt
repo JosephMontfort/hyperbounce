@@ -62,7 +62,7 @@ enum class NavApp(val displayName: String, val packageName: String) {
 /** One app's floating nav bar settings. Stored independently per [NavApp] — changing
  *  WhatsApp's values never touches Instagram's or YouTube's stored state. */
 data class NavBarAppSettings(
-    val enabled: Boolean = true,
+    val enabled: Boolean = false,
     val liquidGlass: Boolean = true,
     val glassIntensity: Float = 1.0f,
     val barBlurIntensity: Float = 1.0f,
@@ -77,11 +77,11 @@ data class NavBarAppSettings(
     val pillGlassIntensity: Float = 1.0f,
     val pillContainerOpacity: Float = 1.0f,
     val pillChromaticAberration: Boolean = true,
-    val pillShadow: Boolean = true,
+    val pillShadow: Boolean = false,
     val autoShrink: Boolean = true,
     val autoShrinkScale: Float = 0.85f,
     val autoShrinkSensitivity: Float = 1.0f,
-    val reelsFullscreenZoom: Boolean = false
+    val reelsFullscreenZoom: Boolean = true
 )
 
 /** The blur/lens/highlight/shadow/spring "feel" of one glass control (toggle or slider). */
@@ -97,14 +97,14 @@ data class GlassFeel(
 )
 
 data class EngineSettings(
-    val togglesSlidersHookEnabled: Boolean = true,
+    val togglesSlidersHookEnabled: Boolean = false,
     val toggleEngine: RenderEngine = RenderEngine.LiquidGlass,
     val sliderEngine: RenderEngine = RenderEngine.LiquidGlass,
-    val keypadEnabled: Boolean = true,
+    val keypadEnabled: Boolean = false,
     val miuixAppsHookingEnabled: Boolean = false,
     val toggleAccent: AccentPreset = AccentPreset.Green,
     val toggleCustomColor: Long = 0xFF30D158L,
-    val sliderAccent: AccentPreset = AccentPreset.Green,
+    val sliderAccent: AccentPreset = AccentPreset.Blue,
     val sliderCustomColor: Long = 0xFF30D158L,
     val toggleGlass: GlassFeel = GlassFeel(
         blurDp = 8f, lensSizeDp = 5f, lensDepthDp = 10f,
@@ -143,18 +143,18 @@ data class GlobalGlassSettings(
 
 /** Feature 1: Lock Screen Sheet & Liquid Glass 2.0 3-Edge Refraction Settings */
 data class LockScreenSheetSettings(
-    val enabled: Boolean = true,
+    val enabled: Boolean = false,
     val enableOptimization: Boolean = true,
-    val refractionHeight: Float = 68.0f,
-    val sideRefraction: Float = 32.0f,
-    val bottomRefraction: Float = 18.0f,
-    val bevelWidth: Float = 38.0f,
-    val leftBevelWidth: Float = 38.0f,
-    val rightBevelWidth: Float = 38.0f,
-    val bottomBevelWidth: Float = 38.0f,
-    val dispersionStrength: Float = 0.09f,
-    val specularStrength: Float = 0.95f,
-    val hairlineStrength: Float = 0.75f,
+    val refractionHeight: Float = 77.0f,
+    val sideRefraction: Float = 80.0f,
+    val bottomRefraction: Float = 80.0f,
+    val bevelWidth: Float = 25.0f,
+    val leftBevelWidth: Float = 25.0f,
+    val rightBevelWidth: Float = 25.0f,
+    val bottomBevelWidth: Float = 30.0f,
+    val dispersionStrength: Float = 1.0f,
+    val specularStrength: Float = 0.0f,
+    val hairlineStrength: Float = 2.0f,
     val innerGlowStrength: Float = 0.20f,
     val innerShadow: Float = 0.45f,
     val saturationFactor: Float = 125.0f,
@@ -170,23 +170,23 @@ data class LockScreenSheetSettings(
 
 /** Feature 7: Notification Center iOS Sheet & Liquid Glass Refraction Settings */
 data class NotificationSheetSettings(
-    val masterEnabled: Boolean = true,
-    val enabled: Boolean = true,
-    val lockWallpaperEnabled: Boolean = false,
+    val masterEnabled: Boolean = false,
+    val enabled: Boolean = false,
+    val lockWallpaperEnabled: Boolean = true,
     val customWallpaperEnabled: Boolean = false,
     val lockWallpaperHomescreenOnly: Boolean = false,
     val depthWallpaperEnabled: Boolean = false,
-    val depthCustomSubject: Boolean = false,
+    val depthCustomSubject: Boolean = true,
     val oneToOneTrackingEnabled: Boolean = false,
-    val lockScreenAsNotifCenterEnabled: Boolean = false,
-    val showBottomWidgets: Boolean = true,
+    val lockScreenAsNotifCenterEnabled: Boolean = true,
+    val showBottomWidgets: Boolean = false,
     val clockMorphOnNotifications: Boolean = false,
-    val glassEffectsEnabled: Boolean = false,
+    val glassEffectsEnabled: Boolean = true,
     val glassOnlyWithoutWallpaper: Boolean = false,
-    val refractionHeight: Float = 24.0f,
+    val refractionHeight: Float = 15.0f,
     val sideRefraction: Float = 20.0f,
     val bottomRefraction: Float = 18.0f,
-    val bevelWidth: Float = 28.0f,
+    val bevelWidth: Float = 32.0f,
     val leftBevelWidth: Float = 32.0f,
     val rightBevelWidth: Float = 32.0f,
     val bottomBevelWidth: Float = 45.0f,
@@ -205,38 +205,38 @@ data class NotificationSheetSettings(
     val pillBottomMargin: Float = 9.0f,
     val iosHunAnimationEnabled: Boolean = true,
     val iosHunDurationMs: Float = 600.0f,
-    val iosHunStartScale: Float = 0.25f,
-    val iosHunSqueezeStrength: Float = 1.0f,
+    val iosHunStartScale: Float = 0.20f,
+    val iosHunSqueezeStrength: Float = 1.5f,
     val notifStartMarginTop: Float = 250.0f,
     val notifClockScale: Float = 0.60f,
-    val notifStackEnabled: Boolean = false,
+    val notifStackEnabled: Boolean = true,
     val launcherUnlockOnDismiss: Boolean = true
 )
 
 /** Feature 2: Liquid Glass 2.0 Button PIN Pad Engine Settings */
 data class LockScreenKeypadSettings(
-    val enabled: Boolean = true,
+    val enabled: Boolean = false,
     val buttonRefraction: Float = 48.0f,
     val buttonBevel: Float = 24.0f,
     val buttonDispersion: Float = 0.09f,
-    val buttonSpecular: Float = 0.95f,
-    val buttonInnerShadow: Float = 0.40f,
+    val buttonSpecular: Float = 0.0f,
+    val buttonInnerShadow: Float = 1.0f,
     val buttonBlur: Float = 0.0f,
-    val buttonSaturation: Float = 125.0f,
-    val circleDiameter: Float = 82.0f,
-    val digitTextSize: Float = 36.0f,
+    val buttonSaturation: Float = 150.0f,
+    val circleDiameter: Float = 100.0f,
+    val digitTextSize: Float = 40.0f,
     val showKlondike: Boolean = false,
     val pressLiquidScale: Float = 1.15f,
     val pressLiquidAmp: Float = 0.60f,
-    val pinpadLift: Float = 0.0f,
-    val row0Offset: Float = -115.0f,
-    val rowSpacing: Float = 30.0f,
-    val columnSpacing: Float = 0.0f,
-    val row1Offset: Float = -90.0f,
-    val row2Offset: Float = -60.0f,
-    val row3Offset: Float = -30.0f,
-    val col1Offset: Float = 0.0f,
-    val col3Offset: Float = 0.0f,
+    val pinpadLift: Float = 65.0f,
+    val row0Offset: Float = -155.0f,
+    val rowSpacing: Float = 40.0f,
+    val columnSpacing: Float = 3.3f,
+    val row1Offset: Float = -150.0f,
+    val row2Offset: Float = -100.0f,
+    val row3Offset: Float = -50.0f,
+    val col1Offset: Float = 15.0f,
+    val col3Offset: Float = 15.0f,
     // Per-Key Entrance Delays (ms) - Preserved in backend with calibrated defaults.
     // Key 1: 0ms, Key 2: 25ms, Key 3: 50ms, Key 4: 55ms, Key 5: 80ms, Key 6: 105ms
     // Key 7: 110ms, Key 8: 135ms, Key 9: 160ms, Key 0: 215ms, Emergency/Cancel: 270ms
@@ -275,10 +275,10 @@ data class LockScreenKeypadSettings(
 
 /** Feature 3: Screen Unlock Velocity Kinetics Settings */
 data class ScreenUnlockSettings(
-    val enabled: Boolean = true,
+    val enabled: Boolean = false,
     val animMode: Int = 1,
     val gridColumns: Int = 4,
-    val gridRows: Int = 7,
+    val gridRows: Int = 6,
     val dockDamping: Float = 0.70f,
     val dockResponse: Float = 0.40f,
     val centerResponse: Float = 0.48f,
@@ -291,8 +291,8 @@ data class ScreenUnlockSettings(
     val minDamping: Float = 0.42f,
     val maxDamping: Float = 0.65f,
     val durationScale: Float = 1.00f,
-    val velocityInfluence: Float = 2.00f,
-    val maxVelocity: Float = 8288.0f,
+    val velocityInfluence: Float = 1.00f,
+    val maxVelocity: Float = 9000.0f,
     val cascadeDamping: Float = 0.86f,
     val kineticDockDamping: Float = 1.00f,
     val kineticDockResponse: Float = 0.55f,
@@ -301,16 +301,16 @@ data class ScreenUnlockSettings(
 
 /** Feature 4: App Transition & Physics Settings */
 data class IOSTransitionSettings(
-    val enabled: Boolean = true,
+    val enabled: Boolean = false,
     val arcApexLift: Float = 1.0f,
     val openUpliftSurge: Boolean = true,
     val keystoneSqueeze: Boolean = true,
     val animSpeed: Float = 1.0f,
-    val openSpringDamping: Float = 0.98f,
-    val closeSpringDamping: Float = 0.84f,
-    val folderTracking: Boolean = true,
-    val recentsCentering: Boolean = true,
-    val zeroFrictionDrag: Boolean = true,
+    val openSpringDamping: Float = 1.0f,
+    val closeSpringDamping: Float = 0.8f,
+    val folderTracking: Boolean = false,
+    val recentsCentering: Boolean = false,
+    val zeroFrictionDrag: Boolean = false,
     val landscapeGameOpt: Boolean = true,
     val refinedHaptics: Boolean = true,
     val stackRecentsHaptics: Boolean = true
@@ -319,11 +319,11 @@ data class IOSTransitionSettings(
 
 /** Features 5, 6, 7, 8, 9: Control Center Modular Customization, Jelly Physics & Dynamics */
 data class ControlCenterSettings(
-    val masterEnabled: Boolean = true,
+    val masterEnabled: Boolean = false,
     val modularEditEnabled: Boolean = true,
-    val animEnabled: Boolean = true,
+    val animEnabled: Boolean = false,
     val jellyEnabled: Boolean = true,
-    val animEngineMode: Int = dev.hyperios.app.controlcenter.DevicePipelineDetector.getDefaultAnimEngineMode(),
+    val animEngineMode: Int = 1,
     val entryInitialScale: Float = 0.10f,
     val entryTranslationY: Float = 0.0f,
     val waterfallEnabled: Boolean = true,
@@ -341,8 +341,8 @@ data class ControlCenterSettings(
     val tileShrinkDamping: Float = 0.85f,
     val tileDelayScale: Float = 60.0f,
     val frictionMultiplier: Float = 0.40f,
-    val lowEndFlashlightEnabled: Boolean = false,
-    val flashlightMaxBrightness: Int = 100,
+    val lowEndFlashlightEnabled: Boolean = true,
+    val flashlightMaxBrightness: Int = 500,
     val true2dGridEnabled: Boolean = true,
     val fluidResizeEnabled: Boolean = true,
     val landscapeRightMaxRows: Int = 3,

@@ -4,19 +4,19 @@ import android.content.Intent
 import android.content.SharedPreferences
 
 data class LockScreenSheetConfig(
-    var enabled: Boolean = true,
+    var enabled: Boolean = false,
     var enableOptimization: Boolean = true,
     // Optics (Liquid Glass 2.0)
-    var refractionHeight: Float = 68.0f,
-    var sideRefraction: Float = 32.0f,
-    var bottomRefraction: Float = 18.0f,
-    var bevelWidth: Float = 38.0f,
-    var leftBevelWidth: Float = 38.0f,
-    var rightBevelWidth: Float = 38.0f,
-    var bottomBevelWidth: Float = 38.0f,
-    var dispersionStrength: Float = 0.09f,
-    var specularStrength: Float = 0.95f,
-    var hairlineStrength: Float = 0.75f,
+    var refractionHeight: Float = 77.0f,
+    var sideRefraction: Float = 80.0f,
+    var bottomRefraction: Float = 80.0f,
+    var bevelWidth: Float = 25.0f,
+    var leftBevelWidth: Float = 25.0f,
+    var rightBevelWidth: Float = 25.0f,
+    var bottomBevelWidth: Float = 30.0f,
+    var dispersionStrength: Float = 1.0f,
+    var specularStrength: Float = 0.0f,
+    var hairlineStrength: Float = 2.0f,
     var innerGlowStrength: Float = 0.20f,
     var innerShadow: Float = 0.45f,
     var saturationFactor: Float = 125.0f,
@@ -32,31 +32,31 @@ data class LockScreenSheetConfig(
 )
 
 data class LockScreenKeypadConfig(
-    var enabled: Boolean = true,
+    var enabled: Boolean = false,
     // Liquid Glass 2.0 Button Optics
     var buttonRefraction: Float = 48.0f,
     var buttonBevel: Float = 24.0f,
     var buttonDispersion: Float = 0.09f,
-    var buttonSpecular: Float = 0.95f,
-    var buttonInnerShadow: Float = 0.40f,
+    var buttonSpecular: Float = 0.0f,
+    var buttonInnerShadow: Float = 1.0f,
     var buttonBlur: Float = 0.0f,
-    var buttonSaturation: Float = 125.0f,
-    var circleDiameter: Float = 82.0f,
-    var digitTextSize: Float = 36.0f,
+    var buttonSaturation: Float = 150.0f,
+    var circleDiameter: Float = 100.0f,
+    var digitTextSize: Float = 40.0f,
     var showKlondike: Boolean = false,
     var pressLiquidScale: Float = 1.15f,
     var pressLiquidAmp: Float = 0.60f,
     // PIN Pad Grid Layout & Spacing
-    var pinpadLift: Float = 0.0f,
-    var row0Offset: Float = -115.0f,
-    var rowSpacing: Float = 30.0f,
-    var columnSpacing: Float = 0.0f,
+    var pinpadLift: Float = 65.0f,
+    var row0Offset: Float = -155.0f,
+    var rowSpacing: Float = 40.0f,
+    var columnSpacing: Float = 3.3f,
     // Legacy fine-tune offsets
-    var row1Offset: Float = -90.0f,
-    var row2Offset: Float = -60.0f,
-    var row3Offset: Float = -30.0f,
-    var col1Offset: Float = 0.0f,
-    var col3Offset: Float = 0.0f,
+    var row1Offset: Float = -150.0f,
+    var row2Offset: Float = -100.0f,
+    var row3Offset: Float = -50.0f,
+    var col1Offset: Float = 15.0f,
+    var col3Offset: Float = 15.0f,
     // Per-Key Custom Delays (ms) - Calibrated values from user profile (preserved in backend)
     // Key 1: 0ms, Key 2: 25ms, Key 3: 50ms, Key 4: 55ms, Key 5: 80ms, Key 6: 105ms
     // Key 7: 110ms, Key 8: 135ms, Key 9: 160ms, Key 0: 215ms, Emergency/Cancel: 270ms
@@ -116,18 +116,18 @@ object LockScreenConfigHolder {
 
     fun updateFromPrefs(prefs: SharedPreferences) {
         // Sheet configs (Liquid Glass 2.0)
-        sheet.enabled = prefs.getBoolean("lock_sheet_enabled", true)
+        sheet.enabled = prefs.getBoolean("lock_sheet_enabled", false)
         sheet.enableOptimization = prefs.getBoolean("lock_sheet_enable_optimization", true)
-        sheet.refractionHeight = prefs.getFloat("lock_card_refraction_height", 68.0f)
-        sheet.sideRefraction = prefs.getFloat("lock_card_side_refraction", 32.0f)
-        sheet.bottomRefraction = prefs.getFloat("lock_card_bottom_refraction", 18.0f)
-        sheet.bevelWidth = prefs.getFloat("lock_card_bevel_width", 38.0f)
-        sheet.leftBevelWidth = prefs.getFloat("lock_card_left_bevel", 38.0f)
-        sheet.rightBevelWidth = prefs.getFloat("lock_card_right_bevel", 38.0f)
-        sheet.bottomBevelWidth = prefs.getFloat("lock_card_bottom_bevel", 38.0f)
-        sheet.dispersionStrength = prefs.getFloat("lock_card_dispersion", 0.09f)
-        sheet.specularStrength = prefs.getFloat("lock_card_specular", 0.95f)
-        sheet.hairlineStrength = prefs.getFloat("lock_card_hairline", 0.75f)
+        sheet.refractionHeight = prefs.getFloat("lock_card_refraction_height", 77.0f)
+        sheet.sideRefraction = prefs.getFloat("lock_card_side_refraction", 80.0f)
+        sheet.bottomRefraction = prefs.getFloat("lock_card_bottom_refraction", 80.0f)
+        sheet.bevelWidth = prefs.getFloat("lock_card_bevel_width", 25.0f)
+        sheet.leftBevelWidth = prefs.getFloat("lock_card_left_bevel", 25.0f)
+        sheet.rightBevelWidth = prefs.getFloat("lock_card_right_bevel", 25.0f)
+        sheet.bottomBevelWidth = prefs.getFloat("lock_card_bottom_bevel", 30.0f)
+        sheet.dispersionStrength = prefs.getFloat("lock_card_dispersion", 1.0f)
+        sheet.specularStrength = prefs.getFloat("lock_card_specular", 0.0f)
+        sheet.hairlineStrength = prefs.getFloat("lock_card_hairline", 2.0f)
         sheet.innerGlowStrength = prefs.getFloat("lock_card_inner_glow", 0.20f)
         sheet.innerShadow = prefs.getFloat("lock_card_inner_shadow", 0.45f)
         sheet.saturationFactor = prefs.getFloat("lock_card_saturation", 125.0f)
@@ -141,29 +141,29 @@ object LockScreenConfigHolder {
         sheet.pillBottomMargin = prefs.getFloat("lock_pill_bottom_margin", 9.0f)
 
         // Keypad configs (Liquid Glass 2.0 Buttons)
-        keypad.enabled = prefs.getBoolean("engine_keypad_enabled", true)
+        keypad.enabled = prefs.getBoolean("engine_keypad_enabled", false)
         keypad.buttonRefraction = prefs.getFloat("pin_btn_refraction", 48.0f)
         keypad.buttonBevel = prefs.getFloat("pin_btn_bevel", 24.0f)
         keypad.buttonDispersion = prefs.getFloat("pin_btn_dispersion", 0.09f)
-        keypad.buttonSpecular = prefs.getFloat("pin_btn_specular", 0.95f)
-        keypad.buttonInnerShadow = prefs.getFloat("pin_btn_inner_shadow", 0.40f)
+        keypad.buttonSpecular = prefs.getFloat("pin_btn_specular", 0.0f)
+        keypad.buttonInnerShadow = prefs.getFloat("pin_btn_inner_shadow", 1.0f)
         keypad.buttonBlur = prefs.getFloat("pin_btn_blur", 0.0f)
-        keypad.buttonSaturation = prefs.getFloat("pin_btn_saturation", 125.0f)
-        keypad.circleDiameter = prefs.getFloat("pin_circle_diameter", 82.0f)
-        keypad.digitTextSize = prefs.getFloat("pin_digit_text_size", 36.0f)
+        keypad.buttonSaturation = prefs.getFloat("pin_btn_saturation", 150.0f)
+        keypad.circleDiameter = prefs.getFloat("pin_circle_diameter", 100.0f)
+        keypad.digitTextSize = prefs.getFloat("pin_digit_text_size", 40.0f)
         keypad.showKlondike = prefs.getBoolean("pin_show_klondike", false)
         keypad.pressLiquidScale = prefs.getFloat("pin_press_liquid_scale", 1.15f)
         keypad.pressLiquidAmp = prefs.getFloat("pin_press_liquid_amp", 0.60f)
 
-        keypad.pinpadLift = prefs.getFloat("pin_pad_lift", 0.0f)
-        keypad.row0Offset = prefs.getFloat("pin_row0_offset", -115.0f)
-        keypad.rowSpacing = prefs.getFloat("pin_row_spacing", 30.0f)
-        keypad.columnSpacing = prefs.getFloat("pin_col_spacing", 0.0f)
-        keypad.row1Offset = prefs.getFloat("pin_row1_offset", -90.0f)
-        keypad.row2Offset = prefs.getFloat("pin_row2_offset", -60.0f)
-        keypad.row3Offset = prefs.getFloat("pin_row3_offset", -30.0f)
-        keypad.col1Offset = prefs.getFloat("pin_col1_offset", 0.0f)
-        keypad.col3Offset = prefs.getFloat("pin_col3_offset", 0.0f)
+        keypad.pinpadLift = prefs.getFloat("pin_pad_lift", 65.0f)
+        keypad.row0Offset = prefs.getFloat("pin_row0_offset", -155.0f)
+        keypad.rowSpacing = prefs.getFloat("pin_row_spacing", 40.0f)
+        keypad.columnSpacing = prefs.getFloat("pin_col_spacing", 3.3f)
+        keypad.row1Offset = prefs.getFloat("pin_row1_offset", -150.0f)
+        keypad.row2Offset = prefs.getFloat("pin_row2_offset", -100.0f)
+        keypad.row3Offset = prefs.getFloat("pin_row3_offset", -50.0f)
+        keypad.col1Offset = prefs.getFloat("pin_col1_offset", 15.0f)
+        keypad.col3Offset = prefs.getFloat("pin_col3_offset", 15.0f)
 
         // Per-Key Custom Entrance Delays (ms) - Calibrated values from user profile
         keypad.delayKey1 = prefs.getFloat("pin_delay_key1", 0f)

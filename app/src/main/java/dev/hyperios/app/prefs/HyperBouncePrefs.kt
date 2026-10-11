@@ -35,25 +35,25 @@ class HyperBouncePrefs(module: XposedInterface) {
     // --- module-wide ----------------------------------------------------------------------
 
     val moduleEnabled: Boolean
-        get() = prefs.getBoolean("module_enabled", true)
+        get() = prefs.getBoolean("module_enabled", false)
 
     val hotReloadEnabled: Boolean
         get() = prefs.getBoolean("hot_reload_enabled", false)
 
     val callerScreenEnabled: Boolean
-        get() = prefs.getBoolean("caller_screen_enabled", true)
+        get() = prefs.getBoolean("caller_screen_enabled", false)
 
     val callerButtonSize: Float
-        get() = prefs.getFloat("caller_button_size", 76f)
+        get() = prefs.getFloat("caller_button_size", 85.4f)
 
     val callerBottomOffset: Float
-        get() = prefs.getFloat("caller_bottom_offset", 68f)
+        get() = prefs.getFloat("caller_bottom_offset", 55.0f)
 
     val callerDanceEnabled: Boolean
         get() = prefs.getBoolean("caller_dance_enabled", true)
 
     val dialerRecentsSwipeEnabled: Boolean
-        get() = prefs.getBoolean("dialer_recents_swipe_enabled", true)
+        get() = prefs.getBoolean("dialer_recents_swipe_enabled", false)
 
     val dialerCallThreshold: Float
         get() = prefs.getFloat("dialer_call_threshold", 96f)
@@ -70,7 +70,7 @@ class HyperBouncePrefs(module: XposedInterface) {
     // --- per-app nav bar (appKey: "instagram" | "whatsapp" | "youtube") --------------------
 
     fun appEnabled(appKey: String): Boolean =
-        prefs.getBoolean("app_${appKey}_enabled", true)
+        prefs.getBoolean("app_${appKey}_enabled", false)
 
     fun appLiquidGlass(appKey: String): Boolean =
         prefs.getBoolean("app_${appKey}_liquid_glass", true)
@@ -135,7 +135,7 @@ class HyperBouncePrefs(module: XposedInterface) {
     // --- toggle/slider engine --------------------------------------------------------------
 
     val togglesSlidersHookEnabled: Boolean
-        get() = prefs.getBoolean("toggles_sliders_hook_enabled", true)
+        get() = prefs.getBoolean("toggles_sliders_hook_enabled", false)
 
     val toggleEngine: String
         get() = prefs.getString("engine_toggle_render", "LiquidGlass") ?: "LiquidGlass"
@@ -157,7 +157,7 @@ class HyperBouncePrefs(module: XposedInterface) {
         get() = sliderEngine == "LiquidGlass"
 
     val keypadEnabled: Boolean
-        get() = prefs.getBoolean("engine_keypad_enabled", true)
+        get() = prefs.getBoolean("engine_keypad_enabled", false)
 
     val miuixAppsHookingEnabled: Boolean
         get() = prefs.getBoolean("miuix_apps_hooking_enabled", false)
@@ -177,7 +177,7 @@ class HyperBouncePrefs(module: XposedInterface) {
     }
 
     fun sliderAccentColor(): Long {
-        val presetName = prefs.getString("slider_accent", "Green") ?: "Green"
+        val presetName = prefs.getString("slider_accent", "Blue") ?: "Blue"
         val customColor = prefs.getLong("slider_custom_color", 0xFF30D158L)
         return when (presetName) {
             "Blue" -> 0xFF0088FFL
@@ -186,7 +186,7 @@ class HyperBouncePrefs(module: XposedInterface) {
             "Orange" -> 0xFFFF9500L
             "Green" -> 0xFF30D158L
             "Custom" -> customColor
-            else -> 0xFF30D158L
+            else -> 0xFF0088FFL
         }
     }
 

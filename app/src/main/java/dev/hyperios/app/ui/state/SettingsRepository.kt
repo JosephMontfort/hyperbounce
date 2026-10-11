@@ -94,7 +94,7 @@ class SettingsRepository(context: Context) {
         editor.apply()
     }
 
-    var moduleEnabled by prefsBooleanState("module_enabled", true)
+    var moduleEnabled by prefsBooleanState("module_enabled", false)
         private set
 
     var hotReloadEnabled by prefsBooleanState("hot_reload_enabled", false)
@@ -150,9 +150,24 @@ class SettingsRepository(context: Context) {
 
     fun exportSettingsToJson(): String {
         val json = org.json.JSONObject()
-        val all = prefs.all
-        for ((k, v) in all) {
-            json.put(k, v)
+        // 1. Export all dynamically registered settings delegates
+        for (delegate in reloadablePrefs) {
+            delegate.exportValue(json)
+        }
+        // 2. Export dynamic row unlock kinetics
+        val rows = screenUnlock.gridRows
+        for (r in 0 until rows) {
+            json.put("unlock_r${r}_z", screenUnlock.getRowZ(r).toDouble())
+            json.put("unlock_r${r}_center_bounce", screenUnlock.getRowCenterBounce(r).toDouble())
+            json.put("unlock_r${r}_outer_bounce", screenUnlock.getRowOuterBounce(r).toDouble())
+            json.put("unlock_r${r}_center_settle", screenUnlock.getRowCenterSettle(r).toDouble())
+            json.put("unlock_r${r}_outer_settle", screenUnlock.getRowOuterSettle(r).toDouble())
+        }
+        // 3. Include any additional preferences not covered by delegates
+        for ((k, v) in prefs.all) {
+            if (!json.has(k)) {
+                json.put(k, v)
+            }
         }
         return json.toString(2)
     }
@@ -169,7 +184,11 @@ class SettingsRepository(context: Context) {
                 val delegate = delegateMap[key]
                 if (delegate != null) {
                     delegate.writeJsonValue(editor, value)
+                } else if (key.startsWith("unlock_r") && (key.endsWith("_z") || key.endsWith("_bounce") || key.endsWith("_settle"))) {
+                    val fVal = (value as? Number)?.toFloat() ?: (value.toString().toFloatOrNull() ?: 0f)
+                    editor.putFloat(key, fVal)
                 } else {
+                    // Modular type resolution for un-delegated or newly added options
                     when (val cur = prefs.all[key]) {
                         is Boolean -> editor.putBoolean(key, if (value is Boolean) value else value.toString().toBoolean())
                         is Float -> editor.putFloat(key, (value as? Number)?.toFloat() ?: (value.toString().toFloatOrNull() ?: 0f))
@@ -177,16 +196,31 @@ class SettingsRepository(context: Context) {
                         is Long -> editor.putLong(key, (value as? Number)?.toLong() ?: (value.toString().toLongOrNull() ?: 0L))
                         is String -> editor.putString(key, value.toString())
                         else -> {
-                            if (key.startsWith("unlock_r") && (key.endsWith("_z") || key.endsWith("_bounce") || key.endsWith("_settle"))) {
-                                editor.putFloat(key, (value as? Number)?.toFloat() ?: (value.toString().toFloatOrNull() ?: 0f))
-                            } else {
-                                when (value) {
-                                    is Boolean -> editor.putBoolean(key, value)
-                                    is Double -> editor.putFloat(key, value.toFloat())
-                                    is Int -> editor.putInt(key, value)
-                                    is Long -> editor.putLong(key, value)
-                                    is String -> editor.putString(key, value)
+                            when (value) {
+                                is Boolean -> editor.putBoolean(key, value)
+                                is Double -> editor.putFloat(key, value.toFloat())
+                                is Float -> editor.putFloat(key, value)
+                                is Long -> {
+                                    if (key.endsWith("color") || key.endsWith("_ms") || value > Int.MAX_VALUE || value < Int.MIN_VALUE) {
+                                        editor.putLong(key, value)
+                                    } else {
+                                        editor.putInt(key, value.toInt())
+                                    }
                                 }
+                                is Int -> {
+                                    if (key.contains("damping") || key.contains("response") || key.contains("radius") ||
+                                        key.contains("offset") || key.contains("size") || key.contains("width") ||
+                                        key.contains("height") || key.contains("margin") || key.contains("scale") ||
+                                        key.contains("strength") || key.contains("stretch") || key.contains("power") ||
+                                        key.contains("factor") || key.contains("friction") || key.contains("depth") ||
+                                        key.contains("blur") || key.contains("bevel") || key.contains("refraction") ||
+                                        key.contains("saturation") || key.contains("ratio") || key.contains("speed")) {
+                                        editor.putFloat(key, value.toFloat())
+                                    } else {
+                                        editor.putInt(key, value)
+                                    }
+                                }
+                                is String -> editor.putString(key, value)
                             }
                         }
                     }
@@ -214,13 +248,13 @@ class SettingsRepository(context: Context) {
         NavApp.YouTube -> youtube
     }
 
-    var togglesSlidersHookEnabled by prefsBooleanState("toggles_sliders_hook_enabled", true)
+    var togglesSlidersHookEnabled by prefsBooleanState("toggles_sliders_hook_enabled", false)
         private set
     var toggleEngine by prefsEnumState("engine_toggle_render", RenderEngine.LiquidGlass)
         private set
     var sliderEngine by prefsEnumState("engine_slider_render", RenderEngine.LiquidGlass)
         private set
-    var keypadEnabled by prefsBooleanState("engine_keypad_enabled", true)
+    var keypadEnabled by prefsBooleanState("engine_keypad_enabled", false)
         private set
     var miuixAppsHookingEnabled by prefsBooleanState("miuix_apps_hooking_enabled", false)
         private set
@@ -229,7 +263,7 @@ class SettingsRepository(context: Context) {
         private set
     var toggleCustomColor by prefsLongState("toggle_custom_color", 0xFF30D158L)
         private set
-    var sliderAccent by prefsEnumState("slider_accent", AccentPreset.Green)
+    var sliderAccent by prefsEnumState("slider_accent", AccentPreset.Blue)
         private set
     var sliderCustomColor by prefsLongState("slider_custom_color", 0xFF30D158L)
         private set
@@ -319,15 +353,15 @@ class SettingsRepository(context: Context) {
         morphPhysics.reloadFromDefaults()
         callerScreen.reloadFromDefaults()
         dialerRecents.reloadFromDefaults()
-        moduleEnabled = true
-        togglesSlidersHookEnabled = true
+        moduleEnabled = false
+        togglesSlidersHookEnabled = false
         toggleEngine = RenderEngine.LiquidGlass
         sliderEngine = RenderEngine.LiquidGlass
-        keypadEnabled = true
+        keypadEnabled = false
         miuixAppsHookingEnabled = false
         toggleAccent = AccentPreset.Green
         toggleCustomColor = 0xFF30D158L
-        sliderAccent = AccentPreset.Green
+        sliderAccent = AccentPreset.Blue
         sliderCustomColor = 0xFF30D158L
     }
 
@@ -354,7 +388,7 @@ class SettingsRepository(context: Context) {
                 tabWidth = 75f,
                 cornerRadius = 32f,
                 bottomMargin = 20f,
-                autoShrinkScale = 0.85f,
+                autoShrinkScale = 0.90f,
                 accent = AccentPreset.Auto
             )
             NavApp.Instagram -> NavBarAppSettings(
@@ -363,7 +397,9 @@ class SettingsRepository(context: Context) {
                 cornerRadius = 32f,
                 bottomMargin = 20f,
                 autoShrinkScale = 0.85f,
-                accent = AccentPreset.Auto
+                accent = AccentPreset.Auto,
+                pillShadow = false,
+                reelsFullscreenZoom = true
             )
         }
 
@@ -1453,11 +1489,11 @@ class SettingsRepository(context: Context) {
     }
 
     inner class CallerScreenHolder {
-        var enabled by prefsBooleanState("caller_screen_enabled", true)
+        var enabled by prefsBooleanState("caller_screen_enabled", false)
             private set
-        var buttonSize by prefsFloatState("caller_button_size", 76f)
+        var buttonSize by prefsFloatState("caller_button_size", 85.4f)
             private set
-        var bottomOffset by prefsFloatState("caller_bottom_offset", 68f)
+        var bottomOffset by prefsFloatState("caller_bottom_offset", 55.0f)
             private set
         var hapticsEnabled by prefsBooleanState("caller_haptics_enabled", true)
             private set
@@ -1485,9 +1521,9 @@ class SettingsRepository(context: Context) {
         fun setDanceEnabled(v: Boolean) { danceEnabled = v }
 
         fun reloadFromDefaults() {
-            enabled = true
-            buttonSize = 76f
-            bottomOffset = 68f
+            enabled = false
+            buttonSize = 85.4f
+            bottomOffset = 55.0f
             hapticsEnabled = true
             shimmerEnabled = true
             danceEnabled = true
@@ -1495,7 +1531,7 @@ class SettingsRepository(context: Context) {
     }
 
     inner class DialerRecentsHolder {
-        var enabled by prefsBooleanState("dialer_recents_swipe_enabled", true)
+        var enabled by prefsBooleanState("dialer_recents_swipe_enabled", false)
             private set
         var callThreshold by prefsFloatState("dialer_call_threshold", 96f)
             private set
@@ -1527,7 +1563,7 @@ class SettingsRepository(context: Context) {
         fun setMorphDuration(v: Float) { morphDuration = v }
 
         fun reloadFromDefaults() {
-            enabled = true
+            enabled = false
             callThreshold = 96f
             deleteWidth = 84f
             confirmDelete = true
@@ -1639,10 +1675,10 @@ class SettingsRepository(context: Context) {
 
     inner class AudioHapticsHolder {
         var realTimeEnabled by prefsBooleanState("audio_haptics_realtime_enabled", false)
-        var sensitivity by prefsFloatState("audio_haptics_sensitivity", 0.75f)
-        var refractoryMs by prefsLongState("audio_haptics_refractory_ms", 35L)
+        var sensitivity by prefsFloatState("audio_haptics_sensitivity", 0.3f)
+        var refractoryMs by prefsLongState("audio_haptics_refractory_ms", 80L)
         var activePipeline by prefsStringState("active_haptic_pipeline", "XiaomiMelodicCrisp")
-        var resonantFrequencyHz by prefsFloatState("active_haptic_freq", 172.0f)
+        var resonantFrequencyHz by prefsFloatState("active_haptic_freq", 160.0f)
 
         fun setRealTimeEnabledPref(v: Boolean) { realTimeEnabled = v }
         fun setSensitivityPref(v: Float) { sensitivity = v }
@@ -1676,6 +1712,7 @@ internal sealed interface ReloadablePref {
     val key: String
     fun reload()
     fun writeJsonValue(editor: SharedPreferences.Editor, rawValue: Any)
+    fun exportValue(json: org.json.JSONObject)
 }
 
 internal fun SharedPreferences.safeGetFloat(key: String, default: Float): Float {
@@ -1775,6 +1812,9 @@ private class PrefBooleanDelegate(
         }
         editor.putBoolean(key, v)
     }
+    override fun exportValue(json: org.json.JSONObject) {
+        json.put(key, state)
+    }
 }
 
 private class PrefLongDelegate(
@@ -1800,6 +1840,9 @@ private class PrefLongDelegate(
             else -> default
         }
         editor.putLong(key, v)
+    }
+    override fun exportValue(json: org.json.JSONObject) {
+        json.put(key, state)
     }
 }
 
@@ -1827,6 +1870,9 @@ private class PrefIntDelegate(
         }
         editor.putInt(key, v)
     }
+    override fun exportValue(json: org.json.JSONObject) {
+        json.put(key, state)
+    }
 }
 
 private class PrefFloatDelegate(
@@ -1853,6 +1899,9 @@ private class PrefFloatDelegate(
         }
         editor.putFloat(key, v)
     }
+    override fun exportValue(json: org.json.JSONObject) {
+        json.put(key, state.toDouble())
+    }
 }
 
 private class PrefStringDelegate(
@@ -1873,6 +1922,9 @@ private class PrefStringDelegate(
     }
     override fun writeJsonValue(editor: SharedPreferences.Editor, rawValue: Any) {
         editor.putString(key, rawValue.toString())
+    }
+    override fun exportValue(json: org.json.JSONObject) {
+        json.put(key, state)
     }
 }
 
@@ -1898,5 +1950,8 @@ private class PrefEnumDelegate<E : Enum<E>>(
     }
     override fun writeJsonValue(editor: SharedPreferences.Editor, rawValue: Any) {
         editor.putString(key, rawValue.toString())
+    }
+    override fun exportValue(json: org.json.JSONObject) {
+        json.put(key, state.name)
     }
 }

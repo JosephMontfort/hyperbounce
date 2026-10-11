@@ -1,5 +1,7 @@
 package dev.hyperios.app.ui.screens
 
+import android.content.Intent
+import android.net.Uri
 import android.os.Build
 import android.widget.Toast
 import androidx.compose.animation.core.animateFloatAsState
@@ -8,6 +10,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -409,13 +414,23 @@ private fun LicenseCardRow(
 @Composable
 private fun DonationSection(colors: HyperBounceColors, backdrop: Backdrop) {
     val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
     SectionHeader("Support", colors)
     GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
         DonationButtonRow(
             label = "Donate",
             colors = colors,
             onClick = {
-                Toast.makeText(context, "Donation options coming soon!", Toast.LENGTH_SHORT).show()
+                try {
+                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://donatr.ee/montfort_1607")).apply {
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                    context.startActivity(intent)
+                } catch (_: Throwable) {}
+                coroutineScope.launch {
+                    delay(3000)
+                    Toast.makeText(context, "Thanks for your support ❤️", Toast.LENGTH_SHORT).show()
+                }
             }
         )
     }

@@ -14,3 +14,5 @@ re_vivo/
 vivo_ota_tracker/
 releases/
 .agents/
+active_prefs.xml
+build_apks/

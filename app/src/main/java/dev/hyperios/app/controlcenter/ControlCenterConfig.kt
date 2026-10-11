@@ -26,9 +26,9 @@ import java.util.concurrent.CopyOnWriteArrayList
  * Configuration data class for Control Center Modular Layout, Motion Dynamics, and Jelly Physics.
  */
 data class ControlCenterConfig(
-    var masterEnabled: Boolean = true,
+    var masterEnabled: Boolean = false,
     var modularEditEnabled: Boolean = true,
-    var animEnabled: Boolean = true,
+    var animEnabled: Boolean = false,
     var jellyEnabled: Boolean = true,
     var animEngineMode: Int = DevicePipelineDetector.getDefaultAnimEngineMode(),
     var entryInitialScale: Float = 0.10f,
@@ -48,8 +48,8 @@ data class ControlCenterConfig(
     var tileShrinkDamping: Float = 0.85f,
     var tileDelayScale: Float = 60.0f,
     var frictionMultiplier: Float = 0.40f,
-    var lowEndFlashlightEnabled: Boolean = false,
-    var flashlightMaxBrightness: Int = 100,
+    var lowEndFlashlightEnabled: Boolean = true,
+    var flashlightMaxBrightness: Int = 500,
     var true2dGridEnabled: Boolean = true,
     var fluidResizeEnabled: Boolean = true,
     var landscapeRightMaxRows: Int = 3
@@ -324,9 +324,9 @@ object ControlCenterConfigHolder {
         }
         pendingResetLayout = prefs.getBoolean("cc_pending_reset_layout", false)
         config = ControlCenterConfig(
-            masterEnabled = prefs.getBoolean("cc_master_enabled", true),
+            masterEnabled = prefs.getBoolean("cc_master_enabled", false),
             modularEditEnabled = prefs.getBoolean("cc_modular_edit_enabled", true),
-            animEnabled = prefs.getBoolean("cc_anim_enabled", true),
+            animEnabled = prefs.getBoolean("cc_anim_enabled", false),
             jellyEnabled = prefs.getBoolean("cc_jelly_enabled", true),
             animEngineMode = engineMode,
             entryInitialScale = prefs.getFloat("cc_entry_initial_scale", 0.10f),
@@ -346,8 +346,8 @@ object ControlCenterConfigHolder {
             tileShrinkDamping = prefs.getFloat("cc_tile_shrink_damping", 0.85f),
             tileDelayScale = prefs.getFloat("cc_tile_delay_scale", 60.0f),
             frictionMultiplier = prefs.getFloat("cc_friction_multiplier", 0.40f),
-            lowEndFlashlightEnabled = prefs.getBoolean("cc_low_end_flashlight_enabled", false),
-            flashlightMaxBrightness = prefs.getInt("cc_flashlight_max_brightness", 100),
+            lowEndFlashlightEnabled = prefs.getBoolean("cc_low_end_flashlight_enabled", true),
+            flashlightMaxBrightness = prefs.getInt("cc_flashlight_max_brightness", 500),
             true2dGridEnabled = prefs.getBoolean("cc_true_2d_grid_enabled", true),
             fluidResizeEnabled = prefs.getBoolean("cc_fluid_resize_enabled", true),
             landscapeRightMaxRows = prefs.getInt("cc_landscape_right_max_rows", 3)
