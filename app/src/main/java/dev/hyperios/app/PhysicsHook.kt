@@ -39,11 +39,6 @@ class PhysicsHook : XposedModule() {
                 null
             }
 
-            val isModuleEnabled = prefs?.getBoolean("module_enabled", false) ?: false
-            if (!isModuleEnabled) {
-                Log.i("HyperiOS", "PhysicsHook: module_enabled is false, skipping hooks for ${param.packageName}")
-                return
-            }
 
             val isHotReload = prefs?.getBoolean("hot_reload_enabled", false) ?: false
 

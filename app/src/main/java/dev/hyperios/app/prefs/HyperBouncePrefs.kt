@@ -35,7 +35,7 @@ class HyperBouncePrefs(module: XposedInterface) {
     // --- module-wide ----------------------------------------------------------------------
 
     val moduleEnabled: Boolean
-        get() = prefs.getBoolean("module_enabled", false)
+        get() = prefs.getBoolean("module_enabled", true)
 
     val hotReloadEnabled: Boolean
         get() = prefs.getBoolean("hot_reload_enabled", false)

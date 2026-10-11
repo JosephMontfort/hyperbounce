@@ -94,7 +94,7 @@ class SettingsRepository(context: Context) {
         editor.apply()
     }
 
-    var moduleEnabled by prefsBooleanState("module_enabled", false)
+    var moduleEnabled by prefsBooleanState("module_enabled", true)
         private set
 
     var hotReloadEnabled by prefsBooleanState("hot_reload_enabled", false)
@@ -353,7 +353,7 @@ class SettingsRepository(context: Context) {
         morphPhysics.reloadFromDefaults()
         callerScreen.reloadFromDefaults()
         dialerRecents.reloadFromDefaults()
-        moduleEnabled = false
+        moduleEnabled = true
         togglesSlidersHookEnabled = false
         toggleEngine = RenderEngine.LiquidGlass
         sliderEngine = RenderEngine.LiquidGlass
