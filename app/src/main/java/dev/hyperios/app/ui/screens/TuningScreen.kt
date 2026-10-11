@@ -208,7 +208,7 @@ fun TuningScreen(
                 ) {
                     BasicText(
                         text = "This module is not activated",
-                        style = HyperBounceType.headline.copy(color = colors.accent)
+                        style = HyperBounceType.headline.copy(color = colors.accentRed)
                     )
                     Spacer(Modifier.height(4.dp))
                     BasicText(
