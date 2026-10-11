@@ -5,7 +5,7 @@ plugins {
 }
 
 android {
-    namespace = "dev.joseph.hyperbounce"
+    namespace = "dev.hyperios.app"
     compileSdk = 37
 
     defaultConfig {
@@ -36,7 +36,12 @@ android {
     buildTypes {
         release {
             signingConfig = signingConfigs.getByName("release")
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
         }
     }
 
@@ -89,8 +94,8 @@ dependencies {
     implementation("org.jetbrains.compose.material:material-icons-core:1.7.3")
 
     // Kyant's actual Liquid Glass backdrop engine. Shared by the nav-bar engine
-    // (dev.joseph.hyperbounce.nav.glass) and the toggle/slider engine
-    // (dev.joseph.hyperbounce.toggles.glass).
+    // (dev.hyperios.app.nav.glass) and the toggle/slider engine
+    // (dev.hyperios.app.toggles.glass).
     implementation("io.github.kyant0:backdrop:2.0.0")
     implementation("io.github.kyant0:shapes:1.2.0")
 

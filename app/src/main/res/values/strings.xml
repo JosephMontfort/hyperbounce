@@ -3,7 +3,7 @@
     <string name="app_name">HyperiOS</string>
 
     <!-- Shown in LSPosed Manager (android:description in AndroidManifest.xml). -->
-    <string name="app_description">Liquid glass iOS-style physics everywhere: floating nav bars for Instagram/WhatsApp/YouTube, plus HyperOS toggles, sliders and keypad.</string>
+    <string name="app_description">HyperOS with iOS Aesthetics!</string>
 
     <!-- Kept from the source branches for reference; no longer wired to android:description. -->
     <string name="xposed_description_nav_experiment">Forces iOS underdamped spring physics on HyperOS</string>

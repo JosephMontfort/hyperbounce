@@ -26,11 +26,6 @@
             android:theme="@android:style/Theme.Material.NoActionBar"
             android:windowSoftInputMode="adjustResize" />
 
-        <activity-alias
-            android:name="dev.hyperios.app.ui.MainActivity"
-            android:targetActivity=".ui.MainActivity"
-            android:exported="true" />
-
         <!-- Monet Icon Launcher Entry (Default enabled) -->
         <activity-alias
             android:name=".ui.MainActivityMonet"
