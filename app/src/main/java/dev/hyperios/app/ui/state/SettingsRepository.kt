@@ -38,6 +38,9 @@ import kotlin.jvm.JvmName
 import kotlin.reflect.KProperty
 
 private const val PREFS_NAME = "hyperbounce_settings"
+private const val KEY_STORAGE_INITIALIZED = "hyperbounce_storage_initialized"
+private const val KEY_SCHEMA_VERSION = "hyperbounce_schema_version"
+private const val CURRENT_SCHEMA_VERSION = 1
 
 class SettingsRepository(context: Context) {
 
@@ -72,12 +75,129 @@ class SettingsRepository(context: Context) {
     init {
         appContext = context.applicationContext
         // Local prefs (above) are this app's own always-available source of truth — the UI
-        // never waits on the Xposed service. This just also mirrors everything out to the
-        // hooks once/if that service becomes available: every individual write already
-        // mirrors itself (see the three Pref*Delegate classes below), but this catches
-        // anything changed *before* the service was bound (e.g. the very first run).
+        // never waits on the Xposed service. When the service binds, deterministic two-way
+        // reconciliation ensures fresh installs clear zombie remote keys while dirty updates
+        // preserve customizations, prune deprecated keys, and seed new features.
         XposedServiceBridge.init()
-        XposedServiceBridge.onBind { pushAllLocalToRemote() }
+        XposedServiceBridge.onBind { reconcilePreferences() }
+    }
+
+    private fun reconcilePreferences() {
+        val remote = XposedServiceBridge.remotePreferencesOrNull(PREFS_NAME) ?: return
+        val isFreshInstall = !prefs.contains(KEY_STORAGE_INITIALIZED) && prefs.all.filterKeys { it != KEY_STORAGE_INITIALIZED }.isEmpty()
+
+        if (isFreshInstall) {
+            // Pure Fresh Install: Explicitly purge leftover ghost keys from LSPosed SQLite DB
+            remote.edit().clear().apply()
+
+            val localEditor = prefs.edit()
+            val remoteEditor = remote.edit()
+
+            for (delegate in reloadablePrefs) {
+                delegate.writeDefault(localEditor)
+                delegate.writeDefault(remoteEditor)
+            }
+
+            val rows = ModuleDefaults.ScreenUnlock.GRID_ROWS
+            for (r in 0 until rows) {
+                val z = ScreenUnlockDefaults.rowZ(r, rows)
+                val cb = ScreenUnlockDefaults.rowBounce(r, rows, false)
+                val ob = ScreenUnlockDefaults.rowBounce(r, rows, true)
+                val cs = ScreenUnlockDefaults.rowSettle(r, rows, false)
+                val os = ScreenUnlockDefaults.rowSettle(r, rows, true)
+                localEditor.putFloat("unlock_r${r}_z", z)
+                localEditor.putFloat("unlock_r${r}_center_bounce", cb)
+                localEditor.putFloat("unlock_r${r}_outer_bounce", ob)
+                localEditor.putFloat("unlock_r${r}_center_settle", cs)
+                localEditor.putFloat("unlock_r${r}_outer_settle", os)
+                remoteEditor.putFloat("unlock_r${r}_z", z)
+                remoteEditor.putFloat("unlock_r${r}_center_bounce", cb)
+                remoteEditor.putFloat("unlock_r${r}_outer_bounce", ob)
+                remoteEditor.putFloat("unlock_r${r}_center_settle", cs)
+                remoteEditor.putFloat("unlock_r${r}_outer_settle", os)
+            }
+
+            localEditor.putBoolean(KEY_STORAGE_INITIALIZED, true)
+            localEditor.putInt(KEY_SCHEMA_VERSION, CURRENT_SCHEMA_VERSION)
+            remoteEditor.putBoolean(KEY_STORAGE_INITIALIZED, true)
+            remoteEditor.putInt(KEY_SCHEMA_VERSION, CURRENT_SCHEMA_VERSION)
+
+            localEditor.apply()
+            remoteEditor.apply()
+
+            for (delegate in reloadablePrefs) {
+                delegate.reload()
+            }
+        } else {
+            // Dirty App Update: Clean migration and reconciliation
+            val validKeySet = HashSet<String>(reloadablePrefs.map { it.key })
+            validKeySet.add(KEY_STORAGE_INITIALIZED)
+            validKeySet.add(KEY_SCHEMA_VERSION)
+            for (r in 0..32) {
+                validKeySet.add("unlock_r${r}_z")
+                validKeySet.add("unlock_r${r}_center_bounce")
+                validKeySet.add("unlock_r${r}_outer_bounce")
+                validKeySet.add("unlock_r${r}_center_settle")
+                validKeySet.add("unlock_r${r}_outer_settle")
+            }
+
+            val localEditor = prefs.edit()
+            val remoteEditor = remote.edit()
+
+            val modulePrefixes = listOf(
+                "ios_anim_", "unlock_", "app_", "cc_", "pin_", "notif_",
+                "caller_", "dialer_", "toggle_", "slider_", "global_",
+                "morph_", "engine_", "miuix_", "component_", "prefs_key_",
+                "audio_haptics_", "active_haptic_"
+            )
+
+            // 1. Remove deleted / orphaned feature keys from both remote and local
+            val remoteKeys = remote.all.keys.toList()
+            for (rk in remoteKeys) {
+                if (modulePrefixes.any { rk.startsWith(it) } && !validKeySet.contains(rk)) {
+                    remoteEditor.remove(rk)
+                }
+            }
+            val localKeys = prefs.all.keys.toList()
+            for (lk in localKeys) {
+                if (modulePrefixes.any { lk.startsWith(it) } && !validKeySet.contains(lk)) {
+                    localEditor.remove(lk)
+                }
+            }
+
+            // 2. Push all valid local customized settings to remote
+            for ((key, value) in prefs.all) {
+                if (validKeySet.contains(key)) {
+                    when (value) {
+                        is Boolean -> remoteEditor.putBoolean(key, value)
+                        is Float -> remoteEditor.putFloat(key, value)
+                        is String -> remoteEditor.putString(key, value)
+                        is Int -> remoteEditor.putInt(key, value)
+                        is Long -> remoteEditor.putLong(key, value)
+                    }
+                }
+            }
+
+            // 3. Populate defaults for any newly introduced keys not yet in local prefs
+            for (delegate in reloadablePrefs) {
+                if (!prefs.contains(delegate.key)) {
+                    delegate.writeDefault(localEditor)
+                    delegate.writeDefault(remoteEditor)
+                }
+            }
+
+            localEditor.putBoolean(KEY_STORAGE_INITIALIZED, true)
+            localEditor.putInt(KEY_SCHEMA_VERSION, CURRENT_SCHEMA_VERSION)
+            remoteEditor.putBoolean(KEY_STORAGE_INITIALIZED, true)
+            remoteEditor.putInt(KEY_SCHEMA_VERSION, CURRENT_SCHEMA_VERSION)
+
+            localEditor.apply()
+            remoteEditor.apply()
+
+            for (delegate in reloadablePrefs) {
+                delegate.reload()
+            }
+        }
     }
 
     private fun pushAllLocalToRemote() {
@@ -339,6 +459,8 @@ class SettingsRepository(context: Context) {
     /** Clears every stored key, restoring every field to the defaults in SettingsModels.kt. */
     fun resetToDefaults() {
         prefs.edit().clear().apply()
+        XposedServiceBridge.remotePreferencesOrNull(PREFS_NAME)?.edit()?.clear()?.apply()
+
         instagram.reloadFromDefaults()
         whatsapp.reloadFromDefaults()
         youtube.reloadFromDefaults()
@@ -354,7 +476,12 @@ class SettingsRepository(context: Context) {
         morphPhysics.reloadFromDefaults()
         callerScreen.reloadFromDefaults()
         dialerRecents.reloadFromDefaults()
-        moduleEnabled = true
+        moduleEnabled = ModuleDefaults.MasterToggles.MODULE_ENABLED
+        hotReloadEnabled = false
+        appTheme = AppTheme.FollowSystem
+        componentStyle = ComponentStyle.MIUIX
+        appIconStyle = AppIconStyle.Flat
+        miuixLiquidGlassBottomBar = false
         togglesSlidersHookEnabled = false
         toggleEngine = RenderEngine.LiquidGlass
         sliderEngine = RenderEngine.LiquidGlass
@@ -364,6 +491,10 @@ class SettingsRepository(context: Context) {
         toggleCustomColor = 0xFF30D158L
         sliderAccent = AccentPreset.Blue
         sliderCustomColor = 0xFF30D158L
+
+        prefs.edit().putBoolean(KEY_STORAGE_INITIALIZED, true).putInt(KEY_SCHEMA_VERSION, CURRENT_SCHEMA_VERSION).apply()
+        XposedServiceBridge.remotePreferencesOrNull(PREFS_NAME)?.edit()?.putBoolean(KEY_STORAGE_INITIALIZED, true)?.putInt(KEY_SCHEMA_VERSION, CURRENT_SCHEMA_VERSION)?.apply()
+        pushAllLocalToRemote()
     }
 
     // --- per-app nav bar settings -------------------------------------------------------
@@ -1724,6 +1855,7 @@ internal sealed interface ReloadablePref {
     fun reload()
     fun writeJsonValue(editor: SharedPreferences.Editor, rawValue: Any)
     fun exportValue(json: org.json.JSONObject)
+    fun writeDefault(editor: SharedPreferences.Editor)
 }
 
 internal fun SharedPreferences.safeGetFloat(key: String, default: Float): Float {
@@ -1826,6 +1958,9 @@ private class PrefBooleanDelegate(
     override fun exportValue(json: org.json.JSONObject) {
         json.put(key, state)
     }
+    override fun writeDefault(editor: SharedPreferences.Editor) {
+        editor.putBoolean(key, default)
+    }
 }
 
 private class PrefLongDelegate(
@@ -1854,6 +1989,9 @@ private class PrefLongDelegate(
     }
     override fun exportValue(json: org.json.JSONObject) {
         json.put(key, state)
+    }
+    override fun writeDefault(editor: SharedPreferences.Editor) {
+        editor.putLong(key, default)
     }
 }
 
@@ -1884,6 +2022,9 @@ private class PrefIntDelegate(
     override fun exportValue(json: org.json.JSONObject) {
         json.put(key, state)
     }
+    override fun writeDefault(editor: SharedPreferences.Editor) {
+        editor.putInt(key, default)
+    }
 }
 
 private class PrefFloatDelegate(
@@ -1913,6 +2054,9 @@ private class PrefFloatDelegate(
     override fun exportValue(json: org.json.JSONObject) {
         json.put(key, state.toDouble())
     }
+    override fun writeDefault(editor: SharedPreferences.Editor) {
+        editor.putFloat(key, default)
+    }
 }
 
 private class PrefStringDelegate(
@@ -1936,6 +2080,9 @@ private class PrefStringDelegate(
     }
     override fun exportValue(json: org.json.JSONObject) {
         json.put(key, state)
+    }
+    override fun writeDefault(editor: SharedPreferences.Editor) {
+        editor.putString(key, default)
     }
 }
 
@@ -1964,5 +2111,8 @@ private class PrefEnumDelegate<E : Enum<E>>(
     }
     override fun exportValue(json: org.json.JSONObject) {
         json.put(key, state.name)
+    }
+    override fun writeDefault(editor: SharedPreferences.Editor) {
+        editor.putString(key, default.name)
     }
 }

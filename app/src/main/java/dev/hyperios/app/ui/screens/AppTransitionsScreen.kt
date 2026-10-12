@@ -93,6 +93,36 @@ fun AppTransitionsScreen(
                     defaultValue = ModuleDefaults.IOSTransitions.CLOSE_SPRING_DAMPING,
                     valueLabel = { String.format(Locale.US, "%.2f", it) }
                 )
+                RowDivider(colors.separator)
+                SettingsSliderRow(
+                    title = "Arc Apex Lift",
+                    subtitle = "Parabolic arc trajectory height multiplier on app launch",
+                    colors = colors,
+                    backdrop = backdrop,
+                    value = trans.arcApexLift,
+                    onValueChange = trans::setArcApexLift,
+                    valueRange = ModuleDefaults.IOSTransitions.ARC_APEX_LIFT_RANGE,
+                    defaultValue = ModuleDefaults.IOSTransitions.ARC_APEX_LIFT,
+                    valueLabel = { String.format(Locale.US, "%.2fx", it) }
+                )
+                RowDivider(colors.separator)
+                SettingsToggleRow(
+                    title = "Opening Uplift Surge",
+                    subtitle = "Initial upward launch velocity surge on app open",
+                    colors = colors,
+                    backdrop = backdrop,
+                    checked = trans.openUpliftSurge,
+                    onCheckedChange = trans::setOpenUpliftSurge
+                )
+                RowDivider(colors.separator)
+                SettingsToggleRow(
+                    title = "Keystone Squeeze",
+                    subtitle = "Perspective trapezoid squeeze distortion during icon expansion",
+                    colors = colors,
+                    backdrop = backdrop,
+                    checked = trans.keystoneSqueeze,
+                    onCheckedChange = trans::setKeystoneSqueeze
+                )
             }
         }
 
@@ -125,6 +155,15 @@ fun AppTransitionsScreen(
                     backdrop = backdrop,
                     checked = trans.zeroFrictionDrag,
                     onCheckedChange = trans::setZeroFrictionDrag
+                )
+                RowDivider(colors.separator)
+                SettingsToggleRow(
+                    title = "Landscape & Game Optimization",
+                    subtitle = "Optimized transition dynamics for landscape and gaming apps",
+                    colors = colors,
+                    backdrop = backdrop,
+                    checked = trans.landscapeGameOpt,
+                    onCheckedChange = trans::setLandscapeGameOpt
                 )
             }
         }
