@@ -259,7 +259,8 @@ object SettingsEntryHook {
 
                     // Set Intent
                     try {
-                        val intent = Intent().apply {
+                        val intent = Intent(Intent.ACTION_MAIN).apply {
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                             putExtra("isDisplayHomeAsUpEnabled", true)
                             setClassName("dev.hyperios.app", "dev.hyperios.app.ui.MainActivity")
                         }

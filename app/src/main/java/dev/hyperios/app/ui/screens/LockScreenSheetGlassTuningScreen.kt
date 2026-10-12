@@ -33,6 +33,7 @@ fun LockScreenSheetGlassTuningScreen(
         onResetPage = {
             sheet.setSideRefraction(ModuleDefaults.LockScreenSheet.SIDE_REFRACTION)
             sheet.setBottomRefraction(ModuleDefaults.LockScreenSheet.BOTTOM_REFRACTION)
+            sheet.setEdgeStretch(ModuleDefaults.LockScreenSheet.EDGE_STRETCH)
             sheet.setDispersionStrength(ModuleDefaults.LockScreenSheet.DISPERSION_STRENGTH)
             sheet.setRimSoftness(ModuleDefaults.LockScreenSheet.RIM_SOFTNESS)
             sheet.setSaturationFactor(ModuleDefaults.LockScreenSheet.SATURATION_FACTOR)
@@ -68,6 +69,19 @@ fun LockScreenSheetGlassTuningScreen(
                     onValueChange = sheet::setBottomRefraction,
                     valueRange = ModuleDefaults.LockScreenSheet.BOTTOM_REFRACTION_RANGE,
                     defaultValue = ModuleDefaults.LockScreenSheet.BOTTOM_REFRACTION,
+                    valueLabel = { String.format(Locale.US, "%.0f dp", it) },
+                    enabled = sheet.enabled
+                )
+                RowDivider(colors.separator)
+                SettingsSliderRow(
+                    title = "Lens Edge Stretch",
+                    subtitle = "Outward boundary pixel distortion and dynamic squeeze expansion",
+                    colors = colors,
+                    backdrop = backdrop,
+                    value = sheet.edgeStretch,
+                    onValueChange = sheet::setEdgeStretch,
+                    valueRange = 0.0f..60.0f,
+                    defaultValue = ModuleDefaults.LockScreenSheet.EDGE_STRETCH,
                     valueLabel = { String.format(Locale.US, "%.0f dp", it) },
                     enabled = sheet.enabled
                 )

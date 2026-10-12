@@ -18,7 +18,7 @@ class InstagramHook(
 
     fun onPackageReady() {
         val hyperBouncePrefs = HyperBouncePrefs(module)
-        if (!hyperBouncePrefs.moduleEnabled || !hyperBouncePrefs.appEnabled("instagram")) {
+        if (!hyperBouncePrefs.appEnabled("instagram")) {
             log("HyperBounce: disabled for Instagram, skipping injection")
             return
         }

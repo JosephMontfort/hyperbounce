@@ -6,12 +6,10 @@ import dev.hyperios.app.common.ModuleDefaults
 
 data class LockScreenSheetConfig(
     var enabled: Boolean = ModuleDefaults.MasterToggles.LOCK_SHEET_ENABLED,
-    var enableOptimization: Boolean = ModuleDefaults.LockScreenSheet.ENABLE_OPTIMIZATION,
     // Optics (Liquid Glass 2.0)
     var refractionHeight: Float = ModuleDefaults.LockScreenSheet.REFRACTION_HEIGHT,
     var sideRefraction: Float = ModuleDefaults.LockScreenSheet.SIDE_REFRACTION,
     var bottomRefraction: Float = ModuleDefaults.LockScreenSheet.BOTTOM_REFRACTION,
-    var bevelWidth: Float = ModuleDefaults.LockScreenSheet.BEVEL_WIDTH,
     var leftBevelWidth: Float = ModuleDefaults.LockScreenSheet.LEFT_BEVEL_WIDTH,
     var rightBevelWidth: Float = ModuleDefaults.LockScreenSheet.RIGHT_BEVEL_WIDTH,
     var bottomBevelWidth: Float = ModuleDefaults.LockScreenSheet.BOTTOM_BEVEL_WIDTH,
@@ -46,18 +44,18 @@ data class LockScreenKeypadConfig(
     var digitTextSize: Float = ModuleDefaults.LockScreenKeypad.DIGIT_TEXT_SIZE,
     var showKlondike: Boolean = ModuleDefaults.LockScreenKeypad.SHOW_KLONDIKE,
     var pressLiquidScale: Float = ModuleDefaults.LockScreenKeypad.PRESS_LIQUID_SCALE,
-    var pressLiquidAmp: Float = ModuleDefaults.LockScreenKeypad.PRESS_LIQUID_AMP,
+    val pressLiquidAmp: Float = ModuleDefaults.LockScreenKeypad.PRESS_LIQUID_AMP,
     // PIN Pad Grid Layout & Spacing
     var pinpadLift: Float = ModuleDefaults.LockScreenKeypad.PAD_LIFT,
     var row0Offset: Float = ModuleDefaults.LockScreenKeypad.ROW0_OFFSET,
     var rowSpacing: Float = ModuleDefaults.LockScreenKeypad.ROW_SPACING,
     var columnSpacing: Float = ModuleDefaults.LockScreenKeypad.COL_SPACING,
-    // Legacy fine-tune offsets
-    var row1Offset: Float = ModuleDefaults.LockScreenKeypad.ROW1_OFFSET,
-    var row2Offset: Float = ModuleDefaults.LockScreenKeypad.ROW2_OFFSET,
-    var row3Offset: Float = ModuleDefaults.LockScreenKeypad.ROW3_OFFSET,
-    var col1Offset: Float = ModuleDefaults.LockScreenKeypad.COL1_OFFSET,
-    var col3Offset: Float = ModuleDefaults.LockScreenKeypad.COL3_OFFSET,
+    // Immutable fine-tune offsets
+    val row1Offset: Float = ModuleDefaults.LockScreenKeypad.ROW1_OFFSET,
+    val row2Offset: Float = ModuleDefaults.LockScreenKeypad.ROW2_OFFSET,
+    val row3Offset: Float = ModuleDefaults.LockScreenKeypad.ROW3_OFFSET,
+    val col1Offset: Float = ModuleDefaults.LockScreenKeypad.COL1_OFFSET,
+    val col3Offset: Float = ModuleDefaults.LockScreenKeypad.COL3_OFFSET,
     // Per-Key Custom Delays (ms)
     var delayKey1: Float = ModuleDefaults.LockScreenKeypad.DELAY_KEY1,
     var delayKey2: Float = ModuleDefaults.LockScreenKeypad.DELAY_KEY2,
@@ -116,11 +114,9 @@ object LockScreenConfigHolder {
     fun updateFromPrefs(prefs: SharedPreferences) {
         // Sheet configs (Liquid Glass 2.0)
         sheet.enabled = prefs.getBoolean("lock_sheet_enabled", ModuleDefaults.MasterToggles.LOCK_SHEET_ENABLED)
-        sheet.enableOptimization = prefs.getBoolean("lock_sheet_enable_optimization", ModuleDefaults.LockScreenSheet.ENABLE_OPTIMIZATION)
         sheet.refractionHeight = prefs.getFloat("lock_card_refraction_height", ModuleDefaults.LockScreenSheet.REFRACTION_HEIGHT)
         sheet.sideRefraction = prefs.getFloat("lock_card_side_refraction", ModuleDefaults.LockScreenSheet.SIDE_REFRACTION)
         sheet.bottomRefraction = prefs.getFloat("lock_card_bottom_refraction", ModuleDefaults.LockScreenSheet.BOTTOM_REFRACTION)
-        sheet.bevelWidth = prefs.getFloat("lock_card_bevel_width", ModuleDefaults.LockScreenSheet.BEVEL_WIDTH)
         sheet.leftBevelWidth = prefs.getFloat("lock_card_left_bevel", ModuleDefaults.LockScreenSheet.LEFT_BEVEL_WIDTH)
         sheet.rightBevelWidth = prefs.getFloat("lock_card_right_bevel", ModuleDefaults.LockScreenSheet.RIGHT_BEVEL_WIDTH)
         sheet.bottomBevelWidth = prefs.getFloat("lock_card_bottom_bevel", ModuleDefaults.LockScreenSheet.BOTTOM_BEVEL_WIDTH)
@@ -152,17 +148,11 @@ object LockScreenConfigHolder {
         keypad.digitTextSize = prefs.getFloat("pin_digit_text_size", ModuleDefaults.LockScreenKeypad.DIGIT_TEXT_SIZE)
         keypad.showKlondike = prefs.getBoolean("pin_show_klondike", ModuleDefaults.LockScreenKeypad.SHOW_KLONDIKE)
         keypad.pressLiquidScale = prefs.getFloat("pin_press_liquid_scale", ModuleDefaults.LockScreenKeypad.PRESS_LIQUID_SCALE)
-        keypad.pressLiquidAmp = prefs.getFloat("pin_press_liquid_amp", ModuleDefaults.LockScreenKeypad.PRESS_LIQUID_AMP)
 
         keypad.pinpadLift = prefs.getFloat("pin_pad_lift", ModuleDefaults.LockScreenKeypad.PAD_LIFT)
         keypad.row0Offset = prefs.getFloat("pin_row0_offset", ModuleDefaults.LockScreenKeypad.ROW0_OFFSET)
         keypad.rowSpacing = prefs.getFloat("pin_row_spacing", ModuleDefaults.LockScreenKeypad.ROW_SPACING)
         keypad.columnSpacing = prefs.getFloat("pin_col_spacing", ModuleDefaults.LockScreenKeypad.COL_SPACING)
-        keypad.row1Offset = prefs.getFloat("pin_row1_offset", ModuleDefaults.LockScreenKeypad.ROW1_OFFSET)
-        keypad.row2Offset = prefs.getFloat("pin_row2_offset", ModuleDefaults.LockScreenKeypad.ROW2_OFFSET)
-        keypad.row3Offset = prefs.getFloat("pin_row3_offset", ModuleDefaults.LockScreenKeypad.ROW3_OFFSET)
-        keypad.col1Offset = prefs.getFloat("pin_col1_offset", ModuleDefaults.LockScreenKeypad.COL1_OFFSET)
-        keypad.col3Offset = prefs.getFloat("pin_col3_offset", ModuleDefaults.LockScreenKeypad.COL3_OFFSET)
 
         // Per-Key Custom Entrance Delays (ms)
         keypad.delayKey1 = prefs.getFloat("pin_delay_key1", ModuleDefaults.LockScreenKeypad.DELAY_KEY1)
@@ -216,7 +206,6 @@ object LockScreenConfigHolder {
             "pin_digit_text_size" -> keypad.digitTextSize = intent.getFloatExtra("value_float", keypad.digitTextSize)
             "pin_show_klondike" -> keypad.showKlondike = intent.getBooleanExtra("value_boolean", keypad.showKlondike)
             "pin_press_liquid_scale" -> keypad.pressLiquidScale = intent.getFloatExtra("value_float", keypad.pressLiquidScale)
-            "pin_press_liquid_amp" -> keypad.pressLiquidAmp = intent.getFloatExtra("value_float", keypad.pressLiquidAmp)
             "pin_drag_max_threshold" -> keypad.dragMaxThreshold = intent.getFloatExtra("value_float", keypad.dragMaxThreshold)
             "pin_drag_initial_stiffness" -> keypad.dragInitialStiffness = intent.getFloatExtra("value_float", keypad.dragInitialStiffness)
             "pin_drag_resistance_power" -> keypad.dragResistancePower = intent.getFloatExtra("value_float", keypad.dragResistancePower)

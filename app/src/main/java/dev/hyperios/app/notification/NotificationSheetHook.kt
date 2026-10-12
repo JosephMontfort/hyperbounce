@@ -1299,13 +1299,10 @@ object NotificationSheetHook {
                         }
                         "notif_sheet_lockscreen_enabled" -> cfg.lockScreenAsNotifCenterEnabled = intent.getBooleanExtra("value_boolean", cfg.lockScreenAsNotifCenterEnabled)
                         "notif_sheet_show_bottom_widgets" -> cfg.showBottomWidgets = intent.getBooleanExtra("value_boolean", cfg.showBottomWidgets)
-                        "notif_sheet_clock_morph" -> cfg.clockMorphOnNotifications = intent.getBooleanExtra("value_boolean", cfg.clockMorphOnNotifications)
                         "notif_sheet_glass_effects_enabled" -> cfg.glassEffectsEnabled = intent.getBooleanExtra("value_boolean", cfg.glassEffectsEnabled)
-                        "notif_sheet_glass_only_without_wallpaper" -> cfg.glassOnlyWithoutWallpaper = intent.getBooleanExtra("value_boolean", cfg.glassOnlyWithoutWallpaper)
                         "notif_card_refraction_height" -> cfg.refractionHeight = intent.getFloatExtra("value_float", cfg.refractionHeight)
                         "notif_card_side_refraction" -> cfg.sideRefraction = intent.getFloatExtra("value_float", cfg.sideRefraction)
                         "notif_card_bottom_refraction" -> cfg.bottomRefraction = intent.getFloatExtra("value_float", cfg.bottomRefraction)
-                        "notif_card_bevel_width" -> cfg.bevelWidth = intent.getFloatExtra("value_float", cfg.bevelWidth)
                         "notif_card_left_bevel" -> cfg.leftBevelWidth = intent.getFloatExtra("value_float", cfg.leftBevelWidth)
                         "notif_card_right_bevel" -> cfg.rightBevelWidth = intent.getFloatExtra("value_float", cfg.rightBevelWidth)
                         "notif_card_bottom_bevel" -> cfg.bottomBevelWidth = intent.getFloatExtra("value_float", cfg.bottomBevelWidth)
@@ -2181,8 +2178,7 @@ object NotificationSheetHook {
                 val isHomescreenAllowed = !cfg.lockWallpaperHomescreenOnly || isHomeScreenCached
                 val isDepthActive = cfg.isDepthActive && !isLandscape && isHomescreenAllowed
                 val isLockScreenActive = cfg.isLockScreenActive && !isLandscape && isHomescreenAllowed
-                val shouldDrawWallpaper = cfg.isWallpaperActive && !isLandscape && isHomescreenAllowed
-                val shouldRenderGlass = !isLandscape && cfg.isGlassEffectsActive && (!cfg.glassOnlyWithoutWallpaper || !shouldDrawWallpaper)
+                val shouldRenderGlass = !isLandscape && cfg.isGlassEffectsActive
                 if (shouldRenderGlass) {
                     RealtimeBackdropHelper.startLiveRefresh(container.context, curSheet)
                 } else {

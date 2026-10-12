@@ -31,7 +31,7 @@ class WhatsAppHook(
     private val hyperBouncePrefs = HyperBouncePrefs(module)
 
     fun onPackageReady() {
-        if (!hyperBouncePrefs.moduleEnabled || !hyperBouncePrefs.appEnabled("whatsapp")) {
+        if (!hyperBouncePrefs.appEnabled("whatsapp")) {
             module.log(Log.INFO, "HyperiOS", "disabled for WhatsApp, skipping injection")
             return
         }

@@ -13,14 +13,11 @@ data class NotificationSheetConfig(
     var depthCustomSubject: Boolean = ModuleDefaults.NotificationSheet.DEPTH_CUSTOM_SUBJECT,
     var lockScreenAsNotifCenterEnabled: Boolean = ModuleDefaults.NotificationSheet.LOCK_SCREEN_AS_NOTIF_CENTER_ENABLED,
     var showBottomWidgets: Boolean = ModuleDefaults.NotificationSheet.SHOW_BOTTOM_WIDGETS,
-    var clockMorphOnNotifications: Boolean = ModuleDefaults.NotificationSheet.CLOCK_MORPH_ON_NOTIFICATIONS,
     var glassEffectsEnabled: Boolean = ModuleDefaults.NotificationSheet.GLASS_EFFECTS_ENABLED,
-    var glassOnlyWithoutWallpaper: Boolean = ModuleDefaults.NotificationSheet.GLASS_ONLY_WITHOUT_WALLPAPER,
     // Optics (Liquid Glass 2.0)
     var refractionHeight: Float = ModuleDefaults.NotificationSheet.REFRACTION_HEIGHT,
     var sideRefraction: Float = ModuleDefaults.NotificationSheet.SIDE_REFRACTION,
     var bottomRefraction: Float = ModuleDefaults.NotificationSheet.BOTTOM_REFRACTION,
-    var bevelWidth: Float = ModuleDefaults.NotificationSheet.BEVEL_WIDTH,
     var leftBevelWidth: Float = ModuleDefaults.NotificationSheet.LEFT_BEVEL_WIDTH,
     var rightBevelWidth: Float = ModuleDefaults.NotificationSheet.RIGHT_BEVEL_WIDTH,
     var bottomBevelWidth: Float = ModuleDefaults.NotificationSheet.BOTTOM_BEVEL_WIDTH,
@@ -115,13 +112,10 @@ object NotificationSheetConfigHolder {
         sheet.oneToOneTrackingEnabled = prefs.getBoolean("notif_sheet_one_to_one_tracking", ModuleDefaults.NotificationSheet.ONE_TO_ONE_TRACKING_ENABLED)
         sheet.lockScreenAsNotifCenterEnabled = prefs.getBoolean("notif_sheet_lockscreen_enabled", ModuleDefaults.NotificationSheet.LOCK_SCREEN_AS_NOTIF_CENTER_ENABLED)
         sheet.showBottomWidgets = prefs.getBoolean("notif_sheet_show_bottom_widgets", ModuleDefaults.NotificationSheet.SHOW_BOTTOM_WIDGETS)
-        sheet.clockMorphOnNotifications = prefs.getBoolean("notif_sheet_clock_morph", ModuleDefaults.NotificationSheet.CLOCK_MORPH_ON_NOTIFICATIONS)
         sheet.glassEffectsEnabled = prefs.getBoolean("notif_sheet_glass_effects_enabled", ModuleDefaults.NotificationSheet.GLASS_EFFECTS_ENABLED)
-        sheet.glassOnlyWithoutWallpaper = prefs.getBoolean("notif_sheet_glass_only_without_wallpaper", ModuleDefaults.NotificationSheet.GLASS_ONLY_WITHOUT_WALLPAPER)
         sheet.refractionHeight = prefs.getFloat("notif_card_refraction_height", ModuleDefaults.NotificationSheet.REFRACTION_HEIGHT)
         sheet.sideRefraction = prefs.getFloat("notif_card_side_refraction", ModuleDefaults.NotificationSheet.SIDE_REFRACTION)
         sheet.bottomRefraction = prefs.getFloat("notif_card_bottom_refraction", ModuleDefaults.NotificationSheet.BOTTOM_REFRACTION)
-        sheet.bevelWidth = prefs.getFloat("notif_card_bevel_width", ModuleDefaults.NotificationSheet.BEVEL_WIDTH)
         sheet.leftBevelWidth = prefs.getFloat("notif_card_left_bevel", ModuleDefaults.NotificationSheet.LEFT_BEVEL_WIDTH)
         sheet.rightBevelWidth = prefs.getFloat("notif_card_right_bevel", ModuleDefaults.NotificationSheet.RIGHT_BEVEL_WIDTH)
         sheet.bottomBevelWidth = prefs.getFloat("notif_card_bottom_bevel", ModuleDefaults.NotificationSheet.BOTTOM_BEVEL_WIDTH)

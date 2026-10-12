@@ -65,7 +65,7 @@ object IosCallerScreenHook {
         initOutgoingCallTransition(module, classLoader)
 
         val prefs = HyperBouncePrefs(module)
-        if (!prefs.moduleEnabled || !prefs.callerScreenEnabled) {
+        if (!prefs.callerScreenEnabled) {
             Log.d(TAG, "iOS Caller Screen feature is disabled in preferences.")
             return
         }

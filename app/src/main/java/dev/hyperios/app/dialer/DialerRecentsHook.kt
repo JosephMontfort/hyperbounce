@@ -147,7 +147,7 @@ object DialerRecentsHook {
             null
         }
 
-        if (prefs != null && (!prefs.moduleEnabled || !prefs.dialerRecentsSwipeEnabled)) {
+        if (prefs != null && !prefs.dialerRecentsSwipeEnabled) {
             Log.d(TAG, "Dialer Recents Swipe is disabled in preferences.")
             return
         }

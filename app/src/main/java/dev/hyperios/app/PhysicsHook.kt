@@ -153,6 +153,13 @@ class PhysicsHook : XposedModule() {
                 param.packageName == "com.xiaomi.misettings" ||
                 param.packageName == "com.android.thememanager" -> {
                     if (param.packageName == "com.android.settings" || param.packageName == "com.xiaomi.misettings") {
+                        if (prefs != null) {
+                            try {
+                                prefs.registerOnSharedPreferenceChangeListener { _, _ -> }
+                            } catch (t: Throwable) {
+                                Log.e("HyperiOS", "Failed to bind remote preferences in Settings", t)
+                            }
+                        }
                         dev.hyperios.app.settings.SettingsEntryHook.init(this, param.classLoader, prefs)
                     }
                     dev.hyperios.app.haptics.ringtone.XiaomiRingtoneHapticHook.init(this, param.classLoader)

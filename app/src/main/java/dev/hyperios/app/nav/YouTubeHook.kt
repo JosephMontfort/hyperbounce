@@ -33,7 +33,7 @@ class YouTubeHook(
     private val hyperBouncePrefs = HyperBouncePrefs(module)
 
     fun onPackageReady() {
-        if (!hyperBouncePrefs.moduleEnabled || !hyperBouncePrefs.appEnabled("youtube")) {
+        if (!hyperBouncePrefs.appEnabled("youtube")) {
             module.log(Log.INFO, "HyperiOS", "disabled for YouTube, skipping injection")
             return
         }

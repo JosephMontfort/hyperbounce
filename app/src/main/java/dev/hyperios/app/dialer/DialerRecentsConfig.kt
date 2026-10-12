@@ -18,15 +18,13 @@ object DialerRecentsConfigHolder {
         private set
 
     fun updateFromPrefs(prefs: SharedPreferences) {
-        val rawMorph = prefs.getFloat("dialer_morph_duration", ModuleDefaults.DialerRecents.MORPH_DURATION)
-        val validMorph = if (rawMorph <= 50f) ModuleDefaults.DialerRecents.MORPH_DURATION.toLong() else rawMorph.toLong().coerceIn(200L, 2000L)
         config = DialerRecentsConfig(
             enabled = prefs.getBoolean("dialer_recents_swipe_enabled", ModuleDefaults.MasterToggles.DIALER_RECENTS_SWIPE_ENABLED),
-            callThresholdDp = prefs.getFloat("dialer_call_threshold", ModuleDefaults.DialerRecents.CALL_THRESHOLD),
-            deleteWidthDp = prefs.getFloat("dialer_delete_width", ModuleDefaults.DialerRecents.DELETE_WIDTH),
-            confirmDelete = prefs.getBoolean("dialer_confirm_delete", ModuleDefaults.DialerRecents.CONFIRM_DELETE),
+            callThresholdDp = ModuleDefaults.DialerRecents.CALL_THRESHOLD,
+            deleteWidthDp = ModuleDefaults.DialerRecents.DELETE_WIDTH,
+            confirmDelete = ModuleDefaults.DialerRecents.CONFIRM_DELETE,
             hapticsEnabled = prefs.getBoolean("dialer_haptics_enabled", true),
-            morphDurationMs = validMorph
+            morphDurationMs = ModuleDefaults.DialerRecents.MORPH_DURATION.toLong()
         )
     }
 }

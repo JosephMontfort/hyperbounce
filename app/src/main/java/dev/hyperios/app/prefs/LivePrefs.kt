@@ -57,7 +57,7 @@ private fun readNavBarSettings(hyperBouncePrefs: HyperBouncePrefs, appKey: Strin
     pillShadow = hyperBouncePrefs.appPillShadow(appKey),
     autoShrink = hyperBouncePrefs.appAutoShrink(appKey),
     autoShrinkScale = hyperBouncePrefs.appAutoShrinkScale(appKey),
-    autoShrinkSensitivity = hyperBouncePrefs.appAutoShrinkSensitivity(appKey)
+    autoShrinkSensitivity = 1.0f
 )
 
 @Composable

@@ -31,6 +31,8 @@ import com.kyant.backdrop.backdrops.rememberCanvasBackdrop
 import dev.hyperios.app.R
 import dev.hyperios.app.ui.components.GlassCard
 import dev.hyperios.app.ui.components.RowDivider
+import dev.hyperios.app.ui.components.SectionHeader
+import dev.hyperios.app.ui.components.SettingsToggleRow
 import dev.hyperios.app.ui.glass.LiquidToggle
 import dev.hyperios.app.ui.state.SettingsRepository
 import dev.hyperios.app.ui.state.ComponentStyle
@@ -81,6 +83,19 @@ fun SafeModeScreen(
         onBack = onBack
     ) { _ ->
         item {
+            GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
+                SettingsToggleRow(
+                    title = "Master Emergency Safe Mode",
+                    subtitle = "Bypass all module hooks across the entire system immediately",
+                    colors = colors,
+                    backdrop = backdrop,
+                    checked = safe.globalSafeMode,
+                    onCheckedChange = safe::setGlobalSafeMode
+                )
+            }
+        }
+        item {
+            SectionHeader("Per-Package Safe Mode", colors)
             GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
                 // 1. System UI
                 SafeModeAppRow(

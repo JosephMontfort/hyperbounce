@@ -1062,60 +1062,6 @@ object ControlCenterHook {
                                     sReleaseTransYEaseField = this
                                 }
                                 releaseTransYEaseField.set(holder, bounceEase)
-
-                                if (!ControlCenterConfigHolder.config.isLowEndAnim() && ControlCenterConfigHolder.config.isAnimActive) {
-                                    val showEaseField = sShowEaseField ?: holderClass.getDeclaredField("showEase").apply {
-                                        isAccessible = true
-                                        sShowEaseField = this
-                                    }
-                                    val showEase = showEaseField.get(holder)
-                                    if (showEase != null) {
-                                        val setFactorsMethod = sSetFactorsMethod ?: showEase.javaClass.getMethod("setFactors", Float::class.javaPrimitiveType, Float::class.javaPrimitiveType).apply {
-                                            isAccessible = true
-                                            sSetFactorsMethod = this
-                                        }
-                                        setFactorsMethod.invoke(showEase, ControlCenterConfigHolder.config.tileShowDamping, ControlCenterConfigHolder.config.tileShowResponse)
-                                    }
-
-                                    val hideEaseField = sHideEaseField ?: holderClass.getDeclaredField("hideEase").apply {
-                                        isAccessible = true
-                                        sHideEaseField = this
-                                    }
-                                    val hideEase = hideEaseField.get(holder)
-                                    if (hideEase != null) {
-                                        val setFactorsMethod = sSetFactorsMethod ?: hideEase.javaClass.getMethod("setFactors", Float::class.javaPrimitiveType, Float::class.javaPrimitiveType).apply {
-                                            isAccessible = true
-                                            sSetFactorsMethod = this
-                                        }
-                                        setFactorsMethod.invoke(hideEase, ControlCenterConfigHolder.config.tileHideDamping, ControlCenterConfigHolder.config.tileHideResponse)
-                                    }
-
-                                    val shrinkXEaseField = sShrinkXEaseField ?: holderClass.getDeclaredField("shrinkXEase").apply {
-                                        isAccessible = true
-                                        sShrinkXEaseField = this
-                                    }
-                                    val shrinkXEase = shrinkXEaseField.get(holder)
-                                    if (shrinkXEase != null) {
-                                        val setFactorsMethod = sSetFactorsMethod ?: shrinkXEase.javaClass.getMethod("setFactors", Float::class.javaPrimitiveType, Float::class.javaPrimitiveType).apply {
-                                            isAccessible = true
-                                            sSetFactorsMethod = this
-                                        }
-                                        setFactorsMethod.invoke(shrinkXEase, ControlCenterConfigHolder.config.tileShrinkDamping, ControlCenterConfigHolder.config.tileShrinkResponse)
-                                    }
-
-                                    val shrinkYEaseField = sShrinkYEaseField ?: holderClass.getDeclaredField("shrinkYEase").apply {
-                                        isAccessible = true
-                                        sShrinkYEaseField = this
-                                    }
-                                    val shrinkYEase = shrinkYEaseField.get(holder)
-                                    if (shrinkYEase != null) {
-                                        val setFactorsMethod = sSetFactorsMethod ?: shrinkYEase.javaClass.getMethod("setFactors", Float::class.javaPrimitiveType, Float::class.javaPrimitiveType).apply {
-                                            isAccessible = true
-                                            sSetFactorsMethod = this
-                                        }
-                                        setFactorsMethod.invoke(shrinkYEase, ControlCenterConfigHolder.config.tileShrinkDamping, ControlCenterConfigHolder.config.tileShrinkResponse)
-                                    }
-                                }
                             } catch (t: Throwable) {}
                             result
                         }

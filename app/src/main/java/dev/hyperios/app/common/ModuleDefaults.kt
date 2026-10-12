@@ -10,7 +10,6 @@ package dev.hyperios.app.common
 object ModuleDefaults {
 
     object MasterToggles {
-        const val MODULE_ENABLED = true
         const val MASTER_HOOKS_ENABLED = false
         const val ENGINE_KEYPAD_ENABLED = false
         const val CALLER_SCREEN_ENABLED = false
@@ -259,8 +258,6 @@ object ModuleDefaults {
     }
 
     object LockScreenSheet {
-        const val ENABLE_OPTIMIZATION: Boolean = true
-
         const val REFRACTION_HEIGHT: Float = 77.0f
         val REFRACTION_HEIGHT_RANGE = 0.0f..120.0f
 
@@ -269,9 +266,6 @@ object ModuleDefaults {
 
         const val BOTTOM_REFRACTION: Float = 80.0f
         val BOTTOM_REFRACTION_RANGE = 0.0f..120.0f
-
-        const val BEVEL_WIDTH: Float = 25.0f
-        val BEVEL_WIDTH_RANGE = 0.0f..120.0f
 
         const val LEFT_BEVEL_WIDTH: Float = 25.0f
         val LEFT_BEVEL_RANGE = 0.0f..120.0f
@@ -332,9 +326,7 @@ object ModuleDefaults {
         const val ONE_TO_ONE_TRACKING_ENABLED: Boolean = false
         const val LOCK_SCREEN_AS_NOTIF_CENTER_ENABLED: Boolean = true
         const val SHOW_BOTTOM_WIDGETS: Boolean = false
-        const val CLOCK_MORPH_ON_NOTIFICATIONS: Boolean = false
         const val GLASS_EFFECTS_ENABLED: Boolean = true
-        const val GLASS_ONLY_WITHOUT_WALLPAPER: Boolean = false
 
         const val REFRACTION_HEIGHT: Float = 15.0f
         val REFRACTION_HEIGHT_RANGE = 0.0f..80.0f
@@ -344,9 +336,6 @@ object ModuleDefaults {
 
         const val BOTTOM_REFRACTION: Float = 18.0f
         val BOTTOM_REFRACTION_RANGE = 0.0f..80.0f
-
-        const val BEVEL_WIDTH: Float = 32.0f
-        val BEVEL_WIDTH_RANGE = 0.0f..80.0f
 
         const val LEFT_BEVEL_WIDTH: Float = 32.0f
         val LEFT_BEVEL_RANGE = 0.0f..80.0f
@@ -423,16 +412,6 @@ object ModuleDefaults {
         const val ANIM_ENABLED: Boolean = false
         const val JELLY_ENABLED: Boolean = true
 
-        const val ENTRY_INITIAL_SCALE: Float = 0.10f
-        val ENTRY_INITIAL_SCALE_RANGE = 0.05f..0.50f
-
-        const val ENTRY_TRANSLATION_Y: Float = 0.0f
-        val ENTRY_TRANSLATION_Y_RANGE = -200.0f..200.0f
-
-        const val WATERFALL_ENABLED: Boolean = true
-        const val WATERFALL_DELAY_STEP: Float = 0.04f
-        val WATERFALL_DELAY_STEP_RANGE = 0.01f..0.15f
-
         const val SPREAD_RATIO: Float = 0.02f
         val SPREAD_RATIO_RANGE = 0.005f..0.10f
 
@@ -447,24 +426,6 @@ object ModuleDefaults {
 
         const val SPREAD_RELEASE_DAMPING: Float = 1.50f
         val SPREAD_RELEASE_DAMPING_RANGE = 0.1f..3.0f
-
-        const val TILE_SHOW_RESPONSE: Float = 0.20f
-        val TILE_SHOW_RESPONSE_RANGE = 0.05f..1.0f
-
-        const val TILE_SHOW_DAMPING: Float = 0.10f
-        val TILE_SHOW_DAMPING_RANGE = 0.05f..1.5f
-
-        const val TILE_HIDE_RESPONSE: Float = 0.20f
-        val TILE_HIDE_RESPONSE_RANGE = 0.05f..1.0f
-
-        const val TILE_HIDE_DAMPING: Float = 0.30f
-        val TILE_HIDE_DAMPING_RANGE = 0.05f..1.5f
-
-        const val TILE_SHRINK_RESPONSE: Float = 0.85f
-        val TILE_SHRINK_RESPONSE_RANGE = 0.2f..1.5f
-
-        const val TILE_SHRINK_DAMPING: Float = 0.85f
-        val TILE_SHRINK_DAMPING_RANGE = 0.2f..1.5f
 
         const val TILE_DELAY_SCALE: Float = 60.0f
         val TILE_DELAY_SCALE_RANGE = 10.0f..200.0f

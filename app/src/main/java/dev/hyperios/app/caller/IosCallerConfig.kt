@@ -26,8 +26,8 @@ object IosCallerConfigHolder {
             buttonSize = prefs.getFloat("caller_button_size", ModuleDefaults.CallerScreen.BUTTON_SIZE),
             bottomOffset = prefs.getFloat("caller_bottom_offset", ModuleDefaults.CallerScreen.BOTTOM_OFFSET),
             hapticsEnabled = prefs.getBoolean("caller_haptics_enabled", true),
-            shimmerEffect = prefs.getBoolean("caller_shimmer_enabled", true),
-            danceEnabled = prefs.getBoolean("caller_dance_enabled", ModuleDefaults.CallerScreen.DANCE_ENABLED),
+            shimmerEffect = true,
+            danceEnabled = ModuleDefaults.CallerScreen.DANCE_ENABLED,
             slideThreshold = prefs.getFloat("caller_slide_threshold", 0.75f)
         )
     }

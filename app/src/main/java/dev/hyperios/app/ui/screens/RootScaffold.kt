@@ -159,7 +159,7 @@ fun RootScaffold(
     fun copyDebugInfo() {
         val text = buildString {
             appendLine("HyperiOS 1.0.0")
-            appendLine("Module: ${if (repository.moduleEnabled) "On" else "Off"}")
+            appendLine("Hot Reload: ${if (repository.hotReloadEnabled) "On" else "Off"}")
             appendLine("Toggle engine: ${repository.toggleEngine.label}")
             appendLine("Slider engine: ${repository.sliderEngine.label}")
             append("Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})")

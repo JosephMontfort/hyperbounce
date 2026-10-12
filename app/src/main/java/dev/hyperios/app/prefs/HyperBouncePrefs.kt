@@ -35,9 +35,6 @@ class HyperBouncePrefs(module: XposedInterface) {
 
     // --- module-wide ----------------------------------------------------------------------
 
-    val moduleEnabled: Boolean
-        get() = prefs.getBoolean("module_enabled", ModuleDefaults.MasterToggles.MODULE_ENABLED)
-
     val hotReloadEnabled: Boolean
         get() = prefs.getBoolean("hot_reload_enabled", false)
 
@@ -50,20 +47,8 @@ class HyperBouncePrefs(module: XposedInterface) {
     val callerBottomOffset: Float
         get() = prefs.getFloat("caller_bottom_offset", ModuleDefaults.CallerScreen.BOTTOM_OFFSET)
 
-    val callerDanceEnabled: Boolean
-        get() = prefs.getBoolean("caller_dance_enabled", ModuleDefaults.CallerScreen.DANCE_ENABLED)
-
     val dialerRecentsSwipeEnabled: Boolean
         get() = prefs.getBoolean("dialer_recents_swipe_enabled", ModuleDefaults.MasterToggles.DIALER_RECENTS_SWIPE_ENABLED)
-
-    val dialerCallThreshold: Float
-        get() = prefs.getFloat("dialer_call_threshold", ModuleDefaults.DialerRecents.CALL_THRESHOLD)
-
-    val dialerDeleteWidth: Float
-        get() = prefs.getFloat("dialer_delete_width", ModuleDefaults.DialerRecents.DELETE_WIDTH)
-
-    val dialerConfirmDelete: Boolean
-        get() = prefs.getBoolean("dialer_confirm_delete", ModuleDefaults.DialerRecents.CONFIRM_DELETE)
 
     val dialerHapticsEnabled: Boolean
         get() = prefs.getBoolean("dialer_haptics_enabled", true)
@@ -131,9 +116,6 @@ class HyperBouncePrefs(module: XposedInterface) {
 
     fun appAutoShrinkScale(appKey: String): Float =
         prefs.getFloat("app_${appKey}_auto_shrink_scale", if (appKey == "whatsapp") 0.70f else ModuleDefaults.NavApps.YouTube.AUTO_SHRINK_SCALE)
-
-    fun appAutoShrinkSensitivity(appKey: String): Float =
-        prefs.getFloat("app_${appKey}_auto_shrink_sensitivity", 1.0f)
 
     val reelsFullscreenZoom: Boolean
         get() = prefs.getBoolean("app_instagram_reels_fullscreen_zoom", prefs.getBoolean("reels_fullscreen_zoom", ModuleDefaults.NavApps.Instagram.REELS_FULLSCREEN_ZOOM))

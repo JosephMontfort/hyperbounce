@@ -40,7 +40,53 @@ import kotlin.reflect.KProperty
 private const val PREFS_NAME = "hyperbounce_settings"
 private const val KEY_STORAGE_INITIALIZED = "hyperbounce_storage_initialized"
 private const val KEY_SCHEMA_VERSION = "hyperbounce_schema_version"
-private const val CURRENT_SCHEMA_VERSION = 1
+private const val CURRENT_SCHEMA_VERSION = 2
+
+private val DEPRECATED_KEYS = setOf(
+    "module_enabled",
+    "app_com.instagram.android_auto_shrink_sensitivity",
+    "app_com.whatsapp_auto_shrink_sensitivity",
+    "app_com.google.android.youtube_auto_shrink_sensitivity",
+    "lock_sheet_enable_optimization",
+    "lock_card_bevel_width",
+    "notif_sheet_clock_morph",
+    "notif_sheet_glass_only_without_wallpaper",
+    "notif_card_bevel_width",
+    "pin_press_liquid_amp",
+    "pin_row1_offset",
+    "pin_row2_offset",
+    "pin_row3_offset",
+    "pin_col1_offset",
+    "pin_col3_offset",
+    "cc_entry_scale",
+    "cc_entry_initial_scale",
+    "cc_entry_trans_y",
+    "cc_entry_translation_y",
+    "cc_waterfall_enabled",
+    "cc_waterfall_step",
+    "cc_waterfall_delay_step",
+    "cc_tile_show_resp",
+    "cc_tile_show_response",
+    "cc_tile_show_damp",
+    "cc_tile_show_damping",
+    "cc_tile_hide_resp",
+    "cc_tile_hide_response",
+    "cc_tile_hide_damp",
+    "cc_tile_hide_damping",
+    "cc_tile_shrink_resp",
+    "cc_tile_shrink_response",
+    "cc_tile_shrink_damp",
+    "cc_tile_shrink_damping",
+    "caller_shimmer_enabled",
+    "caller_dance_enabled",
+    "dialer_call_threshold",
+    "dialer_delete_width",
+    "dialer_confirm_delete",
+    "dialer_morph_duration",
+    "prefs_key_instagram_safe_mode_enable",
+    "prefs_key_whatsapp_safe_mode_enable",
+    "prefs_key_youtube_safe_mode_enable"
+)
 
 class SettingsRepository(context: Context) {
 
@@ -74,12 +120,7 @@ class SettingsRepository(context: Context) {
 
     init {
         appContext = context.applicationContext
-        // Local prefs (above) are this app's own always-available source of truth — the UI
-        // never waits on the Xposed service. When the service binds, deterministic two-way
-        // reconciliation ensures fresh installs clear zombie remote keys while dirty updates
-        // preserve customizations, prune deprecated keys, and seed new features.
         XposedServiceBridge.init()
-        XposedServiceBridge.onBind { reconcilePreferences() }
     }
 
     private fun reconcilePreferences() {
@@ -129,52 +170,30 @@ class SettingsRepository(context: Context) {
                 delegate.reload()
             }
         } else {
-            // Dirty App Update: Clean migration and reconciliation
-            val validKeySet = HashSet<String>(reloadablePrefs.map { it.key })
-            validKeySet.add(KEY_STORAGE_INITIALIZED)
-            validKeySet.add(KEY_SCHEMA_VERSION)
-            for (r in 0..32) {
-                validKeySet.add("unlock_r${r}_z")
-                validKeySet.add("unlock_r${r}_center_bounce")
-                validKeySet.add("unlock_r${r}_outer_bounce")
-                validKeySet.add("unlock_r${r}_center_settle")
-                validKeySet.add("unlock_r${r}_outer_settle")
-            }
-
+            // Dirty App Update: Clean migration and reconciliation preserving user customizations
             val localEditor = prefs.edit()
             val remoteEditor = remote.edit()
 
-            val modulePrefixes = listOf(
-                "ios_anim_", "unlock_", "app_", "cc_", "pin_", "notif_",
-                "caller_", "dialer_", "toggle_", "slider_", "global_",
-                "morph_", "engine_", "miuix_", "component_", "prefs_key_",
-                "audio_haptics_", "active_haptic_"
-            )
-
-            // 1. Remove deleted / orphaned feature keys from both remote and local
-            val remoteKeys = remote.all.keys.toList()
-            for (rk in remoteKeys) {
-                if (modulePrefixes.any { rk.startsWith(it) } && !validKeySet.contains(rk)) {
-                    remoteEditor.remove(rk)
+            // 1. Purge deprecated keys if upgrading schema
+            val currentVersion = prefs.getInt(KEY_SCHEMA_VERSION, 0)
+            if (currentVersion < CURRENT_SCHEMA_VERSION) {
+                for (depKey in DEPRECATED_KEYS) {
+                    localEditor.remove(depKey)
+                    remoteEditor.remove(depKey)
                 }
-            }
-            val localKeys = prefs.all.keys.toList()
-            for (lk in localKeys) {
-                if (modulePrefixes.any { lk.startsWith(it) } && !validKeySet.contains(lk)) {
-                    localEditor.remove(lk)
-                }
+                localEditor.putInt(KEY_SCHEMA_VERSION, CURRENT_SCHEMA_VERSION)
+                remoteEditor.putInt(KEY_SCHEMA_VERSION, CURRENT_SCHEMA_VERSION)
             }
 
-            // 2. Push all valid local customized settings to remote
+            // 2. Synchronize all valid existing local customizations to remote
             for ((key, value) in prefs.all) {
-                if (validKeySet.contains(key)) {
-                    when (value) {
-                        is Boolean -> remoteEditor.putBoolean(key, value)
-                        is Float -> remoteEditor.putFloat(key, value)
-                        is String -> remoteEditor.putString(key, value)
-                        is Int -> remoteEditor.putInt(key, value)
-                        is Long -> remoteEditor.putLong(key, value)
-                    }
+                if (key in DEPRECATED_KEYS) continue
+                when (value) {
+                    is Boolean -> remoteEditor.putBoolean(key, value)
+                    is Float -> remoteEditor.putFloat(key, value)
+                    is String -> remoteEditor.putString(key, value)
+                    is Int -> remoteEditor.putInt(key, value)
+                    is Long -> remoteEditor.putLong(key, value)
                 }
             }
 
@@ -187,9 +206,7 @@ class SettingsRepository(context: Context) {
             }
 
             localEditor.putBoolean(KEY_STORAGE_INITIALIZED, true)
-            localEditor.putInt(KEY_SCHEMA_VERSION, CURRENT_SCHEMA_VERSION)
             remoteEditor.putBoolean(KEY_STORAGE_INITIALIZED, true)
-            remoteEditor.putInt(KEY_SCHEMA_VERSION, CURRENT_SCHEMA_VERSION)
 
             localEditor.apply()
             remoteEditor.apply()
@@ -204,6 +221,7 @@ class SettingsRepository(context: Context) {
         val remote = XposedServiceBridge.remotePreferencesOrNull(PREFS_NAME) ?: return
         val editor = remote.edit()
         for ((key, value) in prefs.all) {
+            if (key in DEPRECATED_KEYS) continue
             when (value) {
                 is Boolean -> editor.putBoolean(key, value)
                 is Float -> editor.putFloat(key, value)
@@ -214,9 +232,6 @@ class SettingsRepository(context: Context) {
         }
         editor.apply()
     }
-
-    var moduleEnabled by prefsBooleanState("module_enabled", ModuleDefaults.MasterToggles.MODULE_ENABLED)
-        private set
 
     var hotReloadEnabled by prefsBooleanState("hot_reload_enabled", false)
         private set
@@ -405,11 +420,6 @@ class SettingsRepository(context: Context) {
     val safeMode = SafeModeHolder()
     val audioHaptics = AudioHapticsHolder()
 
-    @JvmName("setModuleEnabledPref")
-    fun setModuleEnabled(value: Boolean) {
-        moduleEnabled = value
-    }
-
     @JvmName("setTogglesSlidersHookEnabledPref")
     fun setTogglesSlidersHookEnabled(value: Boolean) {
         togglesSlidersHookEnabled = value
@@ -476,7 +486,6 @@ class SettingsRepository(context: Context) {
         morphPhysics.reloadFromDefaults()
         callerScreen.reloadFromDefaults()
         dialerRecents.reloadFromDefaults()
-        moduleEnabled = ModuleDefaults.MasterToggles.MODULE_ENABLED
         hotReloadEnabled = false
         appTheme = AppTheme.FollowSystem
         componentStyle = ComponentStyle.MIUIX
@@ -581,15 +590,13 @@ class SettingsRepository(context: Context) {
             private set
         var autoShrinkScale by prefsFloatState("${prefix}_auto_shrink_scale", defaults.autoShrinkScale)
             private set
-        var autoShrinkSensitivity by prefsFloatState("${prefix}_auto_shrink_sensitivity", defaults.autoShrinkSensitivity)
-            private set
         var reelsFullscreenZoom by prefsBooleanState("${prefix}_reels_fullscreen_zoom", defaults.reelsFullscreenZoom)
             private set
 
         fun snapshot(): NavBarAppSettings = NavBarAppSettings(
             enabled, liquidGlass, glassIntensity, barBlurIntensity, containerOpacity, cornerRadius, barHeight, tabWidth, bottomMargin,
             themeMode, accent, customAccentColor, pillGlassIntensity, pillContainerOpacity, pillChromaticAberration, pillShadow,
-            autoShrink, autoShrinkScale, autoShrinkSensitivity, reelsFullscreenZoom
+            autoShrink, autoShrinkScale, reelsFullscreenZoom
         )
 
         @JvmName("setEnabledPref")
@@ -635,8 +642,6 @@ class SettingsRepository(context: Context) {
         fun setAutoShrink(v: Boolean) { autoShrink = v }
         @JvmName("setAutoShrinkScalePref")
         fun setAutoShrinkScale(v: Float) { autoShrinkScale = v }
-        @JvmName("setAutoShrinkSensitivityPref")
-        fun setAutoShrinkSensitivity(v: Float) { autoShrinkSensitivity = v }
         @JvmName("setReelsFullscreenZoomPref")
         fun setReelsFullscreenZoom(v: Boolean) {
             reelsFullscreenZoom = v
@@ -663,7 +668,6 @@ class SettingsRepository(context: Context) {
             pillShadow = defaults.pillShadow
             autoShrink = defaults.autoShrink
             autoShrinkScale = defaults.autoShrinkScale
-            autoShrinkSensitivity = defaults.autoShrinkSensitivity
             reelsFullscreenZoom = defaults.reelsFullscreenZoom
         }
     }
@@ -773,11 +777,9 @@ class SettingsRepository(context: Context) {
         private val defaults = LockScreenSheetSettings()
 
         var enabled by prefsBooleanState("lock_sheet_enabled", defaults.enabled); private set
-        var enableOptimization by prefsBooleanState("lock_sheet_enable_optimization", defaults.enableOptimization); private set
         var refractionHeight by prefsFloatState("lock_card_refraction_height", defaults.refractionHeight); private set
         var sideRefraction by prefsFloatState("lock_card_side_refraction", defaults.sideRefraction); private set
         var bottomRefraction by prefsFloatState("lock_card_bottom_refraction", defaults.bottomRefraction); private set
-        var bevelWidth by prefsFloatState("lock_card_bevel_width", defaults.bevelWidth); private set
         var leftBevelWidth by prefsFloatState("lock_card_left_bevel", defaults.leftBevelWidth); private set
         var rightBevelWidth by prefsFloatState("lock_card_right_bevel", defaults.rightBevelWidth); private set
         var bottomBevelWidth by prefsFloatState("lock_card_bottom_bevel", defaults.bottomBevelWidth); private set
@@ -797,17 +799,15 @@ class SettingsRepository(context: Context) {
         var pillBottomMargin by prefsFloatState("lock_pill_bottom_margin", defaults.pillBottomMargin); private set
 
         fun snapshot(): LockScreenSheetSettings = LockScreenSheetSettings(
-            enabled, enableOptimization, refractionHeight, sideRefraction, bottomRefraction, bevelWidth, leftBevelWidth, rightBevelWidth, bottomBevelWidth,
+            enabled, refractionHeight, sideRefraction, bottomRefraction, leftBevelWidth, rightBevelWidth, bottomBevelWidth,
             dispersionStrength, specularStrength, hairlineStrength, innerGlowStrength, innerShadow, saturationFactor, rimSoftness, blurRadius,
             cornerRadius, edgeStretch, pillEnabled, pillWidth, pillHeight, pillBottomMargin
         )
 
         @JvmName("setSheetEnabledPref") fun setEnabled(v: Boolean) { enabled = v }
-        @JvmName("setSheetEnableOptimizationPref") fun setEnableOptimization(v: Boolean) { enableOptimization = v }
         @JvmName("setSheetRefractionHeightPref") fun setRefractionHeight(v: Float) { refractionHeight = v }
         @JvmName("setSheetSideRefractionPref") fun setSideRefraction(v: Float) { sideRefraction = v }
         @JvmName("setSheetBottomRefractionPref") fun setBottomRefraction(v: Float) { bottomRefraction = v }
-        @JvmName("setSheetBevelWidthPref") fun setBevelWidth(v: Float) { bevelWidth = v }
         @JvmName("setSheetSideBevelWidthPref") fun setSideBevelWidth(v: Float) {
             leftBevelWidth = v
             rightBevelWidth = v
@@ -832,11 +832,9 @@ class SettingsRepository(context: Context) {
 
         fun reloadFromDefaults() {
             enabled = defaults.enabled
-            enableOptimization = defaults.enableOptimization
             refractionHeight = defaults.refractionHeight
             sideRefraction = defaults.sideRefraction
             bottomRefraction = defaults.bottomRefraction
-            bevelWidth = defaults.bevelWidth
             leftBevelWidth = defaults.leftBevelWidth
             rightBevelWidth = defaults.rightBevelWidth
             bottomBevelWidth = defaults.bottomBevelWidth
@@ -872,13 +870,10 @@ class SettingsRepository(context: Context) {
         var oneToOneTrackingEnabled by prefsBooleanState("notif_sheet_one_to_one_tracking", defaults.oneToOneTrackingEnabled); private set
         var lockScreenAsNotifCenterEnabled by prefsBooleanState("notif_sheet_lockscreen_enabled", defaults.lockScreenAsNotifCenterEnabled); private set
         var showBottomWidgets by prefsBooleanState("notif_sheet_show_bottom_widgets", defaults.showBottomWidgets); private set
-        var clockMorphOnNotifications by prefsBooleanState("notif_sheet_clock_morph", defaults.clockMorphOnNotifications); private set
         var glassEffectsEnabled by prefsBooleanState("notif_sheet_glass_effects_enabled", defaults.glassEffectsEnabled); private set
-        var glassOnlyWithoutWallpaper by prefsBooleanState("notif_sheet_glass_only_without_wallpaper", defaults.glassOnlyWithoutWallpaper); private set
         var refractionHeight by prefsFloatState("notif_card_refraction_height", defaults.refractionHeight); private set
         var sideRefraction by prefsFloatState("notif_card_side_refraction", defaults.sideRefraction); private set
         var bottomRefraction by prefsFloatState("notif_card_bottom_refraction", defaults.bottomRefraction); private set
-        var bevelWidth by prefsFloatState("notif_card_bevel_width", defaults.bevelWidth); private set
         var leftBevelWidth by prefsFloatState("notif_card_left_bevel", defaults.leftBevelWidth); private set
         var rightBevelWidth by prefsFloatState("notif_card_right_bevel", defaults.rightBevelWidth); private set
         var bottomBevelWidth by prefsFloatState("notif_card_bottom_bevel", defaults.bottomBevelWidth); private set
@@ -909,10 +904,10 @@ class SettingsRepository(context: Context) {
             enabled, lockWallpaperEnabled, customWallpaperEnabled, lockWallpaperHomescreenOnly,
             depthWallpaperEnabled, depthCustomSubject,
             oneToOneTrackingEnabled,
-            lockScreenAsNotifCenterEnabled, showBottomWidgets, clockMorphOnNotifications,
-            glassEffectsEnabled, glassOnlyWithoutWallpaper,
+            lockScreenAsNotifCenterEnabled, showBottomWidgets,
+            glassEffectsEnabled,
             refractionHeight, sideRefraction, bottomRefraction,
-            bevelWidth, leftBevelWidth, rightBevelWidth, bottomBevelWidth,
+            leftBevelWidth, rightBevelWidth, bottomBevelWidth,
             dispersionStrength, specularStrength, hairlineStrength, innerGlowStrength, rimSoftness,
             innerShadow, saturationFactor, blurRadius,
             cornerRadius, sideMargin,
@@ -931,13 +926,14 @@ class SettingsRepository(context: Context) {
         @JvmName("setNotifSheetOneToOneTrackingEnabledPref") fun setOneToOneTrackingEnabled(v: Boolean) { oneToOneTrackingEnabled = v }
         @JvmName("setNotifSheetLockScreenAsNotifCenterEnabledPref") fun setLockScreenAsNotifCenterEnabled(v: Boolean) { lockScreenAsNotifCenterEnabled = v }
         @JvmName("setNotifSheetShowBottomWidgetsPref") fun setShowBottomWidgets(v: Boolean) { showBottomWidgets = v }
-        @JvmName("setNotifSheetClockMorphOnNotificationsPref") fun setClockMorphOnNotifications(v: Boolean) { clockMorphOnNotifications = v }
         @JvmName("setNotifSheetGlassEffectsEnabledPref") fun setGlassEffectsEnabled(v: Boolean) { glassEffectsEnabled = v }
-        @JvmName("setNotifSheetGlassOnlyWithoutWallpaperPref") fun setGlassOnlyWithoutWallpaper(v: Boolean) { glassOnlyWithoutWallpaper = v }
         @JvmName("setNotifSheetRefractionHeightPref") fun setRefractionHeight(v: Float) { refractionHeight = v }
         @JvmName("setNotifSheetSideRefractionPref") fun setSideRefraction(v: Float) { sideRefraction = v }
         @JvmName("setNotifSheetBottomRefractionPref") fun setBottomRefraction(v: Float) { bottomRefraction = v }
-        @JvmName("setNotifSheetBevelWidthPref") fun setBevelWidth(v: Float) { bevelWidth = v }
+        @JvmName("setSheetSideBevelWidthPref") fun setSideBevelWidth(v: Float) {
+            leftBevelWidth = v
+            rightBevelWidth = v
+        }
         @JvmName("setNotifSheetLeftBevelWidthPref") fun setLeftBevelWidth(v: Float) { leftBevelWidth = v }
         @JvmName("setNotifSheetRightBevelWidthPref") fun setRightBevelWidth(v: Float) { rightBevelWidth = v }
         @JvmName("setNotifSheetBottomBevelWidthPref") fun setBottomBevelWidth(v: Float) { bottomBevelWidth = v }
@@ -973,13 +969,10 @@ class SettingsRepository(context: Context) {
             depthCustomSubject = defaults.depthCustomSubject
             lockScreenAsNotifCenterEnabled = defaults.lockScreenAsNotifCenterEnabled
             showBottomWidgets = defaults.showBottomWidgets
-            clockMorphOnNotifications = defaults.clockMorphOnNotifications
             glassEffectsEnabled = defaults.glassEffectsEnabled
-            glassOnlyWithoutWallpaper = defaults.glassOnlyWithoutWallpaper
             refractionHeight = defaults.refractionHeight
             sideRefraction = defaults.sideRefraction
             bottomRefraction = defaults.bottomRefraction
-            bevelWidth = defaults.bevelWidth
             leftBevelWidth = defaults.leftBevelWidth
             rightBevelWidth = defaults.rightBevelWidth
             bottomBevelWidth = defaults.bottomBevelWidth
@@ -1024,17 +1017,11 @@ class SettingsRepository(context: Context) {
         var digitTextSize by prefsFloatState("pin_digit_text_size", defaults.digitTextSize); private set
         var showKlondike by prefsBooleanState("pin_show_klondike", defaults.showKlondike); private set
         var pressLiquidScale by prefsFloatState("pin_press_liquid_scale", defaults.pressLiquidScale); private set
-        var pressLiquidAmp by prefsFloatState("pin_press_liquid_amp", defaults.pressLiquidAmp); private set
 
         var pinpadLift by prefsFloatState("pin_pad_lift", defaults.pinpadLift); private set
         var row0Offset by prefsFloatState("pin_row0_offset", defaults.row0Offset); private set
         var rowSpacing by prefsFloatState("pin_row_spacing", defaults.rowSpacing); private set
         var columnSpacing by prefsFloatState("pin_col_spacing", defaults.columnSpacing); private set
-        var row1Offset by prefsFloatState("pin_row1_offset", defaults.row1Offset); private set
-        var row2Offset by prefsFloatState("pin_row2_offset", defaults.row2Offset); private set
-        var row3Offset by prefsFloatState("pin_row3_offset", defaults.row3Offset); private set
-        var col1Offset by prefsFloatState("pin_col1_offset", defaults.col1Offset); private set
-        var col3Offset by prefsFloatState("pin_col3_offset", defaults.col3Offset); private set
         // Per-Key Entrance Delays (ms) - Preserved in backend
         var delayKey1 by prefsFloatState("pin_delay_key1", defaults.delayKey1); private set
         var delayKey2 by prefsFloatState("pin_delay_key2", defaults.delayKey2); private set
@@ -1071,8 +1058,7 @@ class SettingsRepository(context: Context) {
         fun snapshot(): LockScreenKeypadSettings = LockScreenKeypadSettings(
             enabled, buttonRefraction, buttonBevel, buttonDispersion, buttonSpecular, buttonInnerShadow,
             buttonBlur, buttonSaturation, circleDiameter, digitTextSize, showKlondike, pressLiquidScale,
-            pressLiquidAmp, pinpadLift, row0Offset, rowSpacing, columnSpacing, row1Offset, row2Offset,
-            row3Offset, col1Offset, col3Offset, delayKey1, delayKey2, delayKey3, delayKey4,
+            pinpadLift, row0Offset, rowSpacing, columnSpacing, delayKey1, delayKey2, delayKey3, delayKey4,
             delayKey5, delayKey6, delayKey7, delayKey8, delayKey9, delayKey0, delayEmergency, delayCancel,
             dragMaxThreshold, dragInitialStiffness, dragResistancePower, dragVolumeStretch, releaseDuration,
             releaseSquishAmp, releaseOvershoot,
@@ -1093,16 +1079,10 @@ class SettingsRepository(context: Context) {
         @JvmName("setDigitTextSizePref") fun setDigitTextSize(v: Float) { digitTextSize = v }
         @JvmName("setShowKlondikePref") fun setShowKlondike(v: Boolean) { showKlondike = v }
         @JvmName("setPressLiquidScalePref") fun setPressLiquidScale(v: Float) { pressLiquidScale = v }
-        @JvmName("setPressLiquidAmpPref") fun setPressLiquidAmp(v: Float) { pressLiquidAmp = v }
         @JvmName("setPinpadLiftPref") fun setPinpadLift(v: Float) { pinpadLift = v }
         @JvmName("setRow0OffsetPref") fun setRow0Offset(v: Float) { row0Offset = v }
         @JvmName("setRowSpacingPref") fun setRowSpacing(v: Float) { rowSpacing = v }
         @JvmName("setColumnSpacingPref") fun setColumnSpacing(v: Float) { columnSpacing = v }
-        @JvmName("setRow1OffsetPref") fun setRow1Offset(v: Float) { row1Offset = v }
-        @JvmName("setRow2OffsetPref") fun setRow2Offset(v: Float) { row2Offset = v }
-        @JvmName("setRow3OffsetPref") fun setRow3Offset(v: Float) { row3Offset = v }
-        @JvmName("setCol1OffsetPref") fun setCol1Offset(v: Float) { col1Offset = v }
-        @JvmName("setCol3OffsetPref") fun setCol3Offset(v: Float) { col3Offset = v }
 
         @JvmName("setDelayKey1Pref") fun setDelayKey1(v: Float) { delayKey1 = v }
         @JvmName("setDelayKey2Pref") fun setDelayKey2(v: Float) { delayKey2 = v }
@@ -1147,16 +1127,10 @@ class SettingsRepository(context: Context) {
             digitTextSize = defaults.digitTextSize
             showKlondike = defaults.showKlondike
             pressLiquidScale = defaults.pressLiquidScale
-            pressLiquidAmp = defaults.pressLiquidAmp
             pinpadLift = defaults.pinpadLift
             row0Offset = defaults.row0Offset
             rowSpacing = defaults.rowSpacing
             columnSpacing = defaults.columnSpacing
-            row1Offset = defaults.row1Offset
-            row2Offset = defaults.row2Offset
-            row3Offset = defaults.row3Offset
-            col1Offset = defaults.col1Offset
-            col3Offset = defaults.col3Offset
             delayKey1 = defaults.delayKey1
             delayKey2 = defaults.delayKey2
             delayKey3 = defaults.delayKey3
@@ -1458,21 +1432,11 @@ class SettingsRepository(context: Context) {
         var animEnabled by prefsBooleanState("cc_anim_enabled", defaults.animEnabled); private set
         var jellyEnabled by prefsBooleanState("cc_jelly_enabled", defaults.jellyEnabled); private set
         var animEngineMode by prefsIntState("cc_anim_engine_mode", defaults.animEngineMode); private set
-        var entryInitialScale by prefsFloatState("cc_entry_initial_scale", defaults.entryInitialScale); private set
-        var entryTranslationY by prefsFloatState("cc_entry_translation_y", defaults.entryTranslationY); private set
-        var waterfallEnabled by prefsBooleanState("cc_waterfall_enabled", defaults.waterfallEnabled); private set
-        var waterfallDelayStep by prefsFloatState("cc_waterfall_delay_step", defaults.waterfallDelayStep); private set
         var spreadRatio by prefsFloatState("cc_spread_ratio", defaults.spreadRatio); private set
         var spreadResponse by prefsFloatState("cc_spread_response", defaults.spreadResponse); private set
         var spreadDamping by prefsFloatState("cc_spread_damping", defaults.spreadDamping); private set
         var spreadReleaseResponse by prefsFloatState("cc_spread_release_response", defaults.spreadReleaseResponse); private set
         var spreadReleaseDamping by prefsFloatState("cc_spread_release_damping", defaults.spreadReleaseDamping); private set
-        var tileShowResponse by prefsFloatState("cc_tile_show_response", defaults.tileShowResponse); private set
-        var tileShowDamping by prefsFloatState("cc_tile_show_damping", defaults.tileShowDamping); private set
-        var tileHideResponse by prefsFloatState("cc_tile_hide_response", defaults.tileHideResponse); private set
-        var tileHideDamping by prefsFloatState("cc_tile_hide_damping", defaults.tileHideDamping); private set
-        var tileShrinkResponse by prefsFloatState("cc_tile_shrink_response", defaults.tileShrinkResponse); private set
-        var tileShrinkDamping by prefsFloatState("cc_tile_shrink_damping", defaults.tileShrinkDamping); private set
         var tileDelayScale by prefsFloatState("cc_tile_delay_scale", defaults.tileDelayScale); private set
         var frictionMultiplier by prefsFloatState("cc_friction_multiplier", defaults.frictionMultiplier); private set
         var lowEndFlashlightEnabled by prefsBooleanState("cc_low_end_flashlight_enabled", defaults.lowEndFlashlightEnabled); private set
@@ -1492,10 +1456,8 @@ class SettingsRepository(context: Context) {
         fun snapshot(): ControlCenterSettings = ControlCenterSettings(
             masterEnabled,
             modularEditEnabled, animEnabled, jellyEnabled, animEngineMode,
-            entryInitialScale, entryTranslationY, waterfallEnabled, waterfallDelayStep,
             spreadRatio, spreadResponse, spreadDamping, spreadReleaseResponse, spreadReleaseDamping,
-            tileShowResponse, tileShowDamping, tileHideResponse, tileHideDamping,
-            tileShrinkResponse, tileShrinkDamping, tileDelayScale, frictionMultiplier,
+            tileDelayScale, frictionMultiplier,
             lowEndFlashlightEnabled, flashlightMaxBrightness, true2dGridEnabled, fluidResizeEnabled,
             landscapeRightMaxRows, pendingResetLayout
         )
@@ -1516,21 +1478,11 @@ class SettingsRepository(context: Context) {
         @JvmName("setCcAnimEngineModePref") fun setAnimEngineMode(v: Int) { animEngineMode = v }
         @JvmName("setCcLowEndFlashlightEnabledPref") fun setLowEndFlashlightEnabled(v: Boolean) { lowEndFlashlightEnabled = v }
         @JvmName("setCcFlashlightMaxBrightnessPref") fun setFlashlightMaxBrightness(v: Int) { flashlightMaxBrightness = v }
-        @JvmName("setCcEntryInitialScalePref") fun setEntryInitialScale(v: Float) { entryInitialScale = v }
-        @JvmName("setCcEntryTranslationYPref") fun setEntryTranslationY(v: Float) { entryTranslationY = v }
-        @JvmName("setCcWaterfallEnabledPref") fun setWaterfallEnabled(v: Boolean) { waterfallEnabled = v }
-        @JvmName("setCcWaterfallDelayStepPref") fun setWaterfallDelayStep(v: Float) { waterfallDelayStep = v }
         @JvmName("setCcSpreadRatioPref") fun setSpreadRatio(v: Float) { spreadRatio = v }
         @JvmName("setCcSpreadResponsePref") fun setSpreadResponse(v: Float) { spreadResponse = v }
         @JvmName("setCcSpreadDampingPref") fun setSpreadDamping(v: Float) { spreadDamping = v }
         @JvmName("setCcSpreadReleaseResponsePref") fun setSpreadReleaseResponse(v: Float) { spreadReleaseResponse = v }
         @JvmName("setCcSpreadReleaseDampingPref") fun setSpreadReleaseDamping(v: Float) { spreadReleaseDamping = v }
-        @JvmName("setCcTileShowResponsePref") fun setTileShowResponse(v: Float) { tileShowResponse = v }
-        @JvmName("setCcTileShowDampingPref") fun setTileShowDamping(v: Float) { tileShowDamping = v }
-        @JvmName("setCcTileHideResponsePref") fun setTileHideResponse(v: Float) { tileHideResponse = v }
-        @JvmName("setCcTileHideDampingPref") fun setTileHideDamping(v: Float) { tileHideDamping = v }
-        @JvmName("setCcTileShrinkResponsePref") fun setTileShrinkResponse(v: Float) { tileShrinkResponse = v }
-        @JvmName("setCcTileShrinkDampingPref") fun setTileShrinkDamping(v: Float) { tileShrinkDamping = v }
         @JvmName("setCcTileDelayScalePref") fun setTileDelayScale(v: Float) { tileDelayScale = v }
         @JvmName("setCcFrictionMultiplierPref") fun setFrictionMultiplier(v: Float) { frictionMultiplier = v }
 
@@ -1545,21 +1497,11 @@ class SettingsRepository(context: Context) {
             animEngineMode = defaults.animEngineMode
             lowEndFlashlightEnabled = defaults.lowEndFlashlightEnabled
             flashlightMaxBrightness = defaults.flashlightMaxBrightness
-            entryInitialScale = defaults.entryInitialScale
-            entryTranslationY = defaults.entryTranslationY
-            waterfallEnabled = defaults.waterfallEnabled
-            waterfallDelayStep = defaults.waterfallDelayStep
             spreadRatio = defaults.spreadRatio
             spreadResponse = defaults.spreadResponse
             spreadDamping = defaults.spreadDamping
             spreadReleaseResponse = defaults.spreadReleaseResponse
             spreadReleaseDamping = defaults.spreadReleaseDamping
-            tileShowResponse = defaults.tileShowResponse
-            tileShowDamping = defaults.tileShowDamping
-            tileHideResponse = defaults.tileHideResponse
-            tileHideDamping = defaults.tileHideDamping
-            tileShrinkResponse = defaults.tileShrinkResponse
-            tileShrinkDamping = defaults.tileShrinkDamping
             tileDelayScale = defaults.tileDelayScale
             frictionMultiplier = defaults.frictionMultiplier
         }
@@ -1639,10 +1581,6 @@ class SettingsRepository(context: Context) {
             private set
         var hapticsEnabled by prefsBooleanState("caller_haptics_enabled", true)
             private set
-        var shimmerEnabled by prefsBooleanState("caller_shimmer_enabled", true)
-            private set
-        var danceEnabled by prefsBooleanState("caller_dance_enabled", ModuleDefaults.CallerScreen.DANCE_ENABLED)
-            private set
 
         @JvmName("setCallerEnabledPref")
         fun setEnabled(v: Boolean) { enabled = v }
@@ -1656,61 +1594,29 @@ class SettingsRepository(context: Context) {
         @JvmName("setCallerHapticsEnabledPref")
         fun setHapticsEnabled(v: Boolean) { hapticsEnabled = v }
 
-        @JvmName("setCallerShimmerEnabledPref")
-        fun setShimmerEnabled(v: Boolean) { shimmerEnabled = v }
-
-        @JvmName("setCallerDanceEnabledPref")
-        fun setDanceEnabled(v: Boolean) { danceEnabled = v }
-
         fun reloadFromDefaults() {
             enabled = ModuleDefaults.MasterToggles.CALLER_SCREEN_ENABLED
             buttonSize = ModuleDefaults.CallerScreen.BUTTON_SIZE
             bottomOffset = ModuleDefaults.CallerScreen.BOTTOM_OFFSET
             hapticsEnabled = true
-            shimmerEnabled = true
-            danceEnabled = ModuleDefaults.CallerScreen.DANCE_ENABLED
         }
     }
 
     inner class DialerRecentsHolder {
         var enabled by prefsBooleanState("dialer_recents_swipe_enabled", ModuleDefaults.MasterToggles.DIALER_RECENTS_SWIPE_ENABLED)
             private set
-        var callThreshold by prefsFloatState("dialer_call_threshold", ModuleDefaults.DialerRecents.CALL_THRESHOLD)
-            private set
-        var deleteWidth by prefsFloatState("dialer_delete_width", ModuleDefaults.DialerRecents.DELETE_WIDTH)
-            private set
-        var confirmDelete by prefsBooleanState("dialer_confirm_delete", ModuleDefaults.DialerRecents.CONFIRM_DELETE)
-            private set
         var hapticsEnabled by prefsBooleanState("dialer_haptics_enabled", true)
-            private set
-        var morphDuration by prefsFloatState("dialer_morph_duration", ModuleDefaults.DialerRecents.MORPH_DURATION)
             private set
 
         @JvmName("setDialerRecentsEnabledPref")
         fun setEnabled(v: Boolean) { enabled = v }
 
-        @JvmName("setDialerCallThresholdPref")
-        fun setCallThreshold(v: Float) { callThreshold = v }
-
-        @JvmName("setDialerDeleteWidthPref")
-        fun setDeleteWidth(v: Float) { deleteWidth = v }
-
-        @JvmName("setDialerConfirmDeletePref")
-        fun setConfirmDelete(v: Boolean) { confirmDelete = v }
-
         @JvmName("setDialerHapticsEnabledPref")
         fun setHapticsEnabled(v: Boolean) { hapticsEnabled = v }
 
-        @JvmName("setDialerMorphDurationPref")
-        fun setMorphDuration(v: Float) { morphDuration = v }
-
         fun reloadFromDefaults() {
             enabled = ModuleDefaults.MasterToggles.DIALER_RECENTS_SWIPE_ENABLED
-            callThreshold = ModuleDefaults.DialerRecents.CALL_THRESHOLD
-            deleteWidth = ModuleDefaults.DialerRecents.DELETE_WIDTH
-            confirmDelete = ModuleDefaults.DialerRecents.CONFIRM_DELETE
             hapticsEnabled = true
-            morphDuration = ModuleDefaults.DialerRecents.MORPH_DURATION
         }
     }
 
@@ -1721,9 +1627,6 @@ class SettingsRepository(context: Context) {
         var systemUiSafeMode by prefsBooleanState("prefs_key_systemui_safe_mode_enable", defaults.systemUiSafeMode); private set
         var launcherSafeMode by prefsBooleanState("prefs_key_home_safe_mode_enable", defaults.launcherSafeMode); private set
         var settingsSafeMode by prefsBooleanState("prefs_key_system_settings_safe_mode_enable", defaults.settingsSafeMode); private set
-        var instagramSafeMode by prefsBooleanState("prefs_key_instagram_safe_mode_enable", defaults.instagramSafeMode); private set
-        var whatsappSafeMode by prefsBooleanState("prefs_key_whatsapp_safe_mode_enable", defaults.whatsappSafeMode); private set
-        var youtubeSafeMode by prefsBooleanState("prefs_key_youtube_safe_mode_enable", defaults.youtubeSafeMode); private set
 
         fun getCrashingAliases(): Set<String> {
             return dev.hyperios.app.safemode.CrashScope.getCrashingAliases()
@@ -1773,44 +1676,11 @@ class SettingsRepository(context: Context) {
             }
         }
 
-        @JvmName("setInstagramSafeModePref")
-        fun setInstagramSafeMode(v: Boolean) {
-            instagramSafeMode = v
-            if (v) {
-                dev.hyperios.app.safemode.SafeModeHandler.updateCrashProp("instagram")
-            } else {
-                dev.hyperios.app.safemode.SafeModeHandler.removeCrashProp("instagram")
-            }
-        }
-
-        @JvmName("setWhatsappSafeModePref")
-        fun setWhatsappSafeMode(v: Boolean) {
-            whatsappSafeMode = v
-            if (v) {
-                dev.hyperios.app.safemode.SafeModeHandler.updateCrashProp("whatsapp")
-            } else {
-                dev.hyperios.app.safemode.SafeModeHandler.removeCrashProp("whatsapp")
-            }
-        }
-
-        @JvmName("setYoutubeSafeModePref")
-        fun setYoutubeSafeMode(v: Boolean) {
-            youtubeSafeMode = v
-            if (v) {
-                dev.hyperios.app.safemode.SafeModeHandler.updateCrashProp("youtube")
-            } else {
-                dev.hyperios.app.safemode.SafeModeHandler.removeCrashProp("youtube")
-            }
-        }
-
         fun clearAll() {
             setGlobalSafeMode(false)
             setSystemUiSafeMode(false)
             setLauncherSafeMode(false)
             setSettingsSafeMode(false)
-            setInstagramSafeMode(false)
-            setWhatsappSafeMode(false)
-            setYoutubeSafeMode(false)
             dev.hyperios.app.safemode.SafeModeHandler.clearAllSafeModes()
         }
     }
@@ -1848,6 +1718,12 @@ class SettingsRepository(context: Context) {
 
     private inline fun <reified E : Enum<E>> prefsEnumState(key: String, default: E) =
         PrefEnumDelegate(prefs, key, default, enumValues<E>()).also { reloadablePrefs.add(it) }
+
+    init {
+        // Runs deterministically AFTER all holders and delegate properties are constructed.
+        // If the Xposed service binds now or in the future, preferences are reconciled safely.
+        XposedServiceBridge.onBind { reconcilePreferences() }
+    }
 }
 
 internal sealed interface ReloadablePref {

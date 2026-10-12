@@ -163,7 +163,7 @@ class NotificationGlassSheetView @JvmOverloads constructor(
         val viewX = 0
         val viewY = translationY.toInt()
 
-        val shouldRenderGlass = !isLandscape && cfg.isGlassEffectsActive && (!cfg.glassOnlyWithoutWallpaper || (!shouldDrawWallpaper && !isDepthActive))
+        val shouldRenderGlass = !isLandscape && cfg.isGlassEffectsActive
 
         var glassRendered = false
         if (shouldRenderGlass && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && renderer != null) {
