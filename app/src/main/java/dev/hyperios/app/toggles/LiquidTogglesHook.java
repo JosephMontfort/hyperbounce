@@ -1288,10 +1288,6 @@ public class LiquidTogglesHook extends XposedModule {
         boolean miuixAppsHookingEnabled = false;
         try {
             hyperBouncePrefs = new HyperBouncePrefs(this);
-            if (!hyperBouncePrefs.getModuleEnabled()) {
-                log(4, "HyperiOS", "disabled globally, skipping toggles/sliders/keypad injection");
-                return;
-            }
             togglesSlidersHookEnabled = hyperBouncePrefs.getTogglesSlidersHookEnabled();
             if (!togglesSlidersHookEnabled) {
                 log(4, "HyperiOS", "toggles/sliders hook disabled via master switch, skipping");
