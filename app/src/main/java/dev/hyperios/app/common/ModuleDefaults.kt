@@ -749,4 +749,5 @@ object ModuleDefaults {
 
         const val SLIDER_GLASS_SPRING_STIFFNESS: Float = 800.0f
         val SLIDER_GLASS_SPRING_STIFFNESS_RANGE = 50.0f..2000.0f
+    }
 }
