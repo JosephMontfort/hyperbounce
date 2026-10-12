@@ -1295,7 +1295,6 @@ public class LiquidTogglesHook extends XposedModule {
             togglesSlidersHookEnabled = hyperBouncePrefs.getTogglesSlidersHookEnabled();
             if (!togglesSlidersHookEnabled) {
                 log(4, "HyperiOS", "toggles/sliders hook disabled via master switch, skipping");
-                hookDynamicIslandIfPresent(packageName, packageClassLoader);
                 return;
             }
 
@@ -1448,48 +1447,6 @@ public class LiquidTogglesHook extends XposedModule {
             }
         }
 
-        hookDynamicIslandIfPresent(packageName, packageClassLoader);
-    }
-
-    private void hookDynamicIslandIfPresent(String packageName, ClassLoader packageClassLoader) {
-        if (packageName.equals("miui.systemui.plugin") ||
-                packageName.equals("com.android.systemui")) {
-            try {
-                Class<?> delegateClass = findClassIfExists(
-                        "miui.systemui.dynamicisland.anim.DynamicIslandAnimationDelegate",
-                        packageClassLoader);
-                if (delegateClass != null) {
-                    hookAllConstructors(delegateClass, chain -> {
-                        Object result = chain.proceed();
-                        try {
-                            Class<?> folmeEaseClass = findClassIfExists(
-                                    "miuix.animation.FolmeEase", packageClassLoader);
-                            if (folmeEaseClass == null) return result;
-
-                            Method spring = findMethod(
-                                    folmeEaseClass, "spring", float.class, float.class);
-                            Object iosSpring = invoke(spring, null, 0.65f, 0.35f);
-                            Object fastSpring = invoke(spring, null, 0.70f, 0.25f);
-
-                            for (Field field : delegateClass.getDeclaredFields()) {
-                                field.setAccessible(true);
-                                if (field.getType().getName().contains("EaseStyle")) {
-                                    String name = field.getName();
-                                    field.set(chain.getThisObject(),
-                                            (name.contains("HIDDEN") ||
-                                                    name.contains("APPEAR"))
-                                                    ? fastSpring : iosSpring);
-                                }
-                            }
-                        } catch (Throwable ignored) {
-                        }
-                        return result;
-                    });
-                }
-            } catch (Throwable t) {
-                log(4, "HyperiOS", "Dynamic Island hook failed", t);
-            }
-        }
     }
 
     @Override

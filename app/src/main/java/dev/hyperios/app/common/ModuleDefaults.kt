@@ -25,7 +25,6 @@ object ModuleDefaults {
         const val APP_WHATSAPP_ENABLED = false
         const val APP_YOUTUBE_ENABLED = false
         const val MIUIX_APPS_HOOKING_ENABLED = false
-        const val GESTURE_DAEMON_ENABLED = false
     }
 
     object ScreenUnlock {
@@ -92,18 +91,6 @@ object ModuleDefaults {
         const val MAX_DAMPING: Float = 0.65f
         val MAX_DAMPING_RANGE = 0.3f..1.5f
 
-        // Mode-Specific Tweaks
-        const val XOS_STIFFNESS: Float = 150.0f
-        val XOS_STIFFNESS_RANGE = 50.0f..300.0f
-
-        const val XOS_DAMPING: Float = 0.70f
-        val XOS_DAMPING_RANGE = 0.2f..1.5f
-
-        const val XOS_ALPHA_DURATION_MS: Long = 250L
-        val XOS_ALPHA_DURATION_RANGE = 100.0f..600.0f
-
-        const val ORIGINOS_UPPER_ROW_DELAY: Int = 35
-        val ORIGINOS_UPPER_ROW_DELAY_RANGE = 10.0f..100.0f
 
         // Dynamic Row Ranges
         val ROW_Z_RANGE = 0.0f..4000.0f
@@ -517,10 +504,6 @@ object ModuleDefaults {
         const val LANDSCAPE_GAME_OPT: Boolean = true
         const val REFINED_HAPTICS: Boolean = true
         const val STACK_RECENTS_HAPTICS: Boolean = true
-
-        const val WORKBENCH_HERO_SCALE: Float = 0.98f
-        val WORKBENCH_HERO_SCALE_RANGE = 0.8f..1.0f
-        const val WORKBENCH_LAYOUT_STYLE: Int = 1
     }
 
     object CallerScreen {
@@ -766,11 +749,4 @@ object ModuleDefaults {
 
         const val SLIDER_GLASS_SPRING_STIFFNESS: Float = 800.0f
         val SLIDER_GLASS_SPRING_STIFFNESS_RANGE = 50.0f..2000.0f
-    }
-
-    object Gestures {
-        const val GESTURE_M_ENABLED: Boolean = true
-        const val GESTURE_V_ENABLED: Boolean = true
-        const val GESTURE_DAEMON_ENABLED: Boolean = false
-    }
 }
