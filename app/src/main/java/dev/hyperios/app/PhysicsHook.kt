@@ -40,8 +40,6 @@ class PhysicsHook : XposedModule() {
             }
 
 
-            val isHotReload = prefs?.getBoolean("hot_reload_enabled", false) ?: false
-
             // Safe Mode Check (HyperCeiler Architecture)
             if (SafeModeHandler.isSafeMode(param.packageName, prefs)) {
                 Log.w("HyperiOS", "[SAFE MODE ACTIVE] Skipping all hooks for ${param.packageName}")
@@ -64,12 +62,12 @@ class PhysicsHook : XposedModule() {
                             dev.hyperios.app.lockscreen.LockScreenConfigHolder.updateFromPrefs(prefs)
                             dev.hyperios.app.controlcenter.ControlCenterConfigHolder.updateFromPrefs(prefs)
                             dev.hyperios.app.notification.NotificationSheetConfigHolder.updateFromPrefs(prefs)
-                            if (isHotReload) {
-                                prefs.registerOnSharedPreferenceChangeListener { _, _ ->
-                                    dev.hyperios.app.lockscreen.LockScreenConfigHolder.updateFromPrefs(prefs)
-                                    dev.hyperios.app.controlcenter.ControlCenterConfigHolder.updateFromPrefs(prefs)
-                                    dev.hyperios.app.notification.NotificationSheetConfigHolder.updateFromPrefs(prefs)
-                                }
+                            prefs.registerOnSharedPreferenceChangeListener { p, _ ->
+                                val liveHotReload = p?.getBoolean("hot_reload_enabled", false) ?: false
+                                if (!liveHotReload) return@registerOnSharedPreferenceChangeListener
+                                dev.hyperios.app.lockscreen.LockScreenConfigHolder.updateFromPrefs(p)
+                                dev.hyperios.app.controlcenter.ControlCenterConfigHolder.updateFromPrefs(p)
+                                dev.hyperios.app.notification.NotificationSheetConfigHolder.updateFromPrefs(p)
                             }
                         } catch (t: Throwable) {
                             Log.e("HyperiOS", "Failed to bind remote preferences in SystemUI", t)
@@ -86,10 +84,10 @@ class PhysicsHook : XposedModule() {
                     if (prefs != null) {
                         try {
                             dev.hyperios.app.controlcenter.ControlCenterConfigHolder.updateFromPrefs(prefs)
-                            if (isHotReload) {
-                                prefs.registerOnSharedPreferenceChangeListener { _, _ ->
-                                    dev.hyperios.app.controlcenter.ControlCenterConfigHolder.updateFromPrefs(prefs)
-                                }
+                            prefs.registerOnSharedPreferenceChangeListener { p, _ ->
+                                val liveHotReload = p?.getBoolean("hot_reload_enabled", false) ?: false
+                                if (!liveHotReload) return@registerOnSharedPreferenceChangeListener
+                                dev.hyperios.app.controlcenter.ControlCenterConfigHolder.updateFromPrefs(p)
                             }
                         } catch (t: Throwable) {
                             Log.e("HyperiOS", "Failed to bind remote preferences in Control Center Plugin", t)
@@ -102,10 +100,10 @@ class PhysicsHook : XposedModule() {
                     if (prefs != null) {
                         try {
                             dev.hyperios.app.launcher.LauncherConfigHolder.update(prefs)
-                            if (isHotReload) {
-                                prefs.registerOnSharedPreferenceChangeListener { _, _ ->
-                                    dev.hyperios.app.launcher.LauncherConfigHolder.update(prefs)
-                                }
+                            prefs.registerOnSharedPreferenceChangeListener { p, _ ->
+                                val liveHotReload = p?.getBoolean("hot_reload_enabled", false) ?: false
+                                if (!liveHotReload) return@registerOnSharedPreferenceChangeListener
+                                dev.hyperios.app.launcher.LauncherConfigHolder.update(p)
                             }
                         } catch (t: Throwable) {
                             Log.e("HyperiOS", "Failed to bind remote preferences in MIUI Home", t)
@@ -120,11 +118,11 @@ class PhysicsHook : XposedModule() {
                         try {
                             dev.hyperios.app.caller.IosCallerConfigHolder.updateFromPrefs(prefs)
                             dev.hyperios.app.dialer.DialerRecentsConfigHolder.updateFromPrefs(prefs)
-                            if (isHotReload) {
-                                prefs.registerOnSharedPreferenceChangeListener { _, _ ->
-                                    dev.hyperios.app.caller.IosCallerConfigHolder.updateFromPrefs(prefs)
-                                    dev.hyperios.app.dialer.DialerRecentsConfigHolder.updateFromPrefs(prefs)
-                                }
+                            prefs.registerOnSharedPreferenceChangeListener { p, _ ->
+                                val liveHotReload = p?.getBoolean("hot_reload_enabled", false) ?: false
+                                if (!liveHotReload) return@registerOnSharedPreferenceChangeListener
+                                dev.hyperios.app.caller.IosCallerConfigHolder.updateFromPrefs(p)
+                                dev.hyperios.app.dialer.DialerRecentsConfigHolder.updateFromPrefs(p)
                             }
                         } catch (t: Throwable) {
                             Log.e("HyperiOS", "Failed to bind remote preferences in InCallUI", t)
@@ -137,10 +135,10 @@ class PhysicsHook : XposedModule() {
                     if (prefs != null) {
                         try {
                             dev.hyperios.app.dialer.DialerRecentsConfigHolder.updateFromPrefs(prefs)
-                            if (isHotReload) {
-                                prefs.registerOnSharedPreferenceChangeListener { _, _ ->
-                                    dev.hyperios.app.dialer.DialerRecentsConfigHolder.updateFromPrefs(prefs)
-                                }
+                            prefs.registerOnSharedPreferenceChangeListener { p, _ ->
+                                val liveHotReload = p?.getBoolean("hot_reload_enabled", false) ?: false
+                                if (!liveHotReload) return@registerOnSharedPreferenceChangeListener
+                                dev.hyperios.app.dialer.DialerRecentsConfigHolder.updateFromPrefs(p)
                             }
                         } catch (t: Throwable) {
                             Log.e("HyperiOS", "Failed to bind remote preferences in Contacts", t)

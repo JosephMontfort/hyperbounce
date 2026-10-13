@@ -816,6 +816,7 @@ object ControlCenterHook {
                     if (m.name == "expandedStretch") {
                         m.isAccessible = true
                         module.hook(m).intercept { chain ->
+                            if (!ControlCenterConfigHolder.config.isJellyActive) return@intercept chain.proceed()
                             try {
                                 val rawArgs = chain.args
                                 val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as? Array<*>
@@ -824,6 +825,16 @@ object ControlCenterHook {
                                     val f3 = (args[1] as? Number)?.toFloat() ?: 0f
                                     val z2 = args[2] as? Boolean ?: false
                                     val z3 = args[3] as? Boolean ?: false
+
+                                    val damping = ControlCenterConfigHolder.config.spreadReleaseDamping.coerceIn(0.15f, 0.95f)
+                                    val response = ControlCenterConfigHolder.config.spreadReleaseResponse.coerceIn(0.40f, 1.50f)
+                                    val bounceEase = getStyleMethod.invoke(null, -2, floatArrayOf(response, damping))
+
+                                    // Update static releaseTransYEase field on LowEndItemHolderAnimator
+                                    try {
+                                        val releaseTransYField = lowEndAnimatorClass.getDeclaredField("releaseTransYEase").apply { isAccessible = true }
+                                        releaseTransYField.set(null, bounceEase)
+                                    } catch (_: Throwable) {}
 
                                     if (z2 && z3) {
                                         val thisObj = chain.thisObject
@@ -837,7 +848,6 @@ object ControlCenterHook {
                                             val expandedStretchField = lowEndAnimatorClass.getDeclaredField("EXPANDED_STRETCH").apply { isAccessible = true }
                                             val prop = expandedStretchField.get(null)
 
-                                            val bounceEase = getStyleMethod.invoke(null, -2, floatArrayOf(0.88f, 0.38f))
                                             val config = animConfigClass.getDeclaredConstructor().newInstance()
                                             val setEaseMethod = animConfigClass.getMethod("setEase", easeStyleClass)
                                             setEaseMethod.invoke(config, bounceEase)
@@ -865,37 +875,36 @@ object ControlCenterHook {
                     if (m.name == "changeExpand") {
                         m.isAccessible = true
                         module.hook(m).intercept { chain ->
+                            if (!ControlCenterConfigHolder.config.isJellyActive) return@intercept chain.proceed()
                             try {
-                                val rawArgs = chain.args
-                                val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as? Array<*>
-                                if (args != null && args.size >= 4 && (args[3] as Boolean)) {
-                                    val bounceEase = getStyleMethod.invoke(null, -2, floatArrayOf(0.88f, 0.38f))
-                                    val thisObj = chain.thisObject
-                                    if (thisObj != null) {
-                                        // Update animators (Row[])
-                                        try {
-                                            val animatorsField = spreadAnimatorClass.getDeclaredField("animators").apply { isAccessible = true }
-                                            val animators = animatorsField.get(thisObj) as? Array<*>
-                                            if (animators != null) {
-                                                for (row in animators) {
-                                                    if (row != null) {
-                                                        val releaseEaseField = row.javaClass.getDeclaredField("releaseEase").apply { isAccessible = true }
-                                                        releaseEaseField.set(row, bounceEase)
-                                                    }
+                                val damping = ControlCenterConfigHolder.config.spreadReleaseDamping.coerceIn(0.15f, 0.95f)
+                                val response = ControlCenterConfigHolder.config.spreadReleaseResponse.coerceIn(0.40f, 1.50f)
+                                val bounceEase = getStyleMethod.invoke(null, -2, floatArrayOf(response, damping))
+                                val thisObj = chain.thisObject
+                                if (thisObj != null) {
+                                    // Update animators (Row[])
+                                    try {
+                                        val animatorsField = spreadAnimatorClass.getDeclaredField("animators").apply { isAccessible = true }
+                                        val animators = animatorsField.get(thisObj) as? Array<*>
+                                        if (animators != null) {
+                                            for (row in animators) {
+                                                if (row != null) {
+                                                    val releaseEaseField = row.javaClass.getDeclaredField("releaseEase").apply { isAccessible = true }
+                                                    releaseEaseField.set(row, bounceEase)
                                                 }
                                             }
-                                        } catch (_: Throwable) {}
+                                        }
+                                    } catch (_: Throwable) {}
 
-                                        // Update shiftingAnimator (Row)
-                                        try {
-                                            val shiftingField = spreadAnimatorClass.getDeclaredField("shiftingAnimator").apply { isAccessible = true }
-                                            val shifting = shiftingField.get(thisObj)
-                                            if (shifting != null) {
-                                                val releaseEaseField = shifting.javaClass.getDeclaredField("releaseEase").apply { isAccessible = true }
-                                                releaseEaseField.set(shifting, bounceEase)
-                                            }
-                                        } catch (_: Throwable) {}
-                                    }
+                                    // Update shiftingAnimator (Row)
+                                    try {
+                                        val shiftingField = spreadAnimatorClass.getDeclaredField("shiftingAnimator").apply { isAccessible = true }
+                                        val shifting = shiftingField.get(thisObj)
+                                        if (shifting != null) {
+                                            val releaseEaseField = shifting.javaClass.getDeclaredField("releaseEase").apply { isAccessible = true }
+                                            releaseEaseField.set(shifting, bounceEase)
+                                        }
+                                    } catch (_: Throwable) {}
                                 }
                             } catch (t: Throwable) {}
                             chain.proceed()
@@ -1016,62 +1025,6 @@ object ControlCenterHook {
                         }
                     }
 
-                    if (m.name == "prepareLocation") {
-                        m.isAccessible = true
-                        module.hook(m).intercept { chain ->
-                            val holder = chain.thisObject
-                            if (holder != null && ControlCenterGrouping.sGroupChildHolders.contains(holder)) {
-                                return@intercept null
-                            }
-                            val itemView = ControlCenterGrouping.getViewHolderItemView(holder)
-                            if (itemView != null && ControlCenterGrouping.isChildOfGroup(itemView)) {
-                                if (holder != null) ControlCenterGrouping.sGroupChildHolders.add(holder)
-                                return@intercept null
-                            }
-                            val result = try { chain.proceed() } catch (t: Throwable) { null }
-                            if (ControlCenterConfigHolder.config.isLowEndAnim() || !ControlCenterConfigHolder.config.isAnimActive) return@intercept result
-
-                            try {
-                                var ctx: Context? = null
-                                try {
-                                    val getCtxMethod = sGetContextMethod ?: holder.javaClass.getMethod("getContext").apply { sGetContextMethod = this }
-                                    ctx = getCtxMethod.invoke(holder) as? Context
-                                } catch (t: Throwable) {
-                                    try {
-                                        val ivField = sItemViewField ?: holder.javaClass.getField("itemView").apply { sItemViewField = this }
-                                        val iv = ivField.get(holder) as? View
-                                        if (iv != null) ctx = iv.context
-                                    } catch (t2: Throwable) {}
-                                }
-                                if (ctx == null) return@intercept result
-
-                                val screenW = ctx.resources.displayMetrics.widthPixels.toFloat()
-                                val screenH = ctx.resources.displayMetrics.heightPixels.toFloat()
-
-                                val shrinkCenterXField = sShrinkCenterXField ?: holderClass.getDeclaredField("shrinkCenterX").apply {
-                                    isAccessible = true
-                                    sShrinkCenterXField = this
-                                }
-                                shrinkCenterXField.setFloat(holder, screenW / 2.0f)
-
-                                val shrinkCenterYField = sShrinkCenterYField ?: holderClass.getDeclaredField("shrinkCenterY").apply {
-                                    isAccessible = true
-                                    sShrinkCenterYField = this
-                                }
-                                shrinkCenterYField.setFloat(holder, screenH / 2.0f)
-
-                                val delayPerField = sDelayPerField ?: holderClass.getDeclaredField("delayPer").apply {
-                                    isAccessible = true
-                                    sDelayPerField = this
-                                }
-                                delayPerField.setFloat(holder, 0.0f)
-                            } catch (t: Throwable) {
-                                Log.e(TAG, "prepareLocation hook error", t)
-                            }
-                            result
-                        }
-                    }
-
                     if (m.name == "updateEases") {
                         m.isAccessible = true
                         module.hook(m).intercept { chain ->
@@ -1085,17 +1038,11 @@ object ControlCenterHook {
                                 return@intercept null
                             }
                             val result = try { chain.proceed() } catch (t: Throwable) { null }
-                            if (ControlCenterConfigHolder.config.isLowEndAnim() || !ControlCenterConfigHolder.config.isAnimActive) return@intercept result
+                            if (!ControlCenterConfigHolder.config.isJellyActive) return@intercept result
                             try {
-                                val holder = chain.thisObject
-
-                                val delayPerField = sDelayPerField ?: holderClass.getDeclaredField("delayPer").apply {
-                                    isAccessible = true
-                                    sDelayPerField = this
-                                }
-                                delayPerField.setFloat(holder, 0.0f)
-
-                                val bounceEase = getStyleMethod.invoke(null, -2, floatArrayOf(0.88f, 0.38f))
+                                val damping = ControlCenterConfigHolder.config.spreadReleaseDamping.coerceIn(0.15f, 0.95f)
+                                val response = ControlCenterConfigHolder.config.spreadReleaseResponse.coerceIn(0.40f, 1.50f)
+                                val bounceEase = getStyleMethod.invoke(null, -2, floatArrayOf(response, damping))
                                 val releaseTransYEaseField = sReleaseTransYEaseField ?: holderClass.getDeclaredField("releaseTransYEase").apply {
                                     isAccessible = true
                                     sReleaseTransYEaseField = this
@@ -1137,87 +1084,7 @@ object ControlCenterHook {
                                 if (holder != null) ControlCenterGrouping.sGroupChildHolders.add(holder)
                                 return@intercept null
                             }
-                            val result = chain.proceed()
-                            if (ControlCenterConfigHolder.config.isJellyActive) {
-                                try {
-                                    val targetView = itemView ?: (sItemViewField ?: holderClass.getField("itemView").apply {
-                                        sItemViewField = this
-                                    }).get(holder) as? View ?: return@intercept result
-
-                                    val expandScaleRatioField = sExpandScaleRatioField ?: holderClass.getDeclaredField("expandScaleRatio").apply {
-                                        isAccessible = true
-                                        sExpandScaleRatioField = this
-                                    }
-                                    val progress = expandScaleRatioField.getFloat(holder)
-
-                                    val expandTransYField = sExpandTransYField ?: holderClass.getDeclaredField("expandTransY").apply {
-                                        isAccessible = true
-                                        sExpandTransYField = this
-                                    }
-                                    val expandTransY = expandTransYField.getFloat(holder)
-
-                                    val spreadRowField = sSpreadRowField ?: holderClass.getDeclaredField("spreadRow").apply {
-                                        isAccessible = true
-                                        sSpreadRowField = this
-                                    }
-                                    val row = spreadRowField.getInt(holder)
-
-                                    val viewWidth = targetView.width
-                                    val viewHeight = targetView.height
-                                    if (viewWidth <= 0 || viewHeight <= 0) return@intercept result
-
-                                    val isRecentGesture = (System.currentTimeMillis() - ControlCenterConfigHolder.sLastTouchTime) < 700
-                                    val isClosing = (progress < 0.99f && ControlCenterConfigHolder.sCurrentVelocityY < -100.0f)
-
-                                    if (!ControlCenterConfigHolder.sIsUserFlicking && !isRecentGesture && Math.abs(expandTransY) < 1.0f) {
-                                        targetView.scaleX = 1.0f
-                                        targetView.scaleY = 1.0f
-                                        return@intercept result
-                                    }
-
-                                    val absVel = Math.abs(ControlCenterConfigHolder.sCurrentVelocityY)
-                                    val velFactor = if (absVel > 0.1f) Math.max(0.35f, Math.min(1.20f, absVel / 3500.0f)) else 0.70f
-
-                                    val density = targetView.context.resources.displayMetrics.density
-                                    val standardCardHeight = 110.0f * density
-                                    val heightDampener = Math.max(0.42f, Math.min(1.0f, standardCardHeight / viewHeight))
-
-                                    var progressStretchY = 0.0f
-                                    var progressSquishX = 0.0f
-
-                                    if (!isClosing && progress in 0.01f..0.99f && (ControlCenterConfigHolder.sIsUserFlicking || isRecentGesture)) {
-                                        val momentum = Math.sin(progress * Math.PI).toFloat()
-                                        val rowStagger = 1.0f + (row * 0.040f)
-                                        progressStretchY = momentum * 0.090f * velFactor * heightDampener * rowStagger
-                                        progressSquishX = progressStretchY * 0.38f
-                                    } else if (isClosing && (ControlCenterConfigHolder.sIsUserFlicking || isRecentGesture)) {
-                                        val momentum = Math.sin(progress * Math.PI).toFloat()
-                                        progressStretchY = -momentum * 0.050f * velFactor * heightDampener
-                                        progressSquishX = -progressStretchY * 0.38f
-                                    }
-
-                                    val strain = Math.max(-0.22f, Math.min(0.50f, expandTransY / 850.0f))
-                                    val pullStretchY = strain * 0.32f * heightDampener
-                                    val pullSquishX = strain * 0.14f * heightDampener
-
-                                    val baseScale = Math.min(1.0f, Math.max(0.89f, 0.91f + (progress * 0.09f)))
-                                    val totalScaleY = baseScale + progressStretchY + pullStretchY
-                                    val totalScaleX = baseScale - progressSquishX - pullSquishX
-
-                                    targetView.pivotX = viewWidth / 2.0f
-                                    if (expandTransY > 3.0f || (!isClosing && progress > 0.05f && progress < 0.95f)) {
-                                        targetView.pivotY = viewHeight * 0.10f
-                                    } else if (expandTransY < -3.0f || isClosing) {
-                                        targetView.pivotY = viewHeight * 0.90f
-                                    } else {
-                                        targetView.pivotY = viewHeight / 2.0f
-                                    }
-
-                                    targetView.scaleX = Math.max(0.78f, Math.min(1.30f, totalScaleX))
-                                    targetView.scaleY = Math.max(0.78f, Math.min(1.40f, totalScaleY))
-                                } catch (t: Throwable) {}
-                            }
-                            result
+                            chain.proceed()
                         }
                     }
                 }

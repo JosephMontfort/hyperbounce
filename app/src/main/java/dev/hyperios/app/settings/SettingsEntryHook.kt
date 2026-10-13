@@ -26,7 +26,7 @@ import java.util.concurrent.atomic.AtomicBoolean
  */
 object SettingsEntryHook {
     private const val TAG = "HyperBounce_SettingsEntry"
-    private const val HEADER_ID = 666L
+    private const val HEADER_ID = 20261013666L
     // Use android.R.drawable.ic_menu_info_details (17301569) as placeholder framework ID
     // HyperLight uses ic_menu_help (17301568), so 17301569 avoids any ID clash.
     private const val SETTINGS_ENTRY_ICON_RES = android.R.drawable.ic_menu_info_details
@@ -35,6 +35,18 @@ object SettingsEntryHook {
     private var cachedModuleContext: Context? = null
     private val isResolvingIcon = AtomicBoolean(false)
     private var xposedModule: XposedModule? = null
+
+    private fun isOurHeader(item: Any?): Boolean {
+        if (item == null) return false
+        return try {
+            val id = item.javaClass.getField("id").getLong(item)
+            val intent = try { item.javaClass.getField("intent").get(item) as? Intent } catch (_: Throwable) { null }
+            val pkg = intent?.component?.packageName
+            (id == HEADER_ID || pkg == "dev.hyperios.app") && id != 666L && pkg != "com.sevtinge.hyperceiler"
+        } catch (_: Throwable) {
+            false
+        }
+    }
 
     private fun getPrefs(fallback: SharedPreferences?): SharedPreferences? {
         return try {
@@ -169,8 +181,7 @@ object SettingsEntryHook {
                                     val adapter = chain.thisObject ?: return result
                                     val getItemMethod = adapter.javaClass.getMethod("getItem", Int::class.javaPrimitiveType)
                                     val item = getItemMethod.invoke(adapter, position) ?: return result
-                                    val idField = item.javaClass.getField("id")
-                                    if (idField.getLong(item) == HEADER_ID) {
+                                    if (isOurHeader(item)) {
                                         val viewField = try { holder.javaClass.getField("itemView") } catch (_: Throwable) { null }
                                         val itemView = (viewField?.get(holder) as? View) ?: (holder as? View) ?: return result
                                         val context = itemView.context
@@ -235,8 +246,7 @@ object SettingsEntryHook {
                                     val adapter = chain.thisObject ?: return view
                                     val getItemMethod = adapter.javaClass.getMethod("getItem", Int::class.javaPrimitiveType)
                                     val item = getItemMethod.invoke(adapter, position) ?: return view
-                                    val idField = item.javaClass.getField("id")
-                                    if (idField.getLong(item) == HEADER_ID) {
+                                    if (isOurHeader(item)) {
                                         val iconView = view.findViewById<ImageView>(android.R.id.icon)
                                             ?: view.findViewById<ImageView>(view.resources.getIdentifier("icon", "id", "android"))
                                             ?: view.findViewById<ImageView>(view.resources.getIdentifier("icon", "id", view.context.packageName))
@@ -290,18 +300,8 @@ object SettingsEntryHook {
                     @Suppress("UNCHECKED_CAST")
                     val list = chain.args[0] as? MutableList<Any?> ?: return result
 
-                    // Check if header with ID 666 is already added
-                    val alreadyAdded = list.any { item ->
-                        if (item == null) false
-                        else {
-                            try {
-                                val idField = item.javaClass.getField("id")
-                                idField.getLong(item) == HEADER_ID
-                            } catch (_: Throwable) {
-                                false
-                            }
-                        }
-                    }
+                    // Check if our header is already added
+                    val alreadyAdded = list.any { item -> isOurHeader(item) }
                     if (alreadyAdded) return result
 
                     // Cache module context from host activity
@@ -419,10 +419,23 @@ object SettingsEntryHook {
             return null
         }
         try {
-            val iconStyleStr = getPrefs(prefs)?.getString("app_icon_style", "Monet") ?: "Monet"
+            val iconStyleStr = getPrefs(prefs)?.getString("app_icon_style", "Flat") ?: "Flat"
             val isFlat = iconStyleStr.equals("Flat", ignoreCase = true)
             val iconDrawableName = if (isFlat) "ic_settings_entry_flat" else "ic_settings_entry_monet"
 
+            // 1. Try resolving directly via PackageManager getResourcesForApplication
+            if (hostContext != null) {
+                try {
+                    val appRes = hostContext.packageManager.getResourcesForApplication("dev.hyperios.app")
+                    val resId = appRes.getIdentifier(iconDrawableName, "drawable", "dev.hyperios.app")
+                    if (resId != 0) {
+                        val d = appRes.getDrawable(resId, null)
+                        if (d != null) return d.constantState?.newDrawable() ?: d
+                    }
+                } catch (_: Throwable) {}
+            }
+
+            // 2. Try module package context
             val modCtx = ensureModuleContext(hostContext)
             if (modCtx != null) {
                 val res = modCtx.resources
@@ -441,6 +454,21 @@ object SettingsEntryHook {
                         return d.constantState?.newDrawable() ?: d
                     }
                 }
+            }
+
+            // 3. Fallback to packageManager activity alias icon (MainActivityFlat or MainActivityMonet)
+            if (hostContext != null) {
+                try {
+                    val targetAlias = if (isFlat) "dev.hyperios.app.ui.MainActivityFlat" else "dev.hyperios.app.ui.MainActivityMonet"
+                    val comp = android.content.ComponentName("dev.hyperios.app", targetAlias)
+                    val d = hostContext.packageManager.getActivityIcon(comp)
+                    if (d != null) return d.constantState?.newDrawable() ?: d
+                } catch (_: Throwable) {}
+
+                try {
+                    val d = hostContext.packageManager.getApplicationIcon("dev.hyperios.app")
+                    if (d != null) return d.constantState?.newDrawable() ?: d
+                } catch (_: Throwable) {}
             }
         } catch (t: Throwable) {
             Log.e(TAG, "Failed resolving custom icon drawable", t)

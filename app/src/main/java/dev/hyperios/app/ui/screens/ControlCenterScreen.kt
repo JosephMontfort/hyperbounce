@@ -146,6 +146,22 @@ fun ControlCenterScreen(
                     onCheckedChange = cc::setJellyEnabled,
                     enabled = cc.masterEnabled
                 )
+                if (cc.jellyEnabled) {
+                    RowDivider(colors.separator)
+                    SettingsSliderRow(
+                        title = "Release Rebound Damping",
+                        subtitle = "Elasticity and settling bounce of tiles upon pull-down and overstretch release",
+                        colors = colors,
+                        backdrop = backdrop,
+                        value = cc.spreadReleaseDamping.coerceIn(0.20f, 0.80f),
+                        onValueChange = { cc.setSpreadReleaseDamping((it * 100).roundToInt() / 100f) },
+                        valueRange = 0.20f..0.80f,
+                        defaultValue = ModuleDefaults.ControlCenter.SPREAD_RELEASE_DAMPING,
+                        step = 0.01f,
+                        valueLabel = { String.format(java.util.Locale.US, "%.2f", it) },
+                        enabled = cc.masterEnabled
+                    )
+                }
             }
         }
 

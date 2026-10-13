@@ -421,11 +421,11 @@ object ModuleDefaults {
         const val SPREAD_DAMPING: Float = 0.10f
         val SPREAD_DAMPING_RANGE = 0.05f..1.5f
 
-        const val SPREAD_RELEASE_RESPONSE: Float = 0.20f
-        val SPREAD_RELEASE_RESPONSE_RANGE = 0.05f..1.0f
+        const val SPREAD_RELEASE_RESPONSE: Float = 0.88f
+        val SPREAD_RELEASE_RESPONSE_RANGE = 0.40f..1.50f
 
-        const val SPREAD_RELEASE_DAMPING: Float = 1.50f
-        val SPREAD_RELEASE_DAMPING_RANGE = 0.1f..3.0f
+        const val SPREAD_RELEASE_DAMPING: Float = 0.38f
+        val SPREAD_RELEASE_DAMPING_RANGE = 0.20f..0.80f
 
         const val TILE_DELAY_SCALE: Float = 60.0f
         val TILE_DELAY_SCALE_RANGE = 10.0f..200.0f

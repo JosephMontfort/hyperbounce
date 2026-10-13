@@ -121,7 +121,6 @@ object AppTransitionHook {
         hookExtraInteractionsFriction(module, classLoader)
         hookSpringParamsProvider(module, classLoader)
         hookSfAnimImplementor(module, classLoader)
-        hookHomeLayerScaling(module, classLoader)
         hookDeviceLevelUtils(module, classLoader)
     }
 
@@ -1284,66 +1283,6 @@ object AppTransitionHook {
             Log.i(TAG, "Hooked SfWindowAnimImplementor for parabolic ballistic flight arcs and keystone stretch")
         } catch (t: Throwable) {
             Log.w(TAG, "Failed to hook SfWindowAnimImplementor.buildSfAnimParam", t)
-        }
-    }
-
-    /**
-     * Hook 9: Desktop Grid HomeLayer scaling.
-     * Keeps desktop grid breathing smoothly during app open/close transitions.
-     */
-    private fun hookHomeLayerScaling(module: XposedInterface, classLoader: ClassLoader) {
-        try {
-            val homeLayerClass = Class.forName("com.miui.home.recents.anim.HomeLayerParams\$Companion", false, classLoader)
-            val homeLayerParamClass = Class.forName("com.miui.home.recents.anim.HomeLayerParams", false, classLoader)
-
-            val homeLayerParamConst = homeLayerParamClass.getDeclaredConstructor(
-                Float::class.javaPrimitiveType,
-                Float::class.javaPrimitiveType,
-                Float::class.javaPrimitiveType,
-                Float::class.javaPrimitiveType
-            ).apply { isAccessible = true }
-
-            val getAppStateMethod = homeLayerClass.getDeclaredMethod("getAppStateParams")
-            module.hook(getAppStateMethod).intercept(object : XposedInterface.Hooker {
-                override fun intercept(chain: XposedInterface.Chain): Any? {
-                    val cfg = LauncherConfigHolder.iosAnimConfig
-                    if (!cfg.enabled) {
-                        return chain.proceed()
-                    }
-                    return homeLayerParamConst.newInstance(1.0f, 1.0f, 0.0f, 0.92f)
-                }
-            })
-
-            val getHomeStateMethod = homeLayerClass.getDeclaredMethod("getHomeStateParams")
-            module.hook(getHomeStateMethod).intercept(object : XposedInterface.Hooker {
-                override fun intercept(chain: XposedInterface.Chain): Any? {
-                    val cfg = LauncherConfigHolder.iosAnimConfig
-                    if (!cfg.enabled) {
-                        return chain.proceed()
-                    }
-                    return homeLayerParamConst.newInstance(0.0f, 0.92f, 1.0f, 1.0f)
-                }
-            })
-
-            // Ensure HomeLayerElement is active so the desktop actually scales
-            try {
-                val elemClass = Class.forName("com.miui.home.recents.anim.HomeLayerElement", false, classLoader)
-                val enableField = elemClass.getDeclaredField("enable").apply { isAccessible = true }
-                val bindMethod = elemClass.getDeclaredMethod("bindHomeLeash")
-                module.hook(bindMethod).intercept(object : XposedInterface.Hooker {
-                    override fun intercept(chain: XposedInterface.Chain): Any? {
-                        val cfg = LauncherConfigHolder.iosAnimConfig
-                        if (cfg.enabled) {
-                            try { enableField.set(chain.thisObject, true) } catch (_: Throwable) {}
-                        }
-                        return chain.proceed()
-                    }
-                })
-            } catch (_: Throwable) {}
-
-            Log.i(TAG, "Hooked HomeLayerParams for desktop environmental depth scaling")
-        } catch (t: Throwable) {
-            Log.w(TAG, "Failed to hook HomeLayerParams", t)
         }
     }
 
