@@ -861,7 +861,7 @@ object ControlCenterHook {
 
                                     val damping = ControlCenterConfigHolder.config.spreadReleaseDamping.coerceIn(0.01f, 3.0f)
                                     val response = ControlCenterConfigHolder.config.spreadReleaseResponse.coerceIn(0.05f, 5.0f)
-                                    val bounceEase = getStyleMethod.invoke(null, -2, floatArrayOf(damping, response))
+                                    val bounceEase = getStyleMethod.invoke(null, -2, floatArrayOf(response, damping))
 
                                     // Update static releaseTransYEase field on LowEndItemHolderAnimator
                                     try {
@@ -912,7 +912,7 @@ object ControlCenterHook {
                             try {
                                 val damping = ControlCenterConfigHolder.config.spreadReleaseDamping.coerceIn(0.01f, 3.0f)
                                 val response = ControlCenterConfigHolder.config.spreadReleaseResponse.coerceIn(0.05f, 5.0f)
-                                val bounceEase = getStyleMethod.invoke(null, -2, floatArrayOf(damping, response))
+                                val bounceEase = getStyleMethod.invoke(null, -2, floatArrayOf(response, damping))
                                 val thisObj = chain.thisObject
                                 if (thisObj != null) {
                                     // Update animators (Row[])
@@ -1075,7 +1075,7 @@ object ControlCenterHook {
                             try {
                                 val damping = ControlCenterConfigHolder.config.spreadReleaseDamping.coerceIn(0.01f, 3.0f)
                                 val response = ControlCenterConfigHolder.config.spreadReleaseResponse.coerceIn(0.05f, 5.0f)
-                                val bounceEase = getStyleMethod.invoke(null, -2, floatArrayOf(damping, response))
+                                val bounceEase = getStyleMethod.invoke(null, -2, floatArrayOf(response, damping))
                                 val releaseTransYEaseField = sReleaseTransYEaseField ?: holderClass.getDeclaredField("releaseTransYEase").apply {
                                     isAccessible = true
                                     sReleaseTransYEaseField = this

@@ -942,7 +942,13 @@ object KeypadPhysicsHook {
                         }
 
                         // 7. Direct Touch Routing for Elevated / Negative-Translated Rows
-                        val activeNumKeys = sNumKeyIds.mapNotNull { if (it != 0) pinView.findViewById<View>(it) else null }
+                        val activeNumKeys = mutableListOf<View>()
+                        for (id in sNumKeyIds) {
+                            if (id != 0) {
+                                val key = pinView.findViewById<View>(id)
+                                if (key != null) activeNumKeys.add(key)
+                            }
+                        }
                         val attachKeyTouchRouter: (View?) -> Unit = { targetView ->
                             if (targetView != null) {
                                 var activeForwardKey: View? = null
