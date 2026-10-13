@@ -162,7 +162,11 @@ object NotificationSheetHook {
             val cl = containerRef?.get()?.context?.classLoader ?: NotificationSheetHook::class.java.classLoader
             if (cl != null) {
                 val stubClass = Class.forName("miui.stub.CommonStub\$registerFlashlightController\$1", false, cl)
-                val mgrClass = Class.forName("com.miui.interfaces.InterfacesImplManager", false, cl)
+                val mgrClass = try {
+                    Class.forName("com.miui.systemui.interfacesmanager.InterfacesImplManager", false, cl)
+                } catch (_: Throwable) {
+                    Class.forName("com.miui.interfaces.InterfacesImplManager", false, cl)
+                }
                 val getImpl = mgrClass.getMethod("getImpl", Class::class.java)
                 val stub = getImpl.invoke(null, stubClass)
                 if (stub != null) {
@@ -800,49 +804,6 @@ object NotificationSheetHook {
         } catch (t: Throwable) {
             Log.e(TAG, "Failed to hook ControlCenterImpl", t)
         }
-
-        // 3. Hook ControlCenterWindowViewController to ensure isControlCenterExpanded is never stuck
-        try {
-            val ccwvcClass = Class.forName("com.miui.systemui.controlcenter.panel.ControlCenterWindowViewController", false, classLoader)
-            for (m in ccwvcClass.declaredMethods) {
-                if (m.name == "hidePanel" || m.name == "collapse") {
-                    module.hook(m).intercept(object : XposedInterface.Hooker {
-                        override fun intercept(chain: XposedInterface.Chain): Any? {
-                            isControlCenterExpanded = false
-                            if (isShadeSwitchingToNotification) {
-                                isShadeSwitching = false
-                                isShadeSwitchingToNotification = false
-                                isShadeOpen = true
-                                isShadeFullyOpen = true
-                                hasFullyOpenedForCurrentSession = true
-                                hasTriggeredUnlockForCurrentOpen = false
-                                lastAppliedFraction = 1.0f
-                                showSheetForNotificationCenter()
-                                suppressNotificationBlur()
-                            } else {
-                                isShadeSwitching = false
-                                isShadeFullyOpen = false
-                                hasTriggeredUnlockForCurrentOpen = true
-                            }
-                            return chain.proceed()
-                        }
-                    })
-                } else if (m.name == "showPanel" || m.name == "expand") {
-                    module.hook(m).intercept(object : XposedInterface.Hooker {
-                        override fun intercept(chain: XposedInterface.Chain): Any? {
-                            isControlCenterExpanded = true
-                            isShadeOpen = false
-                            isShadeFullyOpen = false
-                            hasFullyOpenedForCurrentSession = false
-                            lastAppliedFraction = 0f
-                            hasTriggeredUnlockForCurrentOpen = true
-                            hideSheetForControlCenter()
-                            return chain.proceed()
-                        }
-                    })
-                }
-            }
-        } catch (_: Throwable) {}
     }
 
     private fun hookContainerParent(module: XposedModule, classLoader: ClassLoader) {

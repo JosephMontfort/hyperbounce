@@ -122,7 +122,6 @@ object AppTransitionHook {
         hookSpringParamsProvider(module, classLoader)
         hookSfAnimImplementor(module, classLoader)
         hookHomeLayerScaling(module, classLoader)
-        hookWallpaperDynamics(module, classLoader)
         hookDeviceLevelUtils(module, classLoader)
     }
 
@@ -1311,7 +1310,7 @@ object AppTransitionHook {
                     if (!cfg.enabled) {
                         return chain.proceed()
                     }
-                    return homeLayerParamConst.newInstance(0.92f, 0.92f, 0.0f, 0.0f)
+                    return homeLayerParamConst.newInstance(1.0f, 1.0f, 0.0f, 0.92f)
                 }
             })
 
@@ -1322,7 +1321,7 @@ object AppTransitionHook {
                     if (!cfg.enabled) {
                         return chain.proceed()
                     }
-                    return homeLayerParamConst.newInstance(1.0f, 1.0f, 0.0f, 0.0f)
+                    return homeLayerParamConst.newInstance(0.0f, 0.92f, 1.0f, 1.0f)
                 }
             })
 
@@ -1345,48 +1344,6 @@ object AppTransitionHook {
             Log.i(TAG, "Hooked HomeLayerParams for desktop environmental depth scaling")
         } catch (t: Throwable) {
             Log.w(TAG, "Failed to hook HomeLayerParams", t)
-        }
-    }
-
-    /**
-     * Hook 10: Wallpaper depth zoom staging.
-     */
-    private fun hookWallpaperDynamics(module: XposedInterface, classLoader: ClassLoader) {
-        try {
-            val wpCompanionClass = Class.forName("com.miui.home.recents.anim.WallpaperParam\$Companion", false, classLoader)
-            val wpParamClass = Class.forName("com.miui.home.recents.anim.WallpaperParam", false, classLoader)
-
-            val wpParamConst = wpParamClass.getDeclaredConstructor(
-                Float::class.javaPrimitiveType,
-                Float::class.javaPrimitiveType,
-                Float::class.javaPrimitiveType,
-                Float::class.javaPrimitiveType
-            ).apply { isAccessible = true }
-
-            val getAppStateMethod = wpCompanionClass.getDeclaredMethod("getAppStateParams")
-            module.hook(getAppStateMethod).intercept(object : XposedInterface.Hooker {
-                override fun intercept(chain: XposedInterface.Chain): Any? {
-                    val cfg = LauncherConfigHolder.iosAnimConfig
-                    if (!cfg.enabled) {
-                        return chain.proceed()
-                    }
-                    return wpParamConst.newInstance(1.08f, 1.08f, 0.0f, 0.0f)
-                }
-            })
-
-            val getHomeStateMethod = wpCompanionClass.getDeclaredMethod("getHomeStateParams")
-            module.hook(getHomeStateMethod).intercept(object : XposedInterface.Hooker {
-                override fun intercept(chain: XposedInterface.Chain): Any? {
-                    val cfg = LauncherConfigHolder.iosAnimConfig
-                    if (!cfg.enabled) {
-                        return chain.proceed()
-                    }
-                    return wpParamConst.newInstance(1.0f, 1.0f, 0.0f, 0.0f)
-                }
-            })
-            Log.i(TAG, "Hooked WallpaperParam for iOS depth zoom staging")
-        } catch (t: Throwable) {
-            Log.w(TAG, "Failed to hook WallpaperParam", t)
         }
     }
 

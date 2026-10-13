@@ -34,8 +34,18 @@ object SettingsEntryHook {
     @Volatile
     private var cachedModuleContext: Context? = null
     private val isResolvingIcon = AtomicBoolean(false)
+    private var xposedModule: XposedModule? = null
+
+    private fun getPrefs(fallback: SharedPreferences?): SharedPreferences? {
+        return try {
+            xposedModule?.getRemotePreferences("dev.hyperios.app_preferences") ?: fallback
+        } catch (_: Throwable) {
+            fallback
+        }
+    }
 
     fun init(module: XposedModule, classLoader: ClassLoader, prefs: SharedPreferences?) {
+        xposedModule = module
         try {
             // 1. Hook Resources.getDrawable to dynamically intercept SETTINGS_ENTRY_ICON_RES
             hookResources(module, prefs)
@@ -43,7 +53,7 @@ object SettingsEntryHook {
             // 2. Try hooking ResourcesImpl.loadDrawable as deep framework fallback
             hookResourcesImpl(module, classLoader, prefs)
 
-            // 3. Try hooking MiuiSettings$HeaderAdapter.getView for direct view binding
+            // 3. Try hooking MiuiSettings$HeaderAdapter (onBindViewHolder and getView) for direct view binding
             hookHeaderAdapter(module, classLoader, prefs)
 
             // 4. Hook MiuiSettings.updateHeaderList to insert the HyperiOS header
@@ -148,6 +158,73 @@ object SettingsEntryHook {
                     continue
                 }
                 for (m in cls.declaredMethods) {
+                    if (m.name == "onBindViewHolder" && m.parameterTypes.size == 2) {
+                        m.isAccessible = true
+                        module.hook(m).intercept(object : XposedInterface.Hooker {
+                            override fun intercept(chain: XposedInterface.Chain): Any? {
+                                val result = chain.proceed()
+                                try {
+                                    val holder = chain.args[0] ?: return result
+                                    val position = chain.args[1] as? Int ?: return result
+                                    val adapter = chain.thisObject ?: return result
+                                    val getItemMethod = adapter.javaClass.getMethod("getItem", Int::class.javaPrimitiveType)
+                                    val item = getItemMethod.invoke(adapter, position) ?: return result
+                                    val idField = item.javaClass.getField("id")
+                                    if (idField.getLong(item) == HEADER_ID) {
+                                        val viewField = try { holder.javaClass.getField("itemView") } catch (_: Throwable) { null }
+                                        val itemView = (viewField?.get(holder) as? View) ?: (holder as? View) ?: return result
+                                        val context = itemView.context
+                                        val currentPrefs = getPrefs(prefs)
+
+                                        val iconField = try { holder.javaClass.getField("icon") } catch (_: Throwable) { null }
+                                        val iconView = (iconField?.get(holder) as? ImageView)
+                                            ?: itemView.findViewById<ImageView>(android.R.id.icon)
+                                            ?: itemView.findViewById<ImageView>(itemView.resources.getIdentifier("icon", "id", "android"))
+                                            ?: itemView.findViewById<ImageView>(itemView.resources.getIdentifier("icon", "id", context.packageName))
+
+                                        val custom = getCustomIconDrawable(itemView.resources, context.theme, currentPrefs, context)
+                                        if (iconView != null && custom != null) {
+                                            iconView.setImageDrawable(custom)
+                                        }
+
+                                        val titleField = try { holder.javaClass.getField("title") } catch (_: Throwable) { null }
+                                        val titleView = (titleField?.get(holder) as? android.widget.TextView)
+                                            ?: itemView.findViewById<android.widget.TextView>(android.R.id.title)
+                                            ?: itemView.findViewById<android.widget.TextView>(itemView.resources.getIdentifier("title", "id", "android"))
+                                            ?: itemView.findViewById<android.widget.TextView>(itemView.resources.getIdentifier("title", "id", context.packageName))
+
+                                        titleView?.text = "HyperiOS"
+
+                                        val arrowField = try { holder.javaClass.getField("arrowRight") } catch (_: Throwable) { null }
+                                        val arrowView = (arrowField?.get(holder) as? View)
+                                            ?: itemView.findViewById<View>(itemView.resources.getIdentifier("arrow_right", "id", context.packageName))
+                                        arrowView?.visibility = View.VISIBLE
+
+                                        val summaryField = try { holder.javaClass.getField("summary") } catch (_: Throwable) { null }
+                                        val summaryView = (summaryField?.get(holder) as? View)
+                                            ?: itemView.findViewById<View>(android.R.id.summary)
+                                            ?: itemView.findViewById<View>(itemView.resources.getIdentifier("summary", "id", context.packageName))
+                                        summaryView?.visibility = View.GONE
+
+                                        itemView.setOnClickListener {
+                                            try {
+                                                val intent = Intent(Intent.ACTION_MAIN).apply {
+                                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                                    putExtra("isDisplayHomeAsUpEnabled", true)
+                                                    setClassName("dev.hyperios.app", "dev.hyperios.app.ui.MainActivity")
+                                                }
+                                                context.startActivity(intent)
+                                            } catch (t: Throwable) {
+                                                Log.e(TAG, "Failed launching HyperBounce activity", t)
+                                            }
+                                        }
+                                    }
+                                } catch (_: Throwable) {}
+                                return result
+                            }
+                        })
+                    }
+
                     if (m.name == "getView" && m.parameterTypes.size == 3) {
                         m.isAccessible = true
                         module.hook(m).intercept(object : XposedInterface.Hooker {
@@ -164,7 +241,7 @@ object SettingsEntryHook {
                                             ?: view.findViewById<ImageView>(view.resources.getIdentifier("icon", "id", "android"))
                                             ?: view.findViewById<ImageView>(view.resources.getIdentifier("icon", "id", view.context.packageName))
                                         if (iconView != null) {
-                                            val custom = getCustomIconDrawable(view.resources, view.context.theme, prefs, view.context)
+                                            val custom = getCustomIconDrawable(view.resources, view.context.theme, getPrefs(prefs), view.context)
                                             if (custom != null) {
                                                 iconView.setImageDrawable(custom)
                                             }
@@ -174,7 +251,6 @@ object SettingsEntryHook {
                                 return view
                             }
                         })
-                        break
                     }
                 }
             }
@@ -206,7 +282,7 @@ object SettingsEntryHook {
             override fun intercept(chain: XposedInterface.Chain): Any? {
                 val result = chain.proceed()
                 try {
-                    val isEnabled = prefs?.getBoolean("settings_app_entry_enabled", false) ?: false
+                    val isEnabled = getPrefs(prefs)?.getBoolean("settings_app_entry_enabled", false) ?: false
                     if (!isEnabled) return result
 
                     val activity = chain.thisObject as? Activity ?: return result
@@ -250,7 +326,7 @@ object SettingsEntryHook {
                     } catch (_: Throwable) {}
 
                     // Also set 'icon' Drawable field if available on Header
-                    val customDrawable = getCustomIconDrawable(context.resources, activity.theme, prefs, context)
+                    val customDrawable = getCustomIconDrawable(context.resources, activity.theme, getPrefs(prefs), context)
                     if (customDrawable != null) {
                         try {
                             headerClass.getField("icon").set(header, customDrawable)
@@ -343,7 +419,7 @@ object SettingsEntryHook {
             return null
         }
         try {
-            val iconStyleStr = prefs?.getString("app_icon_style", "Monet") ?: "Monet"
+            val iconStyleStr = getPrefs(prefs)?.getString("app_icon_style", "Monet") ?: "Monet"
             val isFlat = iconStyleStr.equals("Flat", ignoreCase = true)
             val iconDrawableName = if (isFlat) "ic_settings_entry_flat" else "ic_settings_entry_monet"
 

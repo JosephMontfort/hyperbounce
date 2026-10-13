@@ -808,6 +808,8 @@ object ControlCenterHook {
             try {
                 val lowEndAnimatorClass = Class.forName("miui.systemui.controlcenter.panel.main.anim.LowEndItemHolderAnimator", false, classLoader)
                 val easeManagerClass = Class.forName("miuix.animation.utils.EaseManager", false, classLoader)
+                val easeStyleClass = Class.forName("miuix.animation.utils.EaseManager\$EaseStyle", false, classLoader)
+                val animConfigClass = Class.forName("miuix.animation.base.AnimConfig", false, classLoader)
                 val getStyleMethod = easeManagerClass.getMethod("getStyle", Int::class.javaPrimitiveType, FloatArray::class.java)
 
                 for (m in lowEndAnimatorClass.declaredMethods) {
@@ -817,13 +819,36 @@ object ControlCenterHook {
                             try {
                                 val rawArgs = chain.args
                                 val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as? Array<*>
-                                if (args != null && args.size >= 4 && (args[3] as Boolean)) {
-                                    val bounceEase = getStyleMethod.invoke(null, -2, floatArrayOf(0.88f, 0.38f))
-                                    val releaseField = lowEndAnimatorClass.getDeclaredField("releaseTransYEase")
-                                    releaseField.isAccessible = true
-                                    releaseField.set(null, bounceEase)
+                                if (args != null && args.size >= 4) {
+                                    val f2 = (args[0] as? Number)?.toFloat() ?: 0f
+                                    val f3 = (args[1] as? Number)?.toFloat() ?: 0f
+                                    val z2 = args[2] as? Boolean ?: false
+                                    val z3 = args[3] as? Boolean ?: false
+
+                                    if (z2 && z3) {
+                                        val thisObj = chain.thisObject
+                                        if (thisObj != null) {
+                                            val threshField = lowEndAnimatorClass.getDeclaredField("thresh").apply { isAccessible = true }
+                                            threshField.set(thisObj, f3)
+
+                                            val getAnimMethod = lowEndAnimatorClass.getDeclaredMethod("getAnim").apply { isAccessible = true }
+                                            val anim = getAnimMethod.invoke(thisObj)
+
+                                            val expandedStretchField = lowEndAnimatorClass.getDeclaredField("EXPANDED_STRETCH").apply { isAccessible = true }
+                                            val prop = expandedStretchField.get(null)
+
+                                            val bounceEase = getStyleMethod.invoke(null, -2, floatArrayOf(0.88f, 0.38f))
+                                            val config = animConfigClass.getDeclaredConstructor().newInstance()
+                                            val setEaseMethod = animConfigClass.getMethod("setEase", easeStyleClass)
+                                            setEaseMethod.invoke(config, bounceEase)
+
+                                            val toMethod = anim.javaClass.getMethod("to", Any::class.java, Any::class.java, animConfigClass)
+                                            toMethod.invoke(anim, prop, f2, config)
+                                            return@intercept null
+                                        }
+                                    }
                                 }
-                            } catch (t: Throwable) {}
+                            } catch (_: Throwable) {}
                             chain.proceed()
                         }
                     }
@@ -845,17 +870,31 @@ object ControlCenterHook {
                                 val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as? Array<*>
                                 if (args != null && args.size >= 4 && (args[3] as Boolean)) {
                                     val bounceEase = getStyleMethod.invoke(null, -2, floatArrayOf(0.88f, 0.38f))
-                                    val rowsField = spreadAnimatorClass.getDeclaredField("rows")
-                                    rowsField.isAccessible = true
-                                    val rows = rowsField.get(chain.thisObject) as? Array<*>
-                                    if (rows != null) {
-                                        for (row in rows) {
-                                            if (row != null) {
-                                                val releaseEaseField = row.javaClass.getDeclaredField("releaseEase")
-                                                releaseEaseField.isAccessible = true
-                                                releaseEaseField.set(row, bounceEase)
+                                    val thisObj = chain.thisObject
+                                    if (thisObj != null) {
+                                        // Update animators (Row[])
+                                        try {
+                                            val animatorsField = spreadAnimatorClass.getDeclaredField("animators").apply { isAccessible = true }
+                                            val animators = animatorsField.get(thisObj) as? Array<*>
+                                            if (animators != null) {
+                                                for (row in animators) {
+                                                    if (row != null) {
+                                                        val releaseEaseField = row.javaClass.getDeclaredField("releaseEase").apply { isAccessible = true }
+                                                        releaseEaseField.set(row, bounceEase)
+                                                    }
+                                                }
                                             }
-                                        }
+                                        } catch (_: Throwable) {}
+
+                                        // Update shiftingAnimator (Row)
+                                        try {
+                                            val shiftingField = spreadAnimatorClass.getDeclaredField("shiftingAnimator").apply { isAccessible = true }
+                                            val shifting = shiftingField.get(thisObj)
+                                            if (shifting != null) {
+                                                val releaseEaseField = shifting.javaClass.getDeclaredField("releaseEase").apply { isAccessible = true }
+                                                releaseEaseField.set(shifting, bounceEase)
+                                            }
+                                        } catch (_: Throwable) {}
                                     }
                                 }
                             } catch (t: Throwable) {}
@@ -4246,7 +4285,11 @@ object ControlCenterHook {
 
         private fun seekMedia(targetMs: Long, cl: ClassLoader) {
             try {
-                val miplayClass = Class.forName("miui.systemui.controlcenter.panel.main.media.MiPlayController", false, cl)
+                val miplayClass = try {
+                    Class.forName("com.android.systemui.MiPlayController", false, cl)
+                } catch (_: Throwable) {
+                    Class.forName("miui.systemui.controlcenter.panel.main.media.MiPlayController", false, cl)
+                }
                 val miplayInst = miplayClass.getDeclaredField("INSTANCE").get(null)
                 val getMgrM = miplayClass.getMethod("getMIPLAY_AUDIO_MANAGER")
                 val mgr = getMgrM.invoke(miplayInst)
