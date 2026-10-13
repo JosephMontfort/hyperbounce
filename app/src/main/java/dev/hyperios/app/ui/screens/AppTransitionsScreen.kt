@@ -94,18 +94,6 @@ fun AppTransitionsScreen(
                     valueLabel = { String.format(Locale.US, "%.2f", it) }
                 )
                 RowDivider(colors.separator)
-                SettingsSliderRow(
-                    title = "Arc Apex Lift",
-                    subtitle = "Parabolic arc trajectory height multiplier on app launch",
-                    colors = colors,
-                    backdrop = backdrop,
-                    value = trans.arcApexLift,
-                    onValueChange = trans::setArcApexLift,
-                    valueRange = ModuleDefaults.IOSTransitions.ARC_APEX_LIFT_RANGE,
-                    defaultValue = ModuleDefaults.IOSTransitions.ARC_APEX_LIFT,
-                    valueLabel = { String.format(Locale.US, "%.2fx", it) }
-                )
-                RowDivider(colors.separator)
                 SettingsToggleRow(
                     title = "Opening Uplift Surge",
                     subtitle = "Initial upward launch velocity surge on app open",
@@ -114,6 +102,43 @@ fun AppTransitionsScreen(
                     checked = trans.openUpliftSurge,
                     onCheckedChange = trans::setOpenUpliftSurge
                 )
+                if (trans.openUpliftSurge) {
+                    RowDivider(colors.separator)
+                    SettingsSliderRow(
+                        title = "Opening Surge Lift",
+                        subtitle = "Upward launch velocity multiplier on app open",
+                        colors = colors,
+                        backdrop = backdrop,
+                        value = trans.openSurgeLift,
+                        onValueChange = trans::setOpenSurgeLift,
+                        valueRange = ModuleDefaults.IOSTransitions.OPEN_SURGE_LIFT_RANGE,
+                        defaultValue = ModuleDefaults.IOSTransitions.OPEN_SURGE_LIFT,
+                        valueLabel = { String.format(Locale.US, "%.2fx", it) }
+                    )
+                }
+                RowDivider(colors.separator)
+                SettingsToggleRow(
+                    title = "Closing Uplift Surge",
+                    subtitle = "Parabolic arc upward trajectory surge on app close",
+                    colors = colors,
+                    backdrop = backdrop,
+                    checked = trans.closeUpliftSurge,
+                    onCheckedChange = trans::setCloseUpliftSurge
+                )
+                if (trans.closeUpliftSurge) {
+                    RowDivider(colors.separator)
+                    SettingsSliderRow(
+                        title = "Closing Arc Apex Lift",
+                        subtitle = "Parabolic arc trajectory height multiplier on app close",
+                        colors = colors,
+                        backdrop = backdrop,
+                        value = trans.arcApexLift,
+                        onValueChange = trans::setArcApexLift,
+                        valueRange = ModuleDefaults.IOSTransitions.ARC_APEX_LIFT_RANGE,
+                        defaultValue = ModuleDefaults.IOSTransitions.ARC_APEX_LIFT,
+                        valueLabel = { String.format(Locale.US, "%.2fx", it) }
+                    )
+                }
                 RowDivider(colors.separator)
                 SettingsToggleRow(
                     title = "Keystone Squeeze",

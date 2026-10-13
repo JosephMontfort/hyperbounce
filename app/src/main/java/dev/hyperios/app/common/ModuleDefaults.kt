@@ -454,6 +454,9 @@ object ModuleDefaults {
         const val ARC_APEX_LIFT: Float = 1.0f
         val ARC_APEX_LIFT_RANGE = 0.5f..2.0f
 
+        const val OPEN_SURGE_LIFT: Float = 1.0f
+        val OPEN_SURGE_LIFT_RANGE = 0.5f..2.0f
+
         const val ANIM_SPEED: Float = 1.0f
         val ANIM_SPEED_RANGE = 0.5f..2.5f
 
@@ -461,6 +464,7 @@ object ModuleDefaults {
         const val RECENTS_CENTERING: Boolean = false
         const val ZERO_FRICTION_DRAG: Boolean = false
         const val OPEN_UPLIFT_SURGE: Boolean = true
+        const val CLOSE_UPLIFT_SURGE: Boolean = true
         const val KEYSTONE_SQUEEZE: Boolean = true
         const val LANDSCAPE_GAME_OPT: Boolean = true
         const val REFINED_HAPTICS: Boolean = true

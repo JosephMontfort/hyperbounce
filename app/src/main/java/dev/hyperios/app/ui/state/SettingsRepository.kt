@@ -1363,7 +1363,9 @@ class SettingsRepository(context: Context) {
 
         var enabled by prefsBooleanState("ios_anim_enabled", defaults.enabled); private set
         var arcApexLift by prefsFloatState("ios_anim_arc_apex_lift", defaults.arcApexLift); private set
+        var openSurgeLift by prefsFloatState("ios_anim_open_surge_lift", defaults.openSurgeLift); private set
         var openUpliftSurge by prefsBooleanState("ios_anim_open_uplift_surge", defaults.openUpliftSurge); private set
+        var closeUpliftSurge by prefsBooleanState("ios_anim_close_uplift_surge", defaults.closeUpliftSurge); private set
         var keystoneSqueeze by prefsBooleanState("ios_anim_keystone_squeeze", defaults.keystoneSqueeze); private set
         var animSpeed by prefsFloatState("ios_anim_speed", defaults.animSpeed); private set
         var openSpringDamping by prefsFloatState("ios_anim_open_spring_damping", defaults.openSpringDamping); private set
@@ -1378,7 +1380,9 @@ class SettingsRepository(context: Context) {
         fun snapshot(): IOSTransitionSettings = IOSTransitionSettings(
             enabled = enabled,
             arcApexLift = arcApexLift,
+            openSurgeLift = openSurgeLift,
             openUpliftSurge = openUpliftSurge,
+            closeUpliftSurge = closeUpliftSurge,
             keystoneSqueeze = keystoneSqueeze,
             animSpeed = animSpeed,
             openSpringDamping = openSpringDamping,
@@ -1393,7 +1397,9 @@ class SettingsRepository(context: Context) {
 
         @JvmName("setIOSTransitionsEnabledPref") fun setEnabled(v: Boolean) { enabled = v }
         @JvmName("setArcApexLiftPref") fun setArcApexLift(v: Float) { arcApexLift = v }
+        @JvmName("setOpenSurgeLiftPref") fun setOpenSurgeLift(v: Float) { openSurgeLift = v }
         @JvmName("setOpenUpliftSurgePref") fun setOpenUpliftSurge(v: Boolean) { openUpliftSurge = v }
+        @JvmName("setCloseUpliftSurgePref") fun setCloseUpliftSurge(v: Boolean) { closeUpliftSurge = v }
         @JvmName("setKeystoneSqueezePref") fun setKeystoneSqueeze(v: Boolean) { keystoneSqueeze = v }
         @JvmName("setAnimSpeedPref") fun setAnimSpeed(v: Float) { animSpeed = v }
         @JvmName("setOpenSpringDampingPref") fun setOpenSpringDamping(v: Float) { openSpringDamping = v }
@@ -1408,7 +1414,9 @@ class SettingsRepository(context: Context) {
         fun reloadFromDefaults() {
             enabled = defaults.enabled
             arcApexLift = defaults.arcApexLift
+            openSurgeLift = defaults.openSurgeLift
             openUpliftSurge = defaults.openUpliftSurge
+            closeUpliftSurge = defaults.closeUpliftSurge
             keystoneSqueeze = defaults.keystoneSqueeze
             animSpeed = defaults.animSpeed
             openSpringDamping = defaults.openSpringDamping

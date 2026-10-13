@@ -288,7 +288,9 @@ data class ScreenUnlockSettings(
 data class IOSTransitionSettings(
     val enabled: Boolean = ModuleDefaults.MasterToggles.IOS_ANIM_ENABLED,
     val arcApexLift: Float = ModuleDefaults.IOSTransitions.ARC_APEX_LIFT,
+    val openSurgeLift: Float = ModuleDefaults.IOSTransitions.OPEN_SURGE_LIFT,
     val openUpliftSurge: Boolean = ModuleDefaults.IOSTransitions.OPEN_UPLIFT_SURGE,
+    val closeUpliftSurge: Boolean = ModuleDefaults.IOSTransitions.CLOSE_UPLIFT_SURGE,
     val keystoneSqueeze: Boolean = ModuleDefaults.IOSTransitions.KEYSTONE_SQUEEZE,
     val animSpeed: Float = ModuleDefaults.IOSTransitions.ANIM_SPEED,
     val openSpringDamping: Float = ModuleDefaults.IOSTransitions.OPEN_SPRING_DAMPING,

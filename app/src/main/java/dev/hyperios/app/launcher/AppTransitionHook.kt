@@ -1183,73 +1183,76 @@ object AppTransitionHook {
                         }.getOrNull()
 
                         if (isHomeOpen) {
-                            if (normY >= 0.50f) {
-                                if (cfg.openUpliftSurge) {
+                            if (cfg.openUpliftSurge) {
+                                val openMultiplier = cfg.openSurgeLift.coerceIn(0.20f, 3.0f)
+                                if (normY >= 0.50f) {
                                     // Bottom-half apps (dock/lower rows): open with a DISTINCT UPLIFT surge right on tap!
-                                    val openUpward = -32000f - ((normY - 0.50f) * 16000f)
+                                    val openUpward = (-32000f - ((normY - 0.50f) * 16000f)) * openMultiplier
                                     setCenterYVelMethod?.invoke(sfAnimParam, openUpward)
 
-                                    val openVx = -(dx / deviceWidth) * 2600f
+                                    val openVx = -(dx / deviceWidth) * 2600f * openMultiplier
                                     setCenterXVelMethod?.invoke(sfAnimParam, openVx)
 
                                     // Vertical squeeze to imitate window uplifting:
-                                    setWidthVelMethod?.invoke(sfAnimParam, 2400f)
-                                    setHeightVelMethod?.invoke(sfAnimParam, -4200f)
-                                    setRatioVelMethod?.invoke(sfAnimParam, -4.5f)
+                                    setWidthVelMethod?.invoke(sfAnimParam, 2400f * openMultiplier)
+                                    setHeightVelMethod?.invoke(sfAnimParam, -4200f * openMultiplier)
+                                    setRatioVelMethod?.invoke(sfAnimParam, -4.5f * openMultiplier)
+                                } else {
+                                    // Top-half apps: plunges down distinctly first before expanding!
+                                    val openDownward = (+26000f + ((0.50f - normY) * 14000f)) * openMultiplier
+                                    setCenterYVelMethod?.invoke(sfAnimParam, openDownward)
+
+                                    val openVx = -(dx / deviceWidth) * 2000f * openMultiplier
+                                    setCenterXVelMethod?.invoke(sfAnimParam, openVx)
+
+                                    setWidthVelMethod?.invoke(sfAnimParam, 1800f * openMultiplier)
+                                    setHeightVelMethod?.invoke(sfAnimParam, -3600f * openMultiplier)
+                                    setRatioVelMethod?.invoke(sfAnimParam, -3.8f * openMultiplier)
                                 }
-                            } else {
-                                // Top-half apps: plunges down distinctly first before expanding!
-                                val openDownward = +26000f + ((0.50f - normY) * 14000f)
-                                setCenterYVelMethod?.invoke(sfAnimParam, openDownward)
-
-                                val openVx = -(dx / deviceWidth) * 2000f
-                                setCenterXVelMethod?.invoke(sfAnimParam, openVx)
-
-                                setWidthVelMethod?.invoke(sfAnimParam, 1800f)
-                                setHeightVelMethod?.invoke(sfAnimParam, -3600f)
-                                setRatioVelMethod?.invoke(sfAnimParam, -3.8f)
                             }
                         } else if (isHomeClose) {
-                            val arcMultiplier = cfg.arcApexLift.coerceIn(0.40f, 2.50f)
-                            val flickSpeed = if (isRecentFlick && vy < -0.10f) abs(vy).coerceIn(0.10f, 12.0f) else 0f
-                            val thumbNormY = if (sLastThumbY > 0f) {
-                                (sLastThumbY / deviceHeight).coerceIn(0.20f, 1.0f)
-                            } else {
-                                0.75f
+                            if (cfg.closeUpliftSurge) {
+                                val arcMultiplier = cfg.arcApexLift.coerceIn(0.20f, 3.0f)
+                                val flickSpeed = if (isRecentFlick && vy < -0.10f) abs(vy).coerceIn(0.10f, 12.0f) else 0f
+                                val thumbNormY = if (sLastThumbY > 0f) {
+                                    (sLastThumbY / deviceHeight).coerceIn(0.20f, 1.0f)
+                                } else {
+                                    0.75f
+                                }
+                                val thumbMultiplier = (1.35f - (thumbNormY * 0.35f)).coerceIn(0.95f, 1.35f)
+
+                                if (normY >= 0.50f) {
+                                    // Bottom-half apps: soar high up into a massive parabolic apex before landing into icon!
+                                    val baseUpward = (32000f + ((normY - 0.50f) * 16000f)) * arcMultiplier
+                                    val flickAdd = flickSpeed * 5000f * arcMultiplier
+                                    val totalUpward = -(baseUpward + flickAdd) * thumbMultiplier
+                                    val vyLaunch = totalUpward.coerceIn(-64000f * arcMultiplier, -4000f * arcMultiplier)
+                                    setCenterYVelMethod?.invoke(sfAnimParam, vyLaunch)
+
+                                    // Symmetrical vertical squeeze on close at the exact same point in space:
+                                    setWidthVelMethod?.invoke(sfAnimParam, 2400f * arcMultiplier)
+                                    setHeightVelMethod?.invoke(sfAnimParam, -4200f * arcMultiplier)
+                                    setRatioVelMethod?.invoke(sfAnimParam, -4.5f * arcMultiplier)
+                                } else {
+                                    // Top-half apps: fly directly up into top icon without overshoot
+                                    val topUpward = (-(12000f + flickSpeed * 3000f) * arcMultiplier).coerceIn(-36000f * arcMultiplier, -2000f * arcMultiplier)
+                                    setCenterYVelMethod?.invoke(sfAnimParam, topUpward)
+
+                                    setWidthVelMethod?.invoke(sfAnimParam, 1800f * arcMultiplier)
+                                    setHeightVelMethod?.invoke(sfAnimParam, -3600f * arcMultiplier)
+                                    setRatioVelMethod?.invoke(sfAnimParam, -3.8f * arcMultiplier)
+                                }
+
+                                // Reverse horizontal trajectory: drift towards the target icon's side
+                                val driftVx = (dx / deviceWidth) * 2800f * arcMultiplier
+                                val gestureVx = if (isRecentFlick && abs(vx) > 0.10f) {
+                                    (vx * 900f).coerceIn(-5000f * arcMultiplier, 5000f * arcMultiplier)
+                                } else {
+                                    0f
+                                }
+                                val totalVx = (gestureVx + driftVx).coerceIn(-7000f * arcMultiplier, 7000f * arcMultiplier)
+                                setCenterXVelMethod?.invoke(sfAnimParam, totalVx)
                             }
-                            val thumbMultiplier = (1.35f - (thumbNormY * 0.35f)).coerceIn(0.95f, 1.35f)
-
-                            if (normY >= 0.50f) {
-                                // Bottom-half apps: soar high up into a massive parabolic apex before landing into icon!
-                                val baseUpward = (32000f + ((normY - 0.50f) * 16000f)) * arcMultiplier
-                                val flickAdd = flickSpeed * 5000f * arcMultiplier
-                                val totalUpward = -(baseUpward + flickAdd) * thumbMultiplier
-                                val vyLaunch = totalUpward.coerceIn(-64000f * arcMultiplier, -16000f)
-                                setCenterYVelMethod?.invoke(sfAnimParam, vyLaunch)
-
-                                // Symmetrical vertical squeeze on close at the exact same point in space:
-                                setWidthVelMethod?.invoke(sfAnimParam, 2400f)
-                                setHeightVelMethod?.invoke(sfAnimParam, -4200f)
-                                setRatioVelMethod?.invoke(sfAnimParam, -4.5f)
-                            } else {
-                                // Top-half apps: fly directly up into top icon without overshoot
-                                val topUpward = (-(12000f + flickSpeed * 3000f) * arcMultiplier).coerceIn(-36000f, -6000f)
-                                setCenterYVelMethod?.invoke(sfAnimParam, topUpward)
-
-                                setWidthVelMethod?.invoke(sfAnimParam, 1800f)
-                                setHeightVelMethod?.invoke(sfAnimParam, -3600f)
-                                setRatioVelMethod?.invoke(sfAnimParam, -3.8f)
-                            }
-
-                            // Reverse horizontal trajectory: drift towards the target icon's side
-                            val driftVx = (dx / deviceWidth) * 2800f
-                            val gestureVx = if (isRecentFlick && abs(vx) > 0.10f) {
-                                (vx * 900f).coerceIn(-5000f, 5000f)
-                            } else {
-                                0f
-                            }
-                            val totalVx = (gestureVx + driftVx).coerceIn(-7000f, 7000f)
-                            setCenterXVelMethod?.invoke(sfAnimParam, totalVx)
                         }
 
                         // Apply Horizontal Edge Squeeze via StretchType on BOTH open and close transitions
@@ -1388,24 +1391,89 @@ object AppTransitionHook {
     }
 
     /**
-     * Hook 11: Forces high animation capabilities and bypasses low-tier device throttling in DeviceLevelUtils.
+     * Hook 11: Forces high animation capabilities and hardware SurfaceFlinger direct animation on ALL device tiers.
+     * Hooks both DeviceLevelUtils and SfAnimCapability.
      */
     private fun hookDeviceLevelUtils(module: XposedInterface, classLoader: ClassLoader) {
+        // 1. Hook com.miui.home.common.utils.DeviceLevelUtils
         try {
-            val dluClass = Class.forName("com.miui.home.launcher.common.DeviceLevelUtils", false, classLoader)
+            val dluClass = Class.forName("com.miui.home.common.utils.DeviceLevelUtils", false, classLoader)
 
-            val isUseSimpleAnimMethod = dluClass.getDeclaredMethod("isUseSimpleAnim")
-            module.hook(isUseSimpleAnimMethod).intercept(object : XposedInterface.Hooker {
-                override fun intercept(chain: XposedInterface.Chain): Any? {
-                    if (LauncherConfigHolder.iosAnimConfig.enabled) {
-                        return false // Never use low-tier simple animation fallbacks
-                    }
-                    return chain.proceed()
+            val simpleAnimMethods = listOf(
+                "isUseSimpleAnim",
+                "isUseSimpleOpenCloseAnim",
+                "isUseSimpleOpenOrCloseAnim",
+                "isLowLevelDevice",
+                "isLowLevelDeviceFromFolme",
+                "isMiddleLevelDeviceFromFolme",
+                "isLowLevelOrLiteDevice",
+                "isLowLevelOrLiteDeviceOrSpecialDevice",
+                "isLowMemoryDevices",
+                "isLowMemoryDevicesOrSpecialDevice"
+            )
+            for (name in simpleAnimMethods) {
+                runCatching {
+                    val m = dluClass.getDeclaredMethod(name)
+                    module.hook(m).intercept(object : XposedInterface.Hooker {
+                        override fun intercept(chain: XposedInterface.Chain): Any? {
+                            if (LauncherConfigHolder.iosAnimConfig.enabled) {
+                                return false // Never use low/mid-tier fallback on any device
+                            }
+                            return chain.proceed()
+                        }
+                    })
                 }
-            })
+            }
+
+            val highLevelMethods = listOf("isHighLevelDeviceByDefault", "isHighLevelDeviceFromFolme")
+            for (name in highLevelMethods) {
+                runCatching {
+                    val m = dluClass.getDeclaredMethod(name)
+                    module.hook(m).intercept(object : XposedInterface.Hooker {
+                        override fun intercept(chain: XposedInterface.Chain): Any? {
+                            if (LauncherConfigHolder.iosAnimConfig.enabled) {
+                                return true
+                            }
+                            return chain.proceed()
+                        }
+                    })
+                }
+            }
             Log.i(TAG, "Hooked DeviceLevelUtils to bypass low-tier throttling")
         } catch (t: Throwable) {
             Log.w(TAG, "Failed to hook DeviceLevelUtils", t)
+        }
+
+        // 2. Hook com.miui.home.common.sfanim.SfAnimCapability to guarantee SurfaceFlinger direct hardware animation
+        try {
+            val sfCapClass = Class.forName("com.miui.home.common.sfanim.SfAnimCapability", false, classLoader)
+            runCatching {
+                val fld = sfCapClass.getDeclaredField("shouldUseSfAnim").apply { isAccessible = true }
+                fld.set(null, true)
+            }
+            runCatching {
+                val fld = sfCapClass.getDeclaredField("useMultiLayersForSfAnim").apply { isAccessible = true }
+                fld.set(null, true)
+            }
+
+            val companionClass = Class.forName("com.miui.home.common.sfanim.SfAnimCapability\$Companion", false, classLoader)
+            val trueMethods = listOf("getShouldUseSfAnim", "isSceneSupport", "getUseMultiLayersForSfAnim")
+            for (name in trueMethods) {
+                runCatching {
+                    val m = companionClass.getDeclaredMethod(name)
+                    module.hook(m).intercept(object : XposedInterface.Hooker {
+                        override fun intercept(chain: XposedInterface.Chain): Any? {
+                            if (LauncherConfigHolder.iosAnimConfig.enabled) {
+                                return true
+                            }
+                            return chain.proceed()
+                        }
+                    })
+                }
+            }
+            Log.i(TAG, "Hooked SfAnimCapability to guarantee SurfaceFlinger direct animation on all devices")
+        } catch (t: Throwable) {
+            Log.w(TAG, "Failed to hook SfAnimCapability", t)
         }
     }
 

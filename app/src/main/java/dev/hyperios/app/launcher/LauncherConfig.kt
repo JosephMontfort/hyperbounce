@@ -46,7 +46,9 @@ data class ScreenUnlockConfig(
 data class IOSTransitionConfig(
     val enabled: Boolean = ModuleDefaults.MasterToggles.IOS_ANIM_ENABLED,
     val arcApexLift: Float = ModuleDefaults.IOSTransitions.ARC_APEX_LIFT,
+    val openSurgeLift: Float = ModuleDefaults.IOSTransitions.OPEN_SURGE_LIFT,
     val openUpliftSurge: Boolean = ModuleDefaults.IOSTransitions.OPEN_UPLIFT_SURGE,
+    val closeUpliftSurge: Boolean = ModuleDefaults.IOSTransitions.CLOSE_UPLIFT_SURGE,
     val keystoneSqueeze: Boolean = ModuleDefaults.IOSTransitions.KEYSTONE_SQUEEZE,
     val animSpeed: Float = ModuleDefaults.IOSTransitions.ANIM_SPEED,
     val openSpringDamping: Float = ModuleDefaults.IOSTransitions.OPEN_SPRING_DAMPING,
@@ -128,7 +130,9 @@ object LauncherConfigHolder {
         iosAnimConfig = IOSTransitionConfig(
             enabled = prefs.getBoolean("ios_anim_enabled", ModuleDefaults.MasterToggles.IOS_ANIM_ENABLED),
             arcApexLift = prefs.getFloat("ios_anim_arc_apex_lift", ModuleDefaults.IOSTransitions.ARC_APEX_LIFT),
+            openSurgeLift = prefs.getFloat("ios_anim_open_surge_lift", ModuleDefaults.IOSTransitions.OPEN_SURGE_LIFT),
             openUpliftSurge = prefs.getBoolean("ios_anim_open_uplift_surge", ModuleDefaults.IOSTransitions.OPEN_UPLIFT_SURGE),
+            closeUpliftSurge = prefs.getBoolean("ios_anim_close_uplift_surge", ModuleDefaults.IOSTransitions.CLOSE_UPLIFT_SURGE),
             keystoneSqueeze = prefs.getBoolean("ios_anim_keystone_squeeze", ModuleDefaults.IOSTransitions.KEYSTONE_SQUEEZE),
             animSpeed = prefs.getFloat("ios_anim_speed", ModuleDefaults.IOSTransitions.ANIM_SPEED),
             openSpringDamping = prefs.getFloat("ios_anim_open_spring_damping", ModuleDefaults.IOSTransitions.OPEN_SPRING_DAMPING),
