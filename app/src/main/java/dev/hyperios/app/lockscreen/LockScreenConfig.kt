@@ -87,6 +87,37 @@ data class LockScreenKeypadConfig(
     var iosBloomWaveStagger: Float = ModuleDefaults.LockScreenKeypad.BLOOM_WAVE_STAGGER,
     var iosBloomDecoupleText: Boolean = ModuleDefaults.LockScreenKeypad.BLOOM_DECOUPLE_TEXT
 ) {
+    fun getPositionDelay(row: Int, col: Int): Long {
+        val delay = when (row) {
+            0 -> when (col) {
+                0 -> delayKey1
+                1 -> delayKey2
+                2 -> delayKey3
+                else -> 0f
+            }
+            1 -> when (col) {
+                0 -> delayKey4
+                1 -> delayKey5
+                2 -> delayKey6
+                else -> 0f
+            }
+            2 -> when (col) {
+                0 -> delayKey7
+                1 -> delayKey8
+                2 -> delayKey9
+                else -> 0f
+            }
+            3 -> when (col) {
+                1 -> delayKey0
+                0 -> delayEmergency
+                2 -> delayCancel
+                else -> 0f
+            }
+            else -> 0f
+        }
+        return delay.toLong().coerceAtLeast(0L)
+    }
+
     fun getKeyDelay(keyName: String): Long {
         val delay = when (keyName) {
             "key1" -> delayKey1

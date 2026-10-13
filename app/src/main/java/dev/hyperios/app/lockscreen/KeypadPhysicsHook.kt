@@ -121,32 +121,119 @@ object KeypadPhysicsHook {
         }
     }
 
-    private fun getBaseTranslationX(view: View, cfg: LockScreenKeypadConfig, density: Float): Float {
-        val entryName = try {
-            view.resources.getResourceEntryName(view.id)
-        } catch (_: Throwable) {
-            ""
+    private var sRow0Id = 0
+    private var sRow1Id = 0
+    private var sRow2Id = 0
+    private var sRow3Id = 0
+    private var sRow4Id = 0
+    private var sPinContainerId = 0
+    private var sEmergencyCallId = 0
+    private var sDeleteContainerId = 0
+    private var sSpacePatternId = 0
+    private var sBouncerBgId = 0
+    private var sRowsLayoutWidthDimenId = 0
+    private var sActionBtnIds = IntArray(0)
+    private var sCancelIds = IntArray(0)
+    private var sNumKeyIds = IntArray(0)
+    private var sResourceIdsInitialized = false
+
+    private fun ensureResourceIds(ctx: Context) {
+        if (sResourceIdsInitialized) return
+        try {
+            val res = ctx.resources
+            val pkg = "com.android.systemui"
+            sRow0Id = res.getIdentifier("row0", "id", pkg)
+            sRow1Id = res.getIdentifier("row1", "id", pkg)
+            sRow2Id = res.getIdentifier("row2", "id", pkg)
+            sRow3Id = res.getIdentifier("row3", "id", pkg)
+            sRow4Id = res.getIdentifier("row4", "id", pkg)
+            sPinContainerId = res.getIdentifier("pin_container", "id", pkg)
+            sEmergencyCallId = res.getIdentifier("emergency_call_button", "id", pkg)
+            sDeleteContainerId = res.getIdentifier("delete_container", "id", pkg)
+            sSpacePatternId = res.getIdentifier("space_pattren", "id", pkg)
+            sBouncerBgId = res.getIdentifier("keyguard_bouncer_bg", "id", pkg)
+            sRowsLayoutWidthDimenId = res.getIdentifier("miui_keyguard_pin_view_rows_layout_width", "dimen", pkg)
+
+            val actionNames = arrayOf(
+                "delete_button", "zero_delete_button",
+                "cancel_button", "zero_cancel_button",
+                "emergency_call_button"
+            )
+            sActionBtnIds = actionNames.map { res.getIdentifier(it, "id", pkg) }.filter { it != 0 }.toIntArray()
+
+            val cancelNames = arrayOf("delete_button", "cancel_button", "zero_delete_button", "zero_cancel_button")
+            sCancelIds = cancelNames.map { res.getIdentifier(it, "id", pkg) }.filter { it != 0 }.toIntArray()
+
+            val numNames = arrayOf("key1", "key2", "key3", "key4", "key5", "key6", "key7", "key8", "key9", "key0")
+            sNumKeyIds = numNames.map { res.getIdentifier(it, "id", pkg) }.filter { it != 0 }.toIntArray()
+
+            sResourceIdsInitialized = true
+        } catch (t: Throwable) {
+            Log.e(TAG, "Failed to initialize cached resource IDs", t)
         }
-        return when (entryName) {
-            "key1", "key4", "key7", "emergency_call_button" -> -cfg.col1Offset * density
-            "key3", "key6", "key9", "delete_container", "delete_button", "zero_delete_button", "cancel_button", "zero_cancel_button" -> cfg.col3Offset * density
+    }
+
+    private fun getBaseTranslationX(view: View, cfg: LockScreenKeypadConfig, density: Float): Float {
+        val id = view.id
+        if (id != 0) {
+            if (id == sEmergencyCallId) return -cfg.col1Offset * density
+            if (id == sDeleteContainerId) return cfg.col3Offset * density
+            for (cid in sCancelIds) {
+                if (id == cid) return cfg.col3Offset * density
+            }
+        }
+        val parent = view.parent as? ViewGroup ?: return 0f
+        val count = parent.childCount
+        val idx = parent.indexOfChild(view)
+        return when {
+            count == 3 && idx == 0 -> -cfg.col1Offset * density
+            count == 3 && idx == 2 -> cfg.col3Offset * density
+            count == 2 && idx == 0 -> -cfg.col1Offset * density
+            count == 2 && idx == 1 -> cfg.col3Offset * density
             else -> 0f
         }
     }
 
-
     private var cachedDigitField: Field? = null
     private var cachedKlondikeField: Field? = null
-    private var hasCachedFields = false
+    private var hasCachedKeyFields = false
 
     private fun ensureCachedKeyFields(keyClass: Class<*>) {
-        if (hasCachedFields) return
-        hasCachedFields = true
+        if (hasCachedKeyFields) return
+        hasCachedKeyFields = true
         try {
             cachedDigitField = keyClass.getDeclaredField("mDigitText").apply { isAccessible = true }
         } catch (_: Throwable) {}
         try {
             cachedKlondikeField = keyClass.getDeclaredField("mKlondikeText").apply { isAccessible = true }
+        } catch (_: Throwable) {}
+    }
+
+    private var cachedSetAnimEnabledMethod: Method? = null
+    private var hasCachedSetAnimMethod = false
+
+    private fun ensureCachedSetAnimMethod(keyClass: Class<*>) {
+        if (hasCachedSetAnimMethod) return
+        hasCachedSetAnimMethod = true
+        try {
+            cachedSetAnimEnabledMethod = keyClass.getMethod("setAnimationEnabled", Boolean::class.javaPrimitiveType).apply {
+                isAccessible = true
+            }
+        } catch (_: Throwable) {}
+    }
+
+    private var cachedKeysAnimStartStateField: Field? = null
+    private var cachedDisappearRunnableField: Field? = null
+    private var hasCachedPinViewFields = false
+
+    private fun ensureCachedPinViewFields(pinViewClass: Class<*>) {
+        if (hasCachedPinViewFields) return
+        hasCachedPinViewFields = true
+        try {
+            cachedKeysAnimStartStateField = pinViewClass.getField("keysAnimStartState").apply { isAccessible = true }
+        } catch (_: Throwable) {}
+        try {
+            cachedDisappearRunnableField = pinViewClass.getDeclaredField("mDisappearAnimationFinishRunnable").apply { isAccessible = true }
         } catch (_: Throwable) {}
     }
 
@@ -156,39 +243,80 @@ object KeypadPhysicsHook {
         density: Float
     ) {
         val ctx = pinView.context
+        ensureResourceIds(ctx)
+
+        val col1TransX = -cfg.col1Offset * density
+        val col3TransX = cfg.col3Offset * density
 
         // Position emergency and delete buttons at their resting places without blooming
-        val emerId = ctx.resources.getIdentifier("emergency_call_button", "id", "com.android.systemui")
-        if (emerId != 0) {
-            val emerView = pinView.findViewById<View>(emerId)
+        if (sEmergencyCallId != 0) {
+            val emerView = pinView.findViewById<View>(sEmergencyCallId)
             emerView?.animate()?.cancel()
-            emerView?.translationX = -cfg.col1Offset * density
+            emerView?.translationX = col1TransX
             emerView?.translationY = 0f
             emerView?.scaleX = 1f
             emerView?.scaleY = 1f
             emerView?.alpha = 1f
         }
-        val delNames = arrayOf("delete_button", "cancel_button", "zero_delete_button", "zero_cancel_button")
-        for (dn in delNames) {
-            val delId = ctx.resources.getIdentifier(dn, "id", "com.android.systemui")
-            if (delId != 0) {
-                val delView = pinView.findViewById<View>(delId)
-                delView?.animate()?.cancel()
-                delView?.translationX = cfg.col3Offset * density
-                delView?.translationY = 0f
-                delView?.scaleX = 1f
-                delView?.scaleY = 1f
-                delView?.alpha = 1f
-            }
+        if (sDeleteContainerId != 0) {
+            val delCont = pinView.findViewById<View>(sDeleteContainerId)
+            delCont?.animate()?.cancel()
+            delCont?.translationX = col3TransX
+            delCont?.translationY = 0f
+            delCont?.scaleX = 1f
+            delCont?.scaleY = 1f
+            delCont?.alpha = 1f
+        }
+        for (delId in sCancelIds) {
+            val delView = pinView.findViewById<View>(delId)
+            delView?.animate()?.cancel()
+            delView?.translationX = col3TransX
+            delView?.translationY = 0f
+            delView?.scaleX = 1f
+            delView?.scaleY = 1f
+            delView?.alpha = 1f
         }
 
-        // Only numeric digits (1-9 and 0) bloom outward from center Key 5
-        val keys = arrayOf(
-            arrayOf("key1", "key2", "key3"),
-            arrayOf("key4", "key5", "key6"),
-            arrayOf("key7", "key8", "key9"),
-            arrayOf("", "key0", "")
-        )
+        // Dynamically discover numeric keys in the 4x3 matrix from row ViewGroups
+        val rowIds = intArrayOf(sRow1Id, sRow2Id, sRow3Id, sRow4Id)
+        val matrix = Array(4) { arrayOfNulls<View>(3) }
+
+        for (r in 0 until 4) {
+            val rId = rowIds[r]
+            if (rId == 0) continue
+            val rowGroup = pinView.findViewById<ViewGroup>(rId) ?: continue
+            val childCount = rowGroup.childCount
+            if (r < 3) {
+                // Rows 0, 1, 2 correspond to row1, row2, row3 in the PIN pad
+                for (c in 0 until min(3, childCount)) {
+                    val child = rowGroup.getChildAt(c)
+                    if (child != null && child.id != sEmergencyCallId && child.id != sDeleteContainerId) {
+                        matrix[r][c] = child
+                    }
+                }
+            } else {
+                // Row 3 corresponds to row4 (bottom row with center key)
+                for (c in 0 until childCount) {
+                    val child = rowGroup.getChildAt(c) ?: continue
+                    if (child.id != sEmergencyCallId && child.id != sDeleteContainerId) {
+                        var isCancel = false
+                        for (cid in sCancelIds) {
+                            if (child.id == cid) { isCancel = true; break }
+                        }
+                        if (!isCancel) {
+                            var isNumKey = false
+                            for (nid in sNumKeyIds) {
+                                if (child.id == nid) { isNumKey = true; break }
+                            }
+                            if (isNumKey || child.background is LiquidGlassKeyOptimizedDrawable || child.javaClass.name.contains("NumPadKey")) {
+                                matrix[3][1] = child
+                                break
+                            }
+                        }
+                    }
+                }
+            }
+        }
 
         val pitchX = (cfg.circleDiameter + 24f + cfg.columnSpacing) * density
         val pitchY = (cfg.circleDiameter + 30f + cfg.rowSpacing) * density
@@ -204,17 +332,9 @@ object KeypadPhysicsHook {
         val kv = cfg.iosBloomVelocityStretch.coerceIn(0.02f, 0.40f)
         val ka = cfg.iosBloomRadialSquish.coerceIn(0.05f, 0.60f)
 
-        val col1TransX = -cfg.col1Offset * density
-        val col3TransX = cfg.col3Offset * density
-
-        for (row in keys.indices) {
-            for (col in keys[row].indices) {
-                val name = keys[row][col]
-                if (name.isEmpty()) continue
-                val id = ctx.resources.getIdentifier(name, "id", "com.android.systemui")
-                if (id == 0) continue
-
-                val keyView = pinView.findViewById<View>(id) ?: continue
+        for (row in 0 until 4) {
+            for (col in 0 until 3) {
+                val keyView = matrix[row][col] ?: continue
                 ensureCachedKeyFields(keyView.javaClass)
 
                 val optDrawable = keyView.background as? LiquidGlassKeyOptimizedDrawable
@@ -239,7 +359,8 @@ object KeypadPhysicsHook {
                 val dirX = if (distUnits > 0.001f) Math.cos(angleRad).toFloat() else 0f
                 val dirY = if (distUnits > 0.001f) Math.sin(angleRad).toFloat() else 0f
 
-                val delay = cfg.getKeyDelay(name)
+                // Calibrated delay per physical matrix position
+                val delay = cfg.getPositionDelay(row, col)
 
                 appearAnimators.remove(keyView)?.cancel()
                 keyView.animate().cancel()
@@ -298,7 +419,7 @@ object KeypadPhysicsHook {
                         val scaleY: Float
 
                         if (distUnits < 0.001f) {
-                            // Center button 5: isotropic breathing bloom
+                            // Center button (row 1, col 1): isotropic breathing bloom
                             val s5 = (1.0 - 0.32 * decay * cosW).toFloat().coerceIn(0.70f, 1.20f)
                             scaleX = s5
                             scaleY = s5
@@ -652,10 +773,9 @@ object KeypadPhysicsHook {
                         val ctx = keyView.context
                         val density = ctx.resources.displayMetrics.density
 
+                        ensureCachedSetAnimMethod(keyView.javaClass)
                         try {
-                            val setAnimMethod = keyView.javaClass.getMethod("setAnimationEnabled", Boolean::class.javaPrimitiveType)
-                            setAnimMethod.isAccessible = true
-                            setAnimMethod.invoke(keyView, false)
+                            cachedSetAnimEnabledMethod?.invoke(keyView, false)
                         } catch (_: Throwable) {}
 
                         keyView.clipToOutline = false
@@ -677,11 +797,11 @@ object KeypadPhysicsHook {
                         }
                         keyView.elevation = 4 * density
 
+                        ensureCachedKeyFields(keyView.javaClass)
+
                         // Letters text (Klondike)
                         try {
-                            val klondikeField: Field = keyView.javaClass.getDeclaredField("mKlondikeText")
-                            klondikeField.isAccessible = true
-                            val klondikeText = klondikeField.get(keyView) as? TextView
+                            val klondikeText = cachedKlondikeField?.get(keyView) as? TextView
                             if (klondikeText != null) {
                                 klondikeText.visibility = if (cfg.showKlondike) View.VISIBLE else View.GONE
                                 if (cfg.showKlondike) {
@@ -693,9 +813,7 @@ object KeypadPhysicsHook {
 
                         // Digit text appearance
                         try {
-                            val digitField: Field = keyView.javaClass.getDeclaredField("mDigitText")
-                            digitField.isAccessible = true
-                            val digitText = digitField.get(keyView) as? TextView
+                            val digitText = cachedDigitField?.get(keyView) as? TextView
                             if (digitText != null) {
                                 digitText.setTextColor(0xFFFFFFFF.toInt())
                                 digitText.setTextSize(TypedValue.COMPLEX_UNIT_SP, cfg.digitTextSize)
@@ -712,17 +830,15 @@ object KeypadPhysicsHook {
                 if (pinView != null && cfg.enabled) {
                     try {
                         val ctx = pinView.context
+                        ensureResourceIds(ctx)
                         val density = ctx.resources.displayMetrics.density
 
                         // Ensure keyguard_bouncer_bg does not show stale blurred preview bitmap
                         val root = pinView.rootView
-                        if (root != null) {
-                            val bouncerBgId = ctx.resources.getIdentifier("keyguard_bouncer_bg", "id", "com.android.systemui")
-                            if (bouncerBgId != 0) {
-                                val iv = root.findViewById<View>(bouncerBgId) as? ImageView
-                                iv?.setImageDrawable(null)
-                                iv?.visibility = View.GONE
-                            }
+                        if (root != null && sBouncerBgId != 0) {
+                            val iv = root.findViewById<View>(sBouncerBgId) as? ImageView
+                            iv?.setImageDrawable(null)
+                            iv?.visibility = View.GONE
                         }
 
                         // Ensure parent ViewGroup doesn't clip when lifting or expanding
@@ -730,14 +846,12 @@ object KeypadPhysicsHook {
                         (pinView as? ViewGroup)?.clipToPadding = false
 
                         // 1. Container Horizontal Width, Column Spacing & Vertical Lift
-                        val pinContainerId = ctx.resources.getIdentifier("pin_container", "id", "com.android.systemui")
-                        val pinContainer = if (pinContainerId != 0) pinView.findViewById<ViewGroup>(pinContainerId) else null
+                        val pinContainer = if (sPinContainerId != 0) pinView.findViewById<ViewGroup>(sPinContainerId) else null
                         if (pinContainer != null) {
                             pinContainer.clipChildren = false
                             pinContainer.clipToPadding = false
 
-                            val dimenId = ctx.resources.getIdentifier("miui_keyguard_pin_view_rows_layout_width", "dimen", "com.android.systemui")
-                            val defaultWidthPx = if (dimenId != 0) ctx.resources.getDimensionPixelOffset(dimenId) else (310 * density).toInt()
+                            val defaultWidthPx = if (sRowsLayoutWidthDimenId != 0) ctx.resources.getDimensionPixelOffset(sRowsLayoutWidthDimenId) else (310 * density).toInt()
                             val extraWidthPx = (3 * cfg.columnSpacing * density).toInt()
                             val maxAllowedWidth = ctx.resources.displayMetrics.widthPixels
                             val targetWidth = (defaultWidthPx + extraWidthPx).coerceIn((180 * density).toInt(), maxAllowedWidth)
@@ -752,59 +866,53 @@ object KeypadPhysicsHook {
                         }
 
                         // 2. Uniform Vertical Row Spacing (Layout Spacing Hack)
-                        val row1Id = ctx.resources.getIdentifier("row1", "id", "com.android.systemui")
-                        val row2Id = ctx.resources.getIdentifier("row2", "id", "com.android.systemui")
-                        val row3Id = ctx.resources.getIdentifier("row3", "id", "com.android.systemui")
-                        val row4Id = ctx.resources.getIdentifier("row4", "id", "com.android.systemui")
-                        val row0Id = ctx.resources.getIdentifier("row0", "id", "com.android.systemui")
-
                         val rowStep = cfg.rowSpacing * density
-                        if (row1Id != 0) pinView.findViewById<View>(row1Id)?.translationY = -3f * rowStep
-                        if (row2Id != 0) pinView.findViewById<View>(row2Id)?.translationY = -2f * rowStep
-                        if (row3Id != 0) pinView.findViewById<View>(row3Id)?.translationY = -1f * rowStep
-                        if (row4Id != 0) pinView.findViewById<View>(row4Id)?.translationY = 0f
-                        if (row0Id != 0) pinView.findViewById<View>(row0Id)?.translationY = cfg.row0Offset * density
+                        if (sRow1Id != 0) pinView.findViewById<View>(sRow1Id)?.translationY = -3f * rowStep
+                        if (sRow2Id != 0) pinView.findViewById<View>(sRow2Id)?.translationY = -2f * rowStep
+                        if (sRow3Id != 0) pinView.findViewById<View>(sRow3Id)?.translationY = -1f * rowStep
+                        if (sRow4Id != 0) pinView.findViewById<View>(sRow4Id)?.translationY = 0f
+                        if (sRow0Id != 0) pinView.findViewById<View>(sRow0Id)?.translationY = cfg.row0Offset * density
 
-                        // 3. Fine-Tune Column Horizontal Offsets (translationX)
+                        // 3. Matrix-Based Column Horizontal Offsets (translationX)
                         val col1TransX = -cfg.col1Offset * density
                         val col3TransX = cfg.col3Offset * density
 
-                        val col1KeyNames = arrayOf("key1", "key4", "key7", "emergency_call_button")
-                        for (name in col1KeyNames) {
-                            val id = ctx.resources.getIdentifier(name, "id", "com.android.systemui")
-                            if (id != 0) {
-                                pinView.findViewById<View>(id)?.translationX = col1TransX
+                        val rowIds = intArrayOf(sRow1Id, sRow2Id, sRow3Id, sRow4Id)
+                        for (rId in rowIds) {
+                            if (rId == 0) continue
+                            val rowGroup = pinView.findViewById<ViewGroup>(rId) ?: continue
+                            val childCount = rowGroup.childCount
+                            for (c in 0 until childCount) {
+                                val child = rowGroup.getChildAt(c) ?: continue
+                                val transX = when {
+                                    childCount == 3 && c == 0 -> col1TransX
+                                    childCount == 3 && c == 2 -> col3TransX
+                                    childCount == 2 && c == 0 -> col1TransX
+                                    childCount == 2 && c == 1 -> col3TransX
+                                    else -> 0f
+                                }
+                                child.translationX = transX
                             }
                         }
 
-                        val col3KeyNames = arrayOf("key3", "key6", "key9", "delete_container", "delete_button", "zero_delete_button", "cancel_button", "zero_cancel_button")
-                        for (name in col3KeyNames) {
-                            val id = ctx.resources.getIdentifier(name, "id", "com.android.systemui")
-                            if (id != 0) {
-                                pinView.findViewById<View>(id)?.translationX = col3TransX
-                            }
+                        if (sEmergencyCallId != 0) {
+                            pinView.findViewById<View>(sEmergencyCallId)?.translationX = col1TransX
+                        }
+                        if (sDeleteContainerId != 0) {
+                            pinView.findViewById<View>(sDeleteContainerId)?.translationX = col3TransX
+                        }
+                        for (cid in sCancelIds) {
+                            pinView.findViewById<View>(cid)?.translationX = col3TransX
                         }
 
-                        // 4. Numeric Digit Keys 1-9 and 0
-                        val numKeyIds = intArrayOf(
-                            ctx.resources.getIdentifier("key1", "id", "com.android.systemui"),
-                            ctx.resources.getIdentifier("key2", "id", "com.android.systemui"),
-                            ctx.resources.getIdentifier("key3", "id", "com.android.systemui"),
-                            ctx.resources.getIdentifier("key4", "id", "com.android.systemui"),
-                            ctx.resources.getIdentifier("key5", "id", "com.android.systemui"),
-                            ctx.resources.getIdentifier("key6", "id", "com.android.systemui"),
-                            ctx.resources.getIdentifier("key7", "id", "com.android.systemui"),
-                            ctx.resources.getIdentifier("key8", "id", "com.android.systemui"),
-                            ctx.resources.getIdentifier("key9", "id", "com.android.systemui"),
-                            ctx.resources.getIdentifier("key0", "id", "com.android.systemui")
-                        )
-                        for (id in numKeyIds) {
+                        // 4. Numeric Digit Keys Styling
+                        for (id in sNumKeyIds) {
                             if (id != 0) {
                                 styleKeyAsLiquidGlass(pinView.findViewById(id))
                             }
                         }
 
-                        // 5. Cleanly style Action Buttons (delete, cancel, emergency) without breaking LinearLayout weights
+                        // 5. Cleanly style Action Buttons without breaking LinearLayout weights
                         val styleActionButton: (View?) -> Unit = { btn ->
                             if (btn != null) {
                                 try {
@@ -819,30 +927,22 @@ object KeypadPhysicsHook {
                             }
                         }
 
-                        val delContainerId = ctx.resources.getIdentifier("delete_container", "id", "com.android.systemui")
-                        if (delContainerId != 0) pinView.findViewById<View>(delContainerId)?.background = null
+                        if (sDeleteContainerId != 0) pinView.findViewById<View>(sDeleteContainerId)?.background = null
 
-                        val actionButtonNames = arrayOf(
-                            "delete_button", "zero_delete_button",
-                            "cancel_button", "zero_cancel_button",
-                            "emergency_call_button"
-                        )
-                        for (name in actionButtonNames) {
-                            val id = ctx.resources.getIdentifier(name, "id", "com.android.systemui")
-                            if (id != 0) {
-                                styleActionButton(pinView.findViewById(id))
-                            }
+                        for (id in sActionBtnIds) {
+                            styleActionButton(pinView.findViewById(id))
                         }
 
                         // 6. Unclip All Rows
-                        for (rId in intArrayOf(row0Id, row1Id, row2Id, row3Id, row4Id)) {
+                        for (rId in intArrayOf(sRow0Id, sRow1Id, sRow2Id, sRow3Id, sRow4Id)) {
                             if (rId != 0) {
                                 (pinView.findViewById<View>(rId) as? ViewGroup)?.clipChildren = false
                                 (pinView.findViewById<View>(rId) as? ViewGroup)?.clipToPadding = false
                             }
                         }
 
-                        // 7. Direct Touch Routing for Elevated / Negative-Translated Rows (e.g. Row 1: Keys 1, 2, 3)
+                        // 7. Direct Touch Routing for Elevated / Negative-Translated Rows
+                        val activeNumKeys = sNumKeyIds.mapNotNull { if (it != 0) pinView.findViewById<View>(it) else null }
                         val attachKeyTouchRouter: (View?) -> Unit = { targetView ->
                             if (targetView != null) {
                                 var activeForwardKey: View? = null
@@ -852,19 +952,16 @@ object KeypadPhysicsHook {
                                     when (ev.actionMasked) {
                                         MotionEvent.ACTION_DOWN -> {
                                             activeForwardKey = null
-                                            for (id in numKeyIds) {
-                                                if (id != 0) {
-                                                    val key = pinView.findViewById<View>(id)
-                                                    if (key != null && key.visibility == View.VISIBLE) {
-                                                        key.getLocationOnScreen(tempLoc)
-                                                        val l = tempLoc[0].toFloat()
-                                                        val t = tempLoc[1].toFloat()
-                                                        val r = l + key.width
-                                                        val b = t + key.height
-                                                        if (ev.rawX >= l && ev.rawX <= r && ev.rawY >= t && ev.rawY <= b) {
-                                                            activeForwardKey = key
-                                                            break
-                                                        }
+                                            for (key in activeNumKeys) {
+                                                if (key.visibility == View.VISIBLE) {
+                                                    key.getLocationOnScreen(tempLoc)
+                                                    val l = tempLoc[0].toFloat()
+                                                    val t = tempLoc[1].toFloat()
+                                                    val r = l + key.width
+                                                    val b = t + key.height
+                                                    if (ev.rawX >= l && ev.rawX <= r && ev.rawY >= t && ev.rawY <= b) {
+                                                        activeForwardKey = key
+                                                        break
                                                     }
                                                 }
                                             }
@@ -913,9 +1010,8 @@ object KeypadPhysicsHook {
                             }
                         }
 
-                        val spacePattrenId = ctx.resources.getIdentifier("space_pattren", "id", "com.android.systemui")
-                        if (spacePattrenId != 0) attachKeyTouchRouter(pinView.findViewById(spacePattrenId))
-                        if (row0Id != 0) attachKeyTouchRouter(pinView.findViewById(row0Id))
+                        if (sSpacePatternId != 0) attachKeyTouchRouter(pinView.findViewById(sSpacePatternId))
+                        if (sRow0Id != 0) attachKeyTouchRouter(pinView.findViewById(sRow0Id))
                         attachKeyTouchRouter(pinView)
                     } catch (_: Throwable) {}
                 }
@@ -951,22 +1047,19 @@ object KeypadPhysicsHook {
                             } catch (_: Throwable) {}
 
                             val ctx = pinView.context
+                            ensureResourceIds(ctx)
                             val density = ctx.resources.displayMetrics.density
 
                             try {
                                 val pairs = Array(4) { Array(3) { android.util.Pair(0, 0) } }
-                                val keysAnimField = try { pinViewObj.javaClass.getField("keysAnimStartState") } catch (_: Throwable) { null }
-                                if (keysAnimField != null) {
-                                    keysAnimField.isAccessible = true
-                                    keysAnimField.set(pinViewObj, pairs)
-                                }
+                                ensureCachedPinViewFields(pinViewObj.javaClass)
+                                cachedKeysAnimStartStateField?.set(pinViewObj, pairs)
                             } catch (_: Throwable) {}
 
                             startIos26RadialBloomAnimation(pinView, cfg, density)
 
-                            val row0Id = ctx.resources.getIdentifier("row0", "id", "com.android.systemui")
-                            if (row0Id != 0) {
-                                val row0 = pinView.findViewById<View>(row0Id)
+                            if (sRow0Id != 0) {
+                                val row0 = pinView.findViewById<View>(sRow0Id)
                                 if (row0 != null) {
                                     row0.animate().cancel()
                                     row0.alpha = 0f
@@ -1001,19 +1094,20 @@ object KeypadPhysicsHook {
                             releaseAnimators.clear()
 
                             val ctx = pinView.context
+                            ensureResourceIds(ctx)
                             val density = ctx.resources.displayMetrics.density
 
-                            val actionNames = arrayOf("emergency_call_button", "delete_button", "cancel_button", "zero_cancel_button")
-                            for (name in actionNames) {
-                                val id = ctx.resources.getIdentifier(name, "id", "com.android.systemui")
-                                if (id != 0) {
-                                    pinView.findViewById<View>(id)?.animate()?.alpha(0f)?.setDuration(120L)?.start()
-                                }
+                            if (sEmergencyCallId != 0) {
+                                pinView.findViewById<View>(sEmergencyCallId)?.animate()?.alpha(0f)?.setDuration(120L)?.start()
+                            }
+                            if (sDeleteContainerId != 0) {
+                                pinView.findViewById<View>(sDeleteContainerId)?.animate()?.alpha(0f)?.setDuration(120L)?.start()
+                            }
+                            for (id in sCancelIds) {
+                                pinView.findViewById<View>(id)?.animate()?.alpha(0f)?.setDuration(120L)?.start()
                             }
 
-                            val numKeyNames = arrayOf("key1", "key2", "key3", "key4", "key5", "key6", "key7", "key8", "key9", "key0")
-                            for (name in numKeyNames) {
-                                val id = ctx.resources.getIdentifier(name, "id", "com.android.systemui")
+                            for (id in sNumKeyIds) {
                                 if (id != 0) {
                                     val keyView = pinView.findViewById<View>(id)
                                     (keyView?.background as? LiquidGlassKeyOptimizedDrawable)?.stopLiveTracking()
@@ -1028,9 +1122,8 @@ object KeypadPhysicsHook {
                                 }
                             }
 
-                            val row0Id = ctx.resources.getIdentifier("row0", "id", "com.android.systemui")
-                            if (row0Id != 0) {
-                                pinView.findViewById<View>(row0Id)?.animate()?.alpha(0f)?.setDuration(120L)?.start()
+                            if (sRow0Id != 0) {
+                                pinView.findViewById<View>(sRow0Id)?.animate()?.alpha(0f)?.setDuration(120L)?.start()
                             }
 
                             try {
@@ -1039,9 +1132,8 @@ object KeypadPhysicsHook {
 
                             Handler(Looper.getMainLooper()).postDelayed({
                                 try {
-                                    val finishField = pinViewObj.javaClass.getDeclaredField("mDisappearAnimationFinishRunnable")
-                                    finishField.isAccessible = true
-                                    val runnable = finishField.get(pinViewObj) as? Runnable
+                                    ensureCachedPinViewFields(pinViewObj.javaClass)
+                                    val runnable = cachedDisappearRunnableField?.get(pinViewObj) as? Runnable
                                     runnable?.run()
                                 } catch (_: Throwable) {}
                             }, 200L)
@@ -1063,20 +1155,8 @@ object KeypadPhysicsHook {
                                 releaseAnimators.clear()
                                 val pinView = chain.thisObject as? View
                                 if (pinView != null) {
-                                    val ctx = pinView.context
-                                    val numKeyIds = intArrayOf(
-                                        ctx.resources.getIdentifier("key1", "id", "com.android.systemui"),
-                                        ctx.resources.getIdentifier("key2", "id", "com.android.systemui"),
-                                        ctx.resources.getIdentifier("key3", "id", "com.android.systemui"),
-                                        ctx.resources.getIdentifier("key4", "id", "com.android.systemui"),
-                                        ctx.resources.getIdentifier("key5", "id", "com.android.systemui"),
-                                        ctx.resources.getIdentifier("key6", "id", "com.android.systemui"),
-                                        ctx.resources.getIdentifier("key7", "id", "com.android.systemui"),
-                                        ctx.resources.getIdentifier("key8", "id", "com.android.systemui"),
-                                        ctx.resources.getIdentifier("key9", "id", "com.android.systemui"),
-                                        ctx.resources.getIdentifier("key0", "id", "com.android.systemui")
-                                    )
-                                    for (id in numKeyIds) {
+                                    ensureResourceIds(pinView.context)
+                                    for (id in sNumKeyIds) {
                                         if (id != 0) {
                                             (pinView.findViewById<View>(id)?.background as? LiquidGlassKeyOptimizedDrawable)?.release()
                                         }
