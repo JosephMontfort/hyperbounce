@@ -501,7 +501,7 @@ fun SettingsSliderRow(
             },
             bottomAction = {
                 Slider(
-                    value = value,
+                    value = value.coerceIn(valueRange.start, valueRange.endInclusive),
                     onValueChange = debouncedOnValueChange,
                     modifier = Modifier
                         .fillMaxWidth()
@@ -512,7 +512,7 @@ fun SettingsSliderRow(
                                 val height = size.height.toFloat()
                                 val thumbRadius = height / 2f
                                 val availableWidth = (width - 2f * thumbRadius).coerceAtLeast(0f)
-                                val fraction = ((value - valueRange.start) / (valueRange.endInclusive - valueRange.start)).coerceIn(0f, 1f)
+                                val fraction = ((value.coerceIn(valueRange.start, valueRange.endInclusive) - valueRange.start) / (valueRange.endInclusive - valueRange.start)).coerceIn(0f, 1f)
                                 val thumbX = thumbRadius + fraction * availableWidth
                                 val hitRadius = thumbRadius * 1.5f + 16.dp.toPx()
                                 val isOverThumb = abs(down.position.x - thumbX) <= hitRadius
@@ -681,7 +681,7 @@ fun SettingsSliderRow(
                     val localBackdrop = com.kyant.backdrop.backdrops.rememberCanvasBackdrop { drawRect(cardColor) }
 
                     LiquidSlider(
-                        value = { value },
+                        value = { value.coerceIn(valueRange.start, valueRange.endInclusive) },
                         onValueChange = debouncedOnValueChange,
                         valueRange = valueRange,
                         visibilityThreshold = (valueRange.endInclusive - valueRange.start) / 1000f,

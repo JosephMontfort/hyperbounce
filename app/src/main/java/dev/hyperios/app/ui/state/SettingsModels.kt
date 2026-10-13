@@ -311,6 +311,7 @@ data class ControlCenterSettings(
     val jellyEnabled: Boolean = ModuleDefaults.ControlCenter.JELLY_ENABLED,
     val animEngineMode: Int = ModuleDefaults.ControlCenter.ANIM_ENGINE_MODE,
     val spreadRatio: Float = ModuleDefaults.ControlCenter.SPREAD_RATIO,
+    val stretchThreshold: Float = ModuleDefaults.ControlCenter.STRETCH_THRESHOLD,
     val spreadResponse: Float = ModuleDefaults.ControlCenter.SPREAD_RESPONSE,
     val spreadDamping: Float = ModuleDefaults.ControlCenter.SPREAD_DAMPING,
     val spreadReleaseResponse: Float = ModuleDefaults.ControlCenter.SPREAD_RELEASE_RESPONSE,

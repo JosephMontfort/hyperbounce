@@ -415,6 +415,9 @@ object ModuleDefaults {
         const val SPREAD_RATIO: Float = 1.00f
         val SPREAD_RATIO_RANGE = 0.20f..2.50f
 
+        const val STRETCH_THRESHOLD: Float = 0.38f
+        val STRETCH_THRESHOLD_RANGE = 0.10f..1.00f
+
         const val SPREAD_RESPONSE: Float = 0.20f
         val SPREAD_RESPONSE_RANGE = 0.05f..1.0f
 

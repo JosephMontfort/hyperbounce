@@ -1441,6 +1441,7 @@ class SettingsRepository(context: Context) {
         var jellyEnabled by prefsBooleanState("cc_jelly_enabled", defaults.jellyEnabled); private set
         var animEngineMode by prefsIntState("cc_anim_engine_mode", defaults.animEngineMode); private set
         var spreadRatio by prefsFloatState("cc_spread_ratio", defaults.spreadRatio); private set
+        var stretchThreshold by prefsFloatState("cc_stretch_threshold", defaults.stretchThreshold); private set
         var spreadResponse by prefsFloatState("cc_spread_response", defaults.spreadResponse); private set
         var spreadDamping by prefsFloatState("cc_spread_damping", defaults.spreadDamping); private set
         var spreadReleaseResponse by prefsFloatState("cc_spread_release_response", defaults.spreadReleaseResponse); private set
@@ -1464,7 +1465,7 @@ class SettingsRepository(context: Context) {
         fun snapshot(): ControlCenterSettings = ControlCenterSettings(
             masterEnabled,
             modularEditEnabled, animEnabled, jellyEnabled, animEngineMode,
-            spreadRatio, spreadResponse, spreadDamping, spreadReleaseResponse, spreadReleaseDamping,
+            spreadRatio, stretchThreshold, spreadResponse, spreadDamping, spreadReleaseResponse, spreadReleaseDamping,
             tileDelayScale, frictionMultiplier,
             lowEndFlashlightEnabled, flashlightMaxBrightness, true2dGridEnabled, fluidResizeEnabled,
             landscapeRightMaxRows, pendingResetLayout
@@ -1487,6 +1488,7 @@ class SettingsRepository(context: Context) {
         @JvmName("setCcLowEndFlashlightEnabledPref") fun setLowEndFlashlightEnabled(v: Boolean) { lowEndFlashlightEnabled = v }
         @JvmName("setCcFlashlightMaxBrightnessPref") fun setFlashlightMaxBrightness(v: Int) { flashlightMaxBrightness = v }
         @JvmName("setCcSpreadRatioPref") fun setSpreadRatio(v: Float) { spreadRatio = v }
+        @JvmName("setCcStretchThresholdPref") fun setStretchThreshold(v: Float) { stretchThreshold = v }
         @JvmName("setCcSpreadResponsePref") fun setSpreadResponse(v: Float) { spreadResponse = v }
         @JvmName("setCcSpreadDampingPref") fun setSpreadDamping(v: Float) { spreadDamping = v }
         @JvmName("setCcSpreadReleaseResponsePref") fun setSpreadReleaseResponse(v: Float) { spreadReleaseResponse = v }
@@ -1506,6 +1508,7 @@ class SettingsRepository(context: Context) {
             lowEndFlashlightEnabled = defaults.lowEndFlashlightEnabled
             flashlightMaxBrightness = defaults.flashlightMaxBrightness
             spreadRatio = defaults.spreadRatio
+            stretchThreshold = defaults.stretchThreshold
             spreadResponse = defaults.spreadResponse
             spreadDamping = defaults.spreadDamping
             spreadReleaseResponse = defaults.spreadReleaseResponse

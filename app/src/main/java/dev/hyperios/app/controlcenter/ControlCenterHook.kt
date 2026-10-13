@@ -809,6 +809,31 @@ object ControlCenterHook {
                             chain.proceed()
                         }
                     }
+                    if (m.name == "notifyStretchHeightChanged") {
+                        m.isAccessible = true
+                        val callbacksField = expandControllerClass.getDeclaredField("callbacks").apply { isAccessible = true }
+                        val callbackClass = Class.forName("com.android.systemui.plugins.miui.shade.PanelExpandController\$Callback", false, classLoader)
+                        val onStretchMethod = callbackClass.getMethod("onStretchHeightChanged", Float::class.javaPrimitiveType)
+                        module.hook(m).intercept { chain ->
+                            if (!ControlCenterConfigHolder.config.isJellyActive) return@intercept chain.proceed()
+                            val thisObj = chain.thisObject ?: return@intercept chain.proceed()
+                            val rawArgs = chain.args
+                            val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as? Array<*>
+                            val f2 = (args?.getOrNull(0) as? Number)?.toFloat() ?: return@intercept chain.proceed()
+                            try {
+                                val callbacks = callbacksField.get(thisObj) as? Iterable<*>
+                                if (callbacks != null) {
+                                    for (cb in callbacks) {
+                                        if (cb != null) {
+                                            onStretchMethod.invoke(cb, f2)
+                                        }
+                                    }
+                                    return@intercept null
+                                }
+                            } catch (_: Throwable) {}
+                            chain.proceed()
+                        }
+                    }
                 }
             } catch (t: Throwable) {}
 
@@ -834,9 +859,9 @@ object ControlCenterHook {
                                     val z2 = args[2] as? Boolean ?: false
                                     val z3 = args[3] as? Boolean ?: false
 
-                                    val damping = ControlCenterConfigHolder.config.spreadReleaseDamping.coerceIn(0.15f, 0.95f)
-                                    val response = ControlCenterConfigHolder.config.spreadReleaseResponse.coerceIn(0.40f, 1.50f)
-                                    val bounceEase = getStyleMethod.invoke(null, -2, floatArrayOf(response, damping))
+                                    val damping = ControlCenterConfigHolder.config.spreadReleaseDamping.coerceIn(0.01f, 3.0f)
+                                    val response = ControlCenterConfigHolder.config.spreadReleaseResponse.coerceIn(0.05f, 5.0f)
+                                    val bounceEase = getStyleMethod.invoke(null, -2, floatArrayOf(damping, response))
 
                                     // Update static releaseTransYEase field on LowEndItemHolderAnimator
                                     try {
@@ -885,9 +910,9 @@ object ControlCenterHook {
                         module.hook(m).intercept { chain ->
                             if (!ControlCenterConfigHolder.config.isJellyActive) return@intercept chain.proceed()
                             try {
-                                val damping = ControlCenterConfigHolder.config.spreadReleaseDamping.coerceIn(0.15f, 0.95f)
-                                val response = ControlCenterConfigHolder.config.spreadReleaseResponse.coerceIn(0.40f, 1.50f)
-                                val bounceEase = getStyleMethod.invoke(null, -2, floatArrayOf(response, damping))
+                                val damping = ControlCenterConfigHolder.config.spreadReleaseDamping.coerceIn(0.01f, 3.0f)
+                                val response = ControlCenterConfigHolder.config.spreadReleaseResponse.coerceIn(0.05f, 5.0f)
+                                val bounceEase = getStyleMethod.invoke(null, -2, floatArrayOf(damping, response))
                                 val thisObj = chain.thisObject
                                 if (thisObj != null) {
                                     // Update animators (Row[])
@@ -1048,9 +1073,9 @@ object ControlCenterHook {
                             val result = try { chain.proceed() } catch (t: Throwable) { null }
                             if (!ControlCenterConfigHolder.config.isJellyActive) return@intercept result
                             try {
-                                val damping = ControlCenterConfigHolder.config.spreadReleaseDamping.coerceIn(0.15f, 0.95f)
-                                val response = ControlCenterConfigHolder.config.spreadReleaseResponse.coerceIn(0.40f, 1.50f)
-                                val bounceEase = getStyleMethod.invoke(null, -2, floatArrayOf(response, damping))
+                                val damping = ControlCenterConfigHolder.config.spreadReleaseDamping.coerceIn(0.01f, 3.0f)
+                                val response = ControlCenterConfigHolder.config.spreadReleaseResponse.coerceIn(0.05f, 5.0f)
+                                val bounceEase = getStyleMethod.invoke(null, -2, floatArrayOf(damping, response))
                                 val releaseTransYEaseField = sReleaseTransYEaseField ?: holderClass.getDeclaredField("releaseTransYEase").apply {
                                     isAccessible = true
                                     sReleaseTransYEaseField = this
@@ -1174,14 +1199,15 @@ object ControlCenterHook {
                             }
                             state.lastFrameNano = now
 
-                            val intensity = config.spreadRatio.coerceIn(0.20f, 2.50f)
-                            val rowStagger = config.tileDelayScale.coerceIn(0.0f, 2.0f)
+                            val reboundIntensity = config.spreadRatio.coerceAtLeast(0.05f)
+                            val stretchThreshold = config.stretchThreshold.coerceAtLeast(0.01f)
+                            val rowStagger = config.tileDelayScale.coerceAtLeast(0.0f)
 
                             // Row-by-Row Wave Propagation (Jelly Ripple)
                             if (expandTransY > 0.0f) {
                                 // Overstretch pull-down: lower rows lag slightly in phase
                                 val lagFactor = 1.0f + (row * 0.12f * rowStagger)
-                                val targetY = expandTransY * (1.0f + row * 0.04f * intensity)
+                                val targetY = expandTransY * (1.0f + row * 0.04f * reboundIntensity)
                                 val smoothAlpha = (1.0f - Math.exp((-dt * 28.0f / lagFactor).toDouble())).toFloat()
                                 state.smoothedTransY += (targetY - state.smoothedTransY) * smoothAlpha
                             } else {
@@ -1192,34 +1218,35 @@ object ControlCenterHook {
                             }
 
                             // Apply row wave translation offset
-                            val additionalTransY = (state.smoothedTransY - expandTransY).coerceIn(-120.0f * intensity, 120.0f * intensity)
+                            val additionalTransY = (state.smoothedTransY - expandTransY).coerceIn(-120.0f * reboundIntensity, 120.0f * reboundIntensity)
                             if (Math.abs(additionalTransY) > 0.1f) {
                                 itemView.translationY += additionalTransY
                             }
 
                             // Organic Jelly Deformation (Stretch & Release Squish)
                             val y = state.smoothedTransY
-                            val strain = (y / 620.0f) * intensity
                             val w = itemView.width.toFloat()
                             val h = itemView.height.toFloat()
 
                             if (y > 0.5f) {
-                                // Pull-down: vertical elongation & lateral Poisson compression
-                                val sy = (Math.tanh(strain.toDouble()).toFloat() * 0.38f * intensity).coerceIn(0.0f, 0.55f)
-                                val sx = sy * 0.40f
+                                // Pull-down: vertical elongation & lateral Poisson compression capped by stretchThreshold
+                                val pullStrain = (y / 620.0f)
+                                val sy = (Math.tanh(pullStrain.toDouble()).toFloat() * stretchThreshold).coerceIn(0.0f, stretchThreshold * 1.5f)
+                                val sx = (sy * 0.40f).coerceIn(0.0f, 0.60f)
                                 itemView.scaleY = 1.0f + sy
-                                itemView.scaleX = (1.0f - sx).coerceAtLeast(0.68f)
+                                itemView.scaleX = (1.0f - sx).coerceAtLeast(0.40f)
                                 if (w > 0f && h > 0f) {
                                     itemView.pivotX = w * 0.5f
                                     itemView.pivotY = h * 0.06f
                                 }
                                 state.isDeformed = true
                             } else if (y < -0.5f) {
-                                // Rebound overshoot: vertical squish compression & horizontal bulge
-                                val cy = (Math.tanh((-strain).toDouble()).toFloat() * 0.28f * intensity).coerceIn(0.0f, 0.45f)
-                                val bx = cy * 0.46f
-                                itemView.scaleY = (1.0f - cy).coerceAtLeast(0.72f)
-                                itemView.scaleX = (1.0f + bx).coerceAtMost(1.35f)
+                                // Rebound overshoot: vertical squish compression & horizontal bulge scaled by reboundIntensity
+                                val squishStrain = (-y / 620.0f) * reboundIntensity
+                                val cy = (Math.tanh(squishStrain.toDouble()).toFloat() * 0.28f * reboundIntensity).coerceIn(0.0f, 0.65f)
+                                val bx = (cy * 0.46f).coerceIn(0.0f, 0.50f)
+                                itemView.scaleY = (1.0f - cy).coerceAtLeast(0.35f)
+                                itemView.scaleX = (1.0f + bx).coerceAtMost(1.65f)
                                 if (w > 0f && h > 0f) {
                                     itemView.pivotX = w * 0.5f
                                     itemView.pivotY = h * 0.85f

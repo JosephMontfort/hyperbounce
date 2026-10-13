@@ -33,6 +33,7 @@ data class ControlCenterConfig(
     var jellyEnabled: Boolean = ModuleDefaults.ControlCenter.JELLY_ENABLED,
     var animEngineMode: Int = ModuleDefaults.ControlCenter.ANIM_ENGINE_MODE,
     var spreadRatio: Float = ModuleDefaults.ControlCenter.SPREAD_RATIO,
+    var stretchThreshold: Float = ModuleDefaults.ControlCenter.STRETCH_THRESHOLD,
     var spreadResponse: Float = ModuleDefaults.ControlCenter.SPREAD_RESPONSE,
     var spreadDamping: Float = ModuleDefaults.ControlCenter.SPREAD_DAMPING,
     var spreadReleaseResponse: Float = ModuleDefaults.ControlCenter.SPREAD_RELEASE_RESPONSE,
@@ -172,7 +173,7 @@ object ControlCenterConfigHolder {
     @Volatile var sBrightnessSliderWidth: Int = 2
     @Volatile var sVolumeSliderWidth: Int = 2
     val landscapeRightMaxRows: Int
-        get() = config.landscapeRightMaxRows.coerceIn(1, 6)
+        get() = config.landscapeRightMaxRows.coerceAtLeast(1)
     val sComponentPriorities = ConcurrentHashMap<String, Int>().apply {
         put("CompactQS", 0)
         put("CompactQSCard", 1)
@@ -321,6 +322,7 @@ object ControlCenterConfigHolder {
             jellyEnabled = prefs.getBoolean("cc_jelly_enabled", ModuleDefaults.ControlCenter.JELLY_ENABLED),
             animEngineMode = engineMode,
             spreadRatio = prefs.getFloat("cc_spread_ratio", ModuleDefaults.ControlCenter.SPREAD_RATIO),
+            stretchThreshold = prefs.getFloat("cc_stretch_threshold", ModuleDefaults.ControlCenter.STRETCH_THRESHOLD),
             spreadResponse = prefs.getFloat("cc_spread_response", ModuleDefaults.ControlCenter.SPREAD_RESPONSE),
             spreadDamping = prefs.getFloat("cc_spread_damping", ModuleDefaults.ControlCenter.SPREAD_DAMPING),
             spreadReleaseResponse = prefs.getFloat("cc_spread_release_response", ModuleDefaults.ControlCenter.SPREAD_RELEASE_RESPONSE),
@@ -452,7 +454,7 @@ object ControlCenterConfigHolder {
                         }
                     }
                     if (json.has("landscape_right_max_rows")) {
-                        config.landscapeRightMaxRows = json.optInt("landscape_right_max_rows", 3).coerceIn(1, 6)
+                        config.landscapeRightMaxRows = json.optInt("landscape_right_max_rows", 3).coerceAtLeast(1)
                     }
 
                     if (json.has("tile_groups_v2")) {
@@ -554,7 +556,7 @@ object ControlCenterConfigHolder {
                     }
                 }
                 if (prefs.contains("landscape_right_max_rows")) {
-                    config.landscapeRightMaxRows = prefs.getInt("landscape_right_max_rows", 3).coerceIn(1, 6)
+                    config.landscapeRightMaxRows = prefs.getInt("landscape_right_max_rows", 3).coerceAtLeast(1)
                 }
 
                 if (prefs.contains("tile_groups_v2")) {
