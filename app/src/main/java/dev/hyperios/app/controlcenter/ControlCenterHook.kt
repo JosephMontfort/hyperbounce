@@ -45,7 +45,9 @@ object ControlCenterHook {
     @Volatile private var sItemViewField: Field? = null
     @Volatile private var sExpandScaleRatioField: Field? = null
     @Volatile private var sExpandTransYField: Field? = null
+    @Volatile private var sExpandAlphaField: Field? = null
     @Volatile private var sSpreadRowField: Field? = null
+    @Volatile private var sGetLayoutPositionMethod: Method? = null
     @Volatile private var sShrinkXEaseField: Field? = null
     @Volatile private var sShrinkCenterXField: Field? = null
     @Volatile private var sShrinkCenterYField: Field? = null
@@ -56,6 +58,12 @@ object ControlCenterHook {
     @Volatile private var sShrinkYEaseField: Field? = null
     @Volatile private var sSetFactorsMethod: Method? = null
     @Volatile private var sGetContextMethod: Method? = null
+
+    private class JellyTileState {
+        var smoothedTransY: Float = 0.0f
+        var isDeformed: Boolean = false
+        var lastFrameNano: Long = 0L
+    }
 
     fun initSystemUIHooks(module: XposedModule, classLoader: ClassLoader?) {
         if (classLoader == null || sysuiHooked) return
@@ -1084,7 +1092,152 @@ object ControlCenterHook {
                                 if (holder != null) ControlCenterGrouping.sGroupChildHolders.add(holder)
                                 return@intercept null
                             }
-                            chain.proceed()
+
+                            val result = chain.proceed()
+
+                            if (holder == null || itemView == null) return@intercept result
+
+                            val config = ControlCenterConfigHolder.config
+                            var state = itemView.getTag(0x7f099998) as? JellyTileState
+
+                            if (!config.isJellyActive) {
+                                if (state != null && state.isDeformed) {
+                                    itemView.scaleX = 1.0f
+                                    itemView.scaleY = 1.0f
+                                    val w = itemView.width.toFloat()
+                                    val h = itemView.height.toFloat()
+                                    if (w > 0f && h > 0f) {
+                                        itemView.pivotX = w * 0.5f
+                                        itemView.pivotY = h * 0.5f
+                                    }
+                                    state.isDeformed = false
+                                    state.smoothedTransY = 0.0f
+                                    state.lastFrameNano = 0L
+                                }
+                                return@intercept result
+                            }
+
+                            if (state == null) {
+                                state = JellyTileState()
+                                itemView.setTag(0x7f099998, state)
+                            }
+
+                            val transYField = sExpandTransYField ?: try {
+                                holderClass.getDeclaredField("expandTransY").apply { isAccessible = true; sExpandTransYField = this }
+                            } catch (t: Throwable) { null }
+
+                            val alphaField = sExpandAlphaField ?: try {
+                                holderClass.getDeclaredField("expandAlpha").apply { isAccessible = true; sExpandAlphaField = this }
+                            } catch (t: Throwable) { null }
+
+                            val rowField = sSpreadRowField ?: try {
+                                holderClass.getDeclaredField("spreadRow").apply { isAccessible = true; sSpreadRowField = this }
+                            } catch (t: Throwable) { null }
+
+                            val expandTransY = (transYField?.getFloat(holder)) ?: 0.0f
+                            val expandAlpha = (alphaField?.getFloat(holder)) ?: 1.0f
+                            val row = try {
+                                val r = rowField?.getInt(holder) ?: -1
+                                if (r >= 0) r else {
+                                    val posMethod = sGetLayoutPositionMethod ?: try {
+                                        holder.javaClass.getMethod("getLayoutPosition").apply { sGetLayoutPositionMethod = this }
+                                    } catch (_: Throwable) { null }
+                                    val pos = (posMethod?.invoke(holder) as? Int) ?: 0
+                                    pos / 4
+                                }
+                            } catch (t: Throwable) { 0 }.coerceIn(0, 9)
+
+                            // 120 FPS Zero-Lag Rest-State Bypass
+                            if (Math.abs(expandTransY) < 0.2f && (expandAlpha >= 0.99f || expandAlpha <= 0.01f)) {
+                                if (state.isDeformed) {
+                                    itemView.scaleX = 1.0f
+                                    itemView.scaleY = 1.0f
+                                    val w = itemView.width.toFloat()
+                                    val h = itemView.height.toFloat()
+                                    if (w > 0f && h > 0f) {
+                                        itemView.pivotX = w * 0.5f
+                                        itemView.pivotY = h * 0.5f
+                                    }
+                                    state.isDeformed = false
+                                    state.smoothedTransY = 0.0f
+                                    state.lastFrameNano = 0L
+                                }
+                                return@intercept result
+                            }
+
+                            // Dynamic Frame Delta Timing
+                            val now = System.nanoTime()
+                            val dt = if (state.lastFrameNano > 0L) {
+                                ((now - state.lastFrameNano) / 1_000_000_000.0f).coerceIn(0.001f, 0.050f)
+                            } else {
+                                0.016f
+                            }
+                            state.lastFrameNano = now
+
+                            val intensity = config.spreadRatio.coerceIn(0.20f, 2.50f)
+                            val rowStagger = config.tileDelayScale.coerceIn(0.0f, 2.0f)
+
+                            // Row-by-Row Wave Propagation (Jelly Ripple)
+                            if (expandTransY > 0.0f) {
+                                // Overstretch pull-down: lower rows lag slightly in phase
+                                val lagFactor = 1.0f + (row * 0.12f * rowStagger)
+                                val targetY = expandTransY * (1.0f + row * 0.04f * intensity)
+                                val smoothAlpha = (1.0f - Math.exp((-dt * 28.0f / lagFactor).toDouble())).toFloat()
+                                state.smoothedTransY += (targetY - state.smoothedTransY) * smoothAlpha
+                            } else {
+                                // Release rebound: top rows snap back first, wave ripples down
+                                val returnSpeed = 32.0f / (1.0f + row * 0.15f * rowStagger)
+                                val smoothAlpha = (1.0f - Math.exp((-dt * returnSpeed).toDouble())).toFloat()
+                                state.smoothedTransY += (expandTransY - state.smoothedTransY) * smoothAlpha
+                            }
+
+                            // Apply row wave translation offset
+                            val additionalTransY = (state.smoothedTransY - expandTransY).coerceIn(-120.0f * intensity, 120.0f * intensity)
+                            if (Math.abs(additionalTransY) > 0.1f) {
+                                itemView.translationY += additionalTransY
+                            }
+
+                            // Organic Jelly Deformation (Stretch & Release Squish)
+                            val y = state.smoothedTransY
+                            val strain = (y / 620.0f) * intensity
+                            val w = itemView.width.toFloat()
+                            val h = itemView.height.toFloat()
+
+                            if (y > 0.5f) {
+                                // Pull-down: vertical elongation & lateral Poisson compression
+                                val sy = (Math.tanh(strain.toDouble()).toFloat() * 0.38f * intensity).coerceIn(0.0f, 0.55f)
+                                val sx = sy * 0.40f
+                                itemView.scaleY = 1.0f + sy
+                                itemView.scaleX = (1.0f - sx).coerceAtLeast(0.68f)
+                                if (w > 0f && h > 0f) {
+                                    itemView.pivotX = w * 0.5f
+                                    itemView.pivotY = h * 0.06f
+                                }
+                                state.isDeformed = true
+                            } else if (y < -0.5f) {
+                                // Rebound overshoot: vertical squish compression & horizontal bulge
+                                val cy = (Math.tanh((-strain).toDouble()).toFloat() * 0.28f * intensity).coerceIn(0.0f, 0.45f)
+                                val bx = cy * 0.46f
+                                itemView.scaleY = (1.0f - cy).coerceAtLeast(0.72f)
+                                itemView.scaleX = (1.0f + bx).coerceAtMost(1.35f)
+                                if (w > 0f && h > 0f) {
+                                    itemView.pivotX = w * 0.5f
+                                    itemView.pivotY = h * 0.85f
+                                }
+                                state.isDeformed = true
+                            } else {
+                                if (state.isDeformed) {
+                                    itemView.scaleX = 1.0f
+                                    itemView.scaleY = 1.0f
+                                    if (w > 0f && h > 0f) {
+                                        itemView.pivotX = w * 0.5f
+                                        itemView.pivotY = h * 0.5f
+                                    }
+                                    state.isDeformed = false
+                                }
+                            }
+
+                            result
                         }
                     }
                 }

@@ -412,8 +412,8 @@ object ModuleDefaults {
         const val ANIM_ENABLED: Boolean = false
         const val JELLY_ENABLED: Boolean = true
 
-        const val SPREAD_RATIO: Float = 0.02f
-        val SPREAD_RATIO_RANGE = 0.005f..0.10f
+        const val SPREAD_RATIO: Float = 1.00f
+        val SPREAD_RATIO_RANGE = 0.20f..2.50f
 
         const val SPREAD_RESPONSE: Float = 0.20f
         val SPREAD_RESPONSE_RANGE = 0.05f..1.0f
@@ -427,8 +427,8 @@ object ModuleDefaults {
         const val SPREAD_RELEASE_DAMPING: Float = 0.38f
         val SPREAD_RELEASE_DAMPING_RANGE = 0.20f..0.80f
 
-        const val TILE_DELAY_SCALE: Float = 60.0f
-        val TILE_DELAY_SCALE_RANGE = 10.0f..200.0f
+        const val TILE_DELAY_SCALE: Float = 0.80f
+        val TILE_DELAY_SCALE_RANGE = 0.00f..2.00f
 
         const val FRICTION_MULTIPLIER: Float = 0.40f
         val FRICTION_MULTIPLIER_RANGE = 0.1f..1.0f

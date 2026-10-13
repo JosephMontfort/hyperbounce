@@ -149,6 +149,20 @@ fun ControlCenterScreen(
                 if (cc.jellyEnabled) {
                     RowDivider(colors.separator)
                     SettingsSliderRow(
+                        title = "Jelly Stretch & Rebound Intensity",
+                        subtitle = "Multiplies physical deformation amplitude of vertical stretch, Poisson squish, and rebound",
+                        colors = colors,
+                        backdrop = backdrop,
+                        value = cc.spreadRatio.coerceIn(0.20f, 2.50f),
+                        onValueChange = { cc.setSpreadRatio((it * 100).roundToInt() / 100f) },
+                        valueRange = 0.20f..2.50f,
+                        defaultValue = ModuleDefaults.ControlCenter.SPREAD_RATIO,
+                        step = 0.05f,
+                        valueLabel = { String.format(java.util.Locale.US, "%.2fx", it) },
+                        enabled = cc.masterEnabled
+                    )
+                    RowDivider(colors.separator)
+                    SettingsSliderRow(
                         title = "Release Rebound Damping",
                         subtitle = "Elasticity and settling bounce of tiles upon pull-down and overstretch release",
                         colors = colors,
@@ -159,6 +173,20 @@ fun ControlCenterScreen(
                         defaultValue = ModuleDefaults.ControlCenter.SPREAD_RELEASE_DAMPING,
                         step = 0.01f,
                         valueLabel = { String.format(java.util.Locale.US, "%.2f", it) },
+                        enabled = cc.masterEnabled
+                    )
+                    RowDivider(colors.separator)
+                    SettingsSliderRow(
+                        title = "Row Ripple Wave Propagation",
+                        subtitle = "Cascading delay between rows during overstretch and release rebound waves",
+                        colors = colors,
+                        backdrop = backdrop,
+                        value = cc.tileDelayScale.coerceIn(0.00f, 2.00f),
+                        onValueChange = { cc.setTileDelayScale((it * 100).roundToInt() / 100f) },
+                        valueRange = 0.00f..2.00f,
+                        defaultValue = ModuleDefaults.ControlCenter.TILE_DELAY_SCALE,
+                        step = 0.05f,
+                        valueLabel = { String.format(java.util.Locale.US, "%.2fx", it) },
                         enabled = cc.masterEnabled
                     )
                 }
