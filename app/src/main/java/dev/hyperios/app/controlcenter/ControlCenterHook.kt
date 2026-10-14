@@ -860,9 +860,9 @@ object ControlCenterHook {
                                     val z3 = args[3] as? Boolean ?: false
 
                                     val damping = ControlCenterConfigHolder.config.spreadReleaseDamping.coerceAtLeast(0.01f)
-                                    val settlingTime = ControlCenterConfigHolder.config.settlingTime.coerceIn(0.10f, 3.0f)
-                                    val zeta = (0.55f + 0.45f * damping).coerceIn(0.20f, 1.50f)
-                                    val responsePeriod = ((Math.PI.toFloat() / 2.0f) * zeta.coerceAtMost(1.0f) * settlingTime).coerceIn(0.15f, 2.50f)
+                                    val settlingTime = ControlCenterConfigHolder.config.settlingTime.coerceIn(0.15f, 3.0f)
+                                    val responsePeriod = 0.36f
+                                    val zeta = ((2.0f * responsePeriod) / (Math.PI.toFloat() * settlingTime) * (damping / 0.38f)).coerceIn(0.15f, 1.80f)
                                     val bounceEase = getStyleMethod.invoke(null, -2, floatArrayOf(zeta, responsePeriod))
 
                                     // Update static releaseTransYEase field on LowEndItemHolderAnimator
@@ -913,9 +913,9 @@ object ControlCenterHook {
                             if (!ControlCenterConfigHolder.config.isJellyActive) return@intercept chain.proceed()
                             try {
                                 val damping = ControlCenterConfigHolder.config.spreadReleaseDamping.coerceAtLeast(0.01f)
-                                val settlingTime = ControlCenterConfigHolder.config.settlingTime.coerceIn(0.10f, 3.0f)
-                                val zeta = (0.55f + 0.45f * damping).coerceIn(0.20f, 1.50f)
-                                val responsePeriod = ((Math.PI.toFloat() / 2.0f) * zeta.coerceAtMost(1.0f) * settlingTime).coerceIn(0.15f, 2.50f)
+                                val settlingTime = ControlCenterConfigHolder.config.settlingTime.coerceIn(0.15f, 3.0f)
+                                val responsePeriod = 0.36f
+                                val zeta = ((2.0f * responsePeriod) / (Math.PI.toFloat() * settlingTime) * (damping / 0.38f)).coerceIn(0.15f, 1.80f)
                                 val bounceEase = getStyleMethod.invoke(null, -2, floatArrayOf(zeta, responsePeriod))
                                 val thisObj = chain.thisObject
                                 if (thisObj != null) {
@@ -1078,9 +1078,9 @@ object ControlCenterHook {
                             if (!ControlCenterConfigHolder.config.isJellyActive) return@intercept result
                             try {
                                 val damping = ControlCenterConfigHolder.config.spreadReleaseDamping.coerceAtLeast(0.01f)
-                                val settlingTime = ControlCenterConfigHolder.config.settlingTime.coerceIn(0.10f, 3.0f)
-                                val zeta = (0.55f + 0.45f * damping).coerceIn(0.20f, 1.50f)
-                                val responsePeriod = ((Math.PI.toFloat() / 2.0f) * zeta.coerceAtMost(1.0f) * settlingTime).coerceIn(0.15f, 2.50f)
+                                val settlingTime = ControlCenterConfigHolder.config.settlingTime.coerceIn(0.15f, 3.0f)
+                                val responsePeriod = 0.36f
+                                val zeta = ((2.0f * responsePeriod) / (Math.PI.toFloat() * settlingTime) * (damping / 0.38f)).coerceIn(0.15f, 1.80f)
                                 val bounceEase = getStyleMethod.invoke(null, -2, floatArrayOf(zeta, responsePeriod))
                                 val releaseTransYEaseField = sReleaseTransYEaseField ?: holderClass.getDeclaredField("releaseTransYEase").apply {
                                     isAccessible = true
@@ -1218,8 +1218,8 @@ object ControlCenterHook {
                                 val smoothAlpha = (1.0f - Math.exp((-dt * 28.0f / lagFactor).toDouble())).toFloat()
                                 state.smoothedTransY += (targetY - state.smoothedTransY) * smoothAlpha
                             } else {
-                                // Release rebound: top rows snap back first, wave ripples down, synchronized to settlingTime
-                                val returnSpeed = (4.0f / settlingTime) / (1.0f + row * 0.12f * rowStagger)
+                                // Release rebound: top rows snap back first, wave ripples down with high-fidelity tracking
+                                val returnSpeed = 30.0f / (1.0f + row * 0.10f * rowStagger)
                                 val smoothAlpha = (1.0f - Math.exp((-dt * returnSpeed).toDouble())).toFloat()
                                 state.smoothedTransY += (expandTransY - state.smoothedTransY) * smoothAlpha
                             }
