@@ -316,6 +316,7 @@ data class ControlCenterSettings(
     val spreadDamping: Float = ModuleDefaults.ControlCenter.SPREAD_DAMPING,
     val spreadReleaseResponse: Float = ModuleDefaults.ControlCenter.SPREAD_RELEASE_RESPONSE,
     val spreadReleaseDamping: Float = ModuleDefaults.ControlCenter.SPREAD_RELEASE_DAMPING,
+    val settlingTime: Float = ModuleDefaults.ControlCenter.SETTLING_TIME,
     val tileDelayScale: Float = ModuleDefaults.ControlCenter.TILE_DELAY_SCALE,
     val frictionMultiplier: Float = ModuleDefaults.ControlCenter.FRICTION_MULTIPLIER,
     val lowEndFlashlightEnabled: Boolean = ModuleDefaults.ControlCenter.LOW_END_FLASHLIGHT_ENABLED,

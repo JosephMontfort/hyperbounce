@@ -1446,6 +1446,7 @@ class SettingsRepository(context: Context) {
         var spreadDamping by prefsFloatState("cc_spread_damping", defaults.spreadDamping); private set
         var spreadReleaseResponse by prefsFloatState("cc_spread_release_response", defaults.spreadReleaseResponse); private set
         var spreadReleaseDamping by prefsFloatState("cc_spread_release_damping", defaults.spreadReleaseDamping); private set
+        var settlingTime by prefsFloatState("cc_settling_time", defaults.settlingTime); private set
         var tileDelayScale by prefsFloatState("cc_tile_delay_scale", defaults.tileDelayScale); private set
         var frictionMultiplier by prefsFloatState("cc_friction_multiplier", defaults.frictionMultiplier); private set
         var lowEndFlashlightEnabled by prefsBooleanState("cc_low_end_flashlight_enabled", defaults.lowEndFlashlightEnabled); private set
@@ -1466,7 +1467,7 @@ class SettingsRepository(context: Context) {
             masterEnabled,
             modularEditEnabled, animEnabled, jellyEnabled, animEngineMode,
             spreadRatio, stretchThreshold, spreadResponse, spreadDamping, spreadReleaseResponse, spreadReleaseDamping,
-            tileDelayScale, frictionMultiplier,
+            settlingTime, tileDelayScale, frictionMultiplier,
             lowEndFlashlightEnabled, flashlightMaxBrightness, true2dGridEnabled, fluidResizeEnabled,
             landscapeRightMaxRows, pendingResetLayout
         )
@@ -1493,6 +1494,7 @@ class SettingsRepository(context: Context) {
         @JvmName("setCcSpreadDampingPref") fun setSpreadDamping(v: Float) { spreadDamping = v }
         @JvmName("setCcSpreadReleaseResponsePref") fun setSpreadReleaseResponse(v: Float) { spreadReleaseResponse = v }
         @JvmName("setCcSpreadReleaseDampingPref") fun setSpreadReleaseDamping(v: Float) { spreadReleaseDamping = v }
+        @JvmName("setCcSettlingTimePref") fun setSettlingTime(v: Float) { settlingTime = v }
         @JvmName("setCcTileDelayScalePref") fun setTileDelayScale(v: Float) { tileDelayScale = v }
         @JvmName("setCcFrictionMultiplierPref") fun setFrictionMultiplier(v: Float) { frictionMultiplier = v }
 
@@ -1513,6 +1515,7 @@ class SettingsRepository(context: Context) {
             spreadDamping = defaults.spreadDamping
             spreadReleaseResponse = defaults.spreadReleaseResponse
             spreadReleaseDamping = defaults.spreadReleaseDamping
+            settlingTime = defaults.settlingTime
             tileDelayScale = defaults.tileDelayScale
             frictionMultiplier = defaults.frictionMultiplier
         }

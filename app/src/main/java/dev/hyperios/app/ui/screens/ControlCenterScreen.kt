@@ -191,6 +191,20 @@ fun ControlCenterScreen(
                     )
                     RowDivider(colors.separator)
                     SettingsSliderRow(
+                        title = "Rebound Settling Time",
+                        subtitle = "Duration for release rebound oscillations and wave ripples to settle to rest",
+                        colors = colors,
+                        backdrop = backdrop,
+                        value = cc.settlingTime,
+                        onValueChange = { cc.setSettlingTime((it * 100).roundToInt() / 100f) },
+                        valueRange = ModuleDefaults.ControlCenter.SETTLING_TIME_RANGE,
+                        defaultValue = ModuleDefaults.ControlCenter.SETTLING_TIME,
+                        step = 0.05f,
+                        valueLabel = { String.format(java.util.Locale.US, "%.2fs", it) },
+                        enabled = cc.masterEnabled
+                    )
+                    RowDivider(colors.separator)
+                    SettingsSliderRow(
                         title = "Row Ripple Wave Propagation",
                         subtitle = "Cascading delay between rows during overstretch and release rebound waves",
                         colors = colors,
