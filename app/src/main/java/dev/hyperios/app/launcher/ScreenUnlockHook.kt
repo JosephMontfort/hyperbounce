@@ -749,7 +749,7 @@ object ScreenUnlockHook {
         }
     }
 
-    fun calculatePhysicsValues(cfg: UnlockConfig): Pair<Float, Float> {
+    fun calculatePhysicsValues(cfg: ScreenUnlockConfig): Pair<Float, Float> {
         return if (cfg.animMode == 0) {
             // Mode 0: iOS Radial
             val damp = cfg.centerDamping.coerceIn(0.10f, 1.2f)
