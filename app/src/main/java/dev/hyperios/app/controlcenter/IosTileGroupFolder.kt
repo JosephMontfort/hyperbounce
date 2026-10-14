@@ -575,11 +575,22 @@ object IosTileGroupFolder {
             val density = resources.displayMetrics.density
             val qsListCtrl = sourceContainer.qsListCtrl
             val holder = ControlCenterGrouping.createLargeCardViewHolder(cardContainer, qsListCtrl, classLoader)
+            if (holder != null) {
+                ControlCenterGrouping.sGroupChildHolders.add(holder)
+                ControlCenterGrouping.attachSubHolder(holder)
+            }
             val cardView = ControlCenterGrouping.getViewHolderItemView(holder) as? ViewGroup
-            if (cardView != null) return cardView
+            if (cardView != null) {
+                cardView.setTag(0x7f09999b, true)
+                cardView.setTag(0x7f099995, true)
+                cardView.setTag(0x7f099993, holder)
+                return cardView
+            }
 
             val fallback = ControlCenterGrouping.inflateTileForType("E", cardContainer, qsListCtrl, classLoader) as ViewGroup
             ControlCenterGrouping.adjustCardToVertical(fallback, density, context)
+            fallback.setTag(0x7f09999b, true)
+            fallback.setTag(0x7f099995, true)
             return fallback
         }
 

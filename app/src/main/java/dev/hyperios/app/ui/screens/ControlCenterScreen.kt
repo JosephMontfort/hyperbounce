@@ -126,16 +126,18 @@ fun ControlCenterScreen(
                     enabled = cc.masterEnabled
                 )
 
-                RowDivider(colors.separator)
-                SettingsToggleRow(
-                    title = "Center Bounce Animation",
-                    subtitle = "Emerge outward from screen center with harmonic spring physics",
-                    colors = colors,
-                    backdrop = backdrop,
-                    checked = cc.animEnabled,
-                    onCheckedChange = cc::setAnimEnabled,
-                    enabled = cc.masterEnabled
-                )
+                if (cc.animEngineMode == 0) {
+                    RowDivider(colors.separator)
+                    SettingsToggleRow(
+                        title = "Center Bounce Animation",
+                        subtitle = "Emerge outward from screen center with harmonic spring physics",
+                        colors = colors,
+                        backdrop = backdrop,
+                        checked = cc.animEnabled,
+                        onCheckedChange = cc::setAnimEnabled,
+                        enabled = cc.masterEnabled
+                    )
+                }
                 RowDivider(colors.separator)
                 SettingsToggleRow(
                     title = "Jelly Physics Engine",

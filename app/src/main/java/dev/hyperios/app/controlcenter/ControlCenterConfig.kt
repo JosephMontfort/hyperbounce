@@ -48,7 +48,8 @@ data class ControlCenterConfig(
     var landscapeRightMaxRows: Int = ModuleDefaults.ControlCenter.LANDSCAPE_RIGHT_MAX_ROWS
 ) {
     val isModularEditActive: Boolean get() = masterEnabled && modularEditEnabled
-    val isAnimActive: Boolean get() = masterEnabled && animEnabled
+    val isCenterBounceActive: Boolean get() = masterEnabled && animEngineMode == 0 && animEnabled
+    val isAnimActive: Boolean get() = isCenterBounceActive
     val isJellyActive: Boolean get() = masterEnabled && jellyEnabled
     val isFlashlightActive: Boolean get() = masterEnabled && lowEndFlashlightEnabled
     val isTrue2dGridActive: Boolean get() = isModularEditActive && true2dGridEnabled

@@ -661,10 +661,14 @@ object ControlCenterGrouping {
 
     fun attachSubHolder(holder: Any?) {
         if (holder == null) return
+        sGroupChildHolders.add(holder)
         val childView = getViewHolderItemView(holder)
+        if (childView != null) {
+            childView.setTag(0x7f09999b, true)
+            childView.setTag(0x7f099995, true)
+        }
         val isGroupChild = childView != null && isChildOfGroup(childView)
         if (isGroupChild) {
-            sGroupChildHolders.add(holder)
             try {
                 val sm = holder.javaClass.getMethod("setIgnoreHolderScale", Boolean::class.javaPrimitiveType)
                 sm.invoke(holder, true)

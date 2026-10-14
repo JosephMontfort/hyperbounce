@@ -58,6 +58,13 @@ object ControlCenterHook {
     @Volatile private var sShrinkYEaseField: Field? = null
     @Volatile private var sSetFactorsMethod: Method? = null
     @Volatile private var sGetContextMethod: Method? = null
+    @Volatile private var sCachedCenterX: Float = -1f
+    @Volatile private var sCachedCenterY: Float = -1f
+    @Volatile private var sCachedDisplayWidth: Int = -1
+    @Volatile private var sCachedDisplayHeight: Int = -1
+    @Volatile private var sCachedBounceEase: Any? = null
+    @Volatile private var sCachedZeta: Float = -1f
+    @Volatile private var sCachedResponsePeriod: Float = -1f
 
     private class JellyTileState {
         var smoothedTransY: Float = 0.0f
@@ -1062,6 +1069,67 @@ object ControlCenterHook {
                         }
                     }
 
+                    if (m.name == "prepareLocation") {
+                        m.isAccessible = true
+                        module.hook(m).intercept { chain ->
+                            val holder = chain.thisObject
+                            if (holder != null && ControlCenterGrouping.sGroupChildHolders.contains(holder)) {
+                                return@intercept null
+                            }
+                            val itemView = ControlCenterGrouping.getViewHolderItemView(holder)
+                            if (itemView != null && (ControlCenterGrouping.isChildOfGroup(itemView) || isChildOfContainer(itemView))) {
+                                if (holder != null) ControlCenterGrouping.sGroupChildHolders.add(holder)
+                                return@intercept null
+                            }
+                            val result = try { chain.proceed() } catch (t: Throwable) { null }
+                            if (!ControlCenterConfigHolder.config.isCenterBounceActive) return@intercept result
+
+                            try {
+                                var ctx: Context? = null
+                                try {
+                                    val getCtxMethod = sGetContextMethod ?: holder.javaClass.getMethod("getContext").apply { sGetContextMethod = this }
+                                    ctx = getCtxMethod.invoke(holder) as? Context
+                                } catch (t: Throwable) {
+                                    try {
+                                        val ivField = sItemViewField ?: holder.javaClass.getField("itemView").apply { sItemViewField = this }
+                                        val iv = ivField.get(holder) as? View
+                                        if (iv != null) ctx = iv.context
+                                    } catch (t2: Throwable) {}
+                                }
+                                if (ctx == null) return@intercept result
+
+                                val dm = ctx.resources.displayMetrics
+                                if (dm.widthPixels != sCachedDisplayWidth || dm.heightPixels != sCachedDisplayHeight) {
+                                    sCachedDisplayWidth = dm.widthPixels
+                                    sCachedDisplayHeight = dm.heightPixels
+                                    sCachedCenterX = dm.widthPixels / 2.0f
+                                    sCachedCenterY = dm.heightPixels / 2.0f
+                                }
+
+                                val shrinkCenterXField = sShrinkCenterXField ?: holderClass.getDeclaredField("shrinkCenterX").apply {
+                                    isAccessible = true
+                                    sShrinkCenterXField = this
+                                }
+                                shrinkCenterXField.setFloat(holder, sCachedCenterX)
+
+                                val shrinkCenterYField = sShrinkCenterYField ?: holderClass.getDeclaredField("shrinkCenterY").apply {
+                                    isAccessible = true
+                                    sShrinkCenterYField = this
+                                }
+                                shrinkCenterYField.setFloat(holder, sCachedCenterY)
+
+                                val delayPerField = sDelayPerField ?: holderClass.getDeclaredField("delayPer").apply {
+                                    isAccessible = true
+                                    sDelayPerField = this
+                                }
+                                delayPerField.setFloat(holder, 0.0f)
+                            } catch (t: Throwable) {
+                                Log.e(TAG, "prepareLocation hook error", t)
+                            }
+                            result
+                        }
+                    }
+
                     if (m.name == "updateEases") {
                         m.isAccessible = true
                         module.hook(m).intercept { chain ->
@@ -1070,24 +1138,44 @@ object ControlCenterHook {
                                 return@intercept null
                             }
                             val itemView = ControlCenterGrouping.getViewHolderItemView(holder)
-                            if (itemView != null && ControlCenterGrouping.isChildOfGroup(itemView)) {
+                            if (itemView != null && (ControlCenterGrouping.isChildOfGroup(itemView) || isChildOfContainer(itemView))) {
                                 if (holder != null) ControlCenterGrouping.sGroupChildHolders.add(holder)
                                 return@intercept null
                             }
                             val result = try { chain.proceed() } catch (t: Throwable) { null }
-                            if (!ControlCenterConfigHolder.config.isJellyActive) return@intercept result
-                            try {
-                                val damping = ControlCenterConfigHolder.config.spreadReleaseDamping.coerceAtLeast(0.01f)
-                                val settlingTime = ControlCenterConfigHolder.config.settlingTime.coerceIn(0.15f, 3.0f)
-                                val responsePeriod = 0.36f
-                                val zeta = ((2.0f * responsePeriod) / (Math.PI.toFloat() * settlingTime) * (damping / 0.38f)).coerceIn(0.15f, 1.80f)
-                                val bounceEase = getStyleMethod.invoke(null, -2, floatArrayOf(zeta, responsePeriod))
-                                val releaseTransYEaseField = sReleaseTransYEaseField ?: holderClass.getDeclaredField("releaseTransYEase").apply {
-                                    isAccessible = true
-                                    sReleaseTransYEaseField = this
-                                }
-                                releaseTransYEaseField.set(holder, bounceEase)
-                            } catch (t: Throwable) {}
+
+                            if (ControlCenterConfigHolder.config.isCenterBounceActive) {
+                                try {
+                                    val delayPerField = sDelayPerField ?: holderClass.getDeclaredField("delayPer").apply {
+                                        isAccessible = true
+                                        sDelayPerField = this
+                                    }
+                                    delayPerField.setFloat(holder, 0.0f)
+                                } catch (_: Throwable) {}
+                            }
+
+                            if (ControlCenterConfigHolder.config.isJellyActive) {
+                                try {
+                                    val damping = ControlCenterConfigHolder.config.spreadReleaseDamping.coerceAtLeast(0.01f)
+                                    val settlingTime = ControlCenterConfigHolder.config.settlingTime.coerceIn(0.15f, 3.0f)
+                                    val responsePeriod = 0.36f
+                                    val zeta = ((2.0f * responsePeriod) / (Math.PI.toFloat() * settlingTime) * (damping / 0.38f)).coerceIn(0.15f, 1.80f)
+                                    val bounceEase = if (sCachedBounceEase != null && sCachedZeta == zeta && sCachedResponsePeriod == responsePeriod) {
+                                        sCachedBounceEase
+                                    } else {
+                                        val created = getStyleMethod.invoke(null, -2, floatArrayOf(zeta, responsePeriod))
+                                        sCachedBounceEase = created
+                                        sCachedZeta = zeta
+                                        sCachedResponsePeriod = responsePeriod
+                                        created
+                                    }
+                                    val releaseTransYEaseField = sReleaseTransYEaseField ?: holderClass.getDeclaredField("releaseTransYEase").apply {
+                                        isAccessible = true
+                                        sReleaseTransYEaseField = this
+                                    }
+                                    releaseTransYEaseField.set(holder, bounceEase)
+                                } catch (t: Throwable) {}
+                            }
                             result
                         }
                     }
@@ -1178,7 +1266,15 @@ object ControlCenterHook {
                                 }
                             } catch (t: Throwable) { 0 }.coerceIn(0, 9)
 
-                            // 120 FPS Zero-Lag Rest-State Bypass
+                            // 120 FPS Zero-Lag Rest-State & Roll-down Bypass:
+                            // When not in overstretch (expandTransY <= 0) and not currently rebounding (state.isDeformed == false),
+                            // do NOT modify roll-down animation. Let Xiaomi stock cascading animation control roll-down.
+                            if (expandTransY <= 0.0f && !state.isDeformed) {
+                                state.smoothedTransY = 0.0f
+                                state.lastFrameNano = 0L
+                                return@intercept result
+                            }
+
                             if (Math.abs(expandTransY) < 0.2f && Math.abs(state.smoothedTransY) < 0.2f && (expandAlpha >= 0.99f || expandAlpha <= 0.01f)) {
                                 if (state.isDeformed) {
                                     itemView.scaleX = 1.0f
@@ -1208,7 +1304,6 @@ object ControlCenterHook {
                             val reboundIntensity = config.spreadRatio.coerceAtLeast(0.05f)
                             val stretchThreshold = config.stretchThreshold.coerceAtLeast(0.01f)
                             val rowStagger = config.tileDelayScale.coerceAtLeast(0.0f)
-                            val settlingTime = config.settlingTime.coerceIn(0.10f, 3.0f)
 
                             // Row-by-Row Wave Propagation (Jelly Ripple)
                             if (expandTransY > 0.0f) {
@@ -1224,19 +1319,13 @@ object ControlCenterHook {
                                 state.smoothedTransY += (expandTransY - state.smoothedTransY) * smoothAlpha
                             }
 
-                            // Apply row wave translation offset
-                            val additionalTransY = (state.smoothedTransY - expandTransY).coerceIn(-120.0f * reboundIntensity, 120.0f * reboundIntensity)
-                            if (Math.abs(additionalTransY) > 0.1f) {
-                                itemView.translationY += additionalTransY
-                            }
-
                             // Organic Jelly Deformation (Stretch & Release Squish)
                             val y = state.smoothedTransY
                             val w = itemView.width.toFloat()
                             val h = itemView.height.toFloat()
 
                             if (y > 0.5f) {
-                                // Pull-down: vertical elongation & lateral Poisson compression capped by stretchThreshold
+                                // Pull-down overstretch: vertical elongation & lateral Poisson compression capped by stretchThreshold
                                 val pullStrain = (y / 620.0f)
                                 val sy = (Math.tanh(pullStrain.toDouble()).toFloat() * stretchThreshold).coerceIn(0.0f, stretchThreshold * 1.5f)
                                 val sx = (sy * 0.40f).coerceIn(0.0f, 0.60f)
@@ -1247,7 +1336,7 @@ object ControlCenterHook {
                                     itemView.pivotY = h * 0.06f
                                 }
                                 state.isDeformed = true
-                            } else if (y < -0.5f) {
+                            } else if (y < -0.5f && state.isDeformed) {
                                 // Rebound overshoot: vertical squish compression & horizontal bulge scaled by reboundIntensity
                                 val squishStrain = (-y / 620.0f) * reboundIntensity
                                 val cy = (Math.tanh(squishStrain.toDouble()).toFloat() * 0.28f * reboundIntensity).coerceIn(0.0f, 0.65f)
