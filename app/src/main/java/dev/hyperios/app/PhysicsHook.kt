@@ -78,6 +78,9 @@ class PhysicsHook : XposedModule() {
                     dev.hyperios.app.controlcenter.ControlCenterHook.initSystemUIHooks(this, param.classLoader)
                     dev.hyperios.app.notification.NotificationSheetHook.init(this, param.classLoader)
                     dev.hyperios.app.notification.IosHunAnimationHook.init(this, param.classLoader)
+                    if (dev.hyperios.app.common.DeviceUtils.isHyperOS4) {
+                        dev.hyperios.app.launcher.ScreenUnlockHook.initSystemUI(this, param.classLoader)
+                    }
                 }
 
                 param.packageName == "miui.systemui.plugin" -> {
@@ -109,8 +112,12 @@ class PhysicsHook : XposedModule() {
                             Log.e("HyperiOS", "Failed to bind remote preferences in MIUI Home", t)
                         }
                     }
-                    dev.hyperios.app.launcher.ScreenUnlockHook.init(this, param.classLoader)
-                    dev.hyperios.app.launcher.AppTransitionHook.init(this, param.classLoader)
+                    if (!dev.hyperios.app.common.DeviceUtils.isHyperOS4) {
+                        dev.hyperios.app.launcher.ScreenUnlockHook.init(this, param.classLoader)
+                        dev.hyperios.app.launcher.AppTransitionHook.init(this, param.classLoader)
+                    } else {
+                        Log.i("HyperiOS", "HyperOS 4 detected: Java launcher hooks bypassed (managed via SystemUI & native layer)")
+                    }
                 }
 
                 param.packageName == "com.android.incallui" -> {
@@ -165,9 +172,13 @@ class PhysicsHook : XposedModule() {
 
                 param.packageName == "com.android.server.telecom" ||
                 param.packageName == "android" ||
-                param.packageName == "system" -> {
+                param.packageName == "system" ||
+                param.packageName == "system_server" -> {
                     dev.hyperios.app.haptics.ringtone.TelecomRingtoneHapticHook.init(this, param.classLoader)
                     dev.hyperios.app.haptics.ringtone.XiaomiRingtoneHapticHook.init(this, param.classLoader)
+                    if (dev.hyperios.app.common.DeviceUtils.isHyperOS4) {
+                        dev.hyperios.app.launcher.ScreenUnlockHook.initSystemServer(this, param.classLoader)
+                    }
                 }
             }
 
@@ -184,6 +195,9 @@ class PhysicsHook : XposedModule() {
             dev.hyperios.app.safemode.CrashMonitor.init(this, param.classLoader)
             dev.hyperios.app.haptics.ringtone.TelecomRingtoneHapticHook.init(this, param.classLoader)
             dev.hyperios.app.haptics.ringtone.XiaomiRingtoneHapticHook.init(this, param.classLoader)
+            if (dev.hyperios.app.common.DeviceUtils.isHyperOS4) {
+                dev.hyperios.app.launcher.ScreenUnlockHook.initSystemServer(this, param.classLoader)
+            }
         } catch (t: Throwable) {
             Log.e("HyperiOS", "Failed to init hooks in onSystemServerStarting", t)
         }

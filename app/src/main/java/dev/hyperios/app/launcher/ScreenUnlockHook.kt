@@ -119,6 +119,11 @@ object ScreenUnlockHook {
         sClassLoader = classLoader
         sModule = module
 
+        if (dev.hyperios.app.common.DeviceUtils.isHyperOS4) {
+            Log.i(TAG, "ScreenUnlockHook: HyperOS 4 detected, skipping DEX-based launcher hooks")
+            return
+        }
+
         hookBaseLauncher(module, classLoader)
 
         try {
@@ -654,5 +659,120 @@ object ScreenUnlockHook {
         } catch (t: Throwable) {
             Log.e(TAG, "Error triggering unlock animation on launcher", t)
         }
+    }
+
+    /* =========================================================================
+     * HyperOS 4 Architecture Support (Native Rust Launcher + SystemUI Interception)
+     * ========================================================================= */
+
+    fun initSystemUI(module: XposedInterface, classLoader: ClassLoader) {
+        if (!dev.hyperios.app.common.DeviceUtils.isHyperOS4) return
+        sModule = module
+        sClassLoader = classLoader
+
+        try {
+            val prefs = try {
+                module.getRemotePreferences(dev.hyperios.app.prefs.PREFS_GROUP)
+            } catch (_: Throwable) { null }
+
+            if (prefs != null) {
+                LauncherConfigHolder.update(prefs)
+                prefs.registerOnSharedPreferenceChangeListener { p, _ ->
+                    val liveHotReload = p?.getBoolean("hot_reload_enabled", false) ?: false
+                    if (!liveHotReload) return@registerOnSharedPreferenceChangeListener
+                    LauncherConfigHolder.update(p)
+                    syncNativeConfig()
+                }
+            }
+            syncNativeConfig()
+        } catch (t: Throwable) {
+            Log.e(TAG, "HyperOS 4: Failed to bind prefs in initSystemUI", t)
+        }
+
+        try {
+            val kuacClass = Class.forName("com.android.systemui.keyguard.KeyguardUnlockAnimationController", false, classLoader)
+
+            for (m in kuacClass.declaredMethods) {
+                if (m.name == "unlockToLauncherWithInWindowAnimations") {
+                    module.hook(m).intercept(object : XposedInterface.Hooker {
+                        override fun intercept(chain: XposedInterface.Chain): Any? {
+                            val cfg = LauncherConfigHolder.unlockConfig
+                            if (cfg.enabled) {
+                                syncNativeConfig()
+                                Log.d(TAG, "HyperOS 4: KeyguardUnlockAnimationController.unlockToLauncherWithInWindowAnimations fired (mode=${cfg.animMode})")
+                            }
+                            return chain.proceed()
+                        }
+                    })
+                    Log.d(TAG, "HyperOS 4: Hooked KeyguardUnlockAnimationController.unlockToLauncherWithInWindowAnimations successfully")
+                }
+            }
+        } catch (t: Throwable) {
+            Log.e(TAG, "HyperOS 4: Failed to hook KeyguardUnlockAnimationController in SystemUI", t)
+        }
+    }
+
+    fun initSystemServer(module: XposedInterface, classLoader: ClassLoader) {
+        if (!dev.hyperios.app.common.DeviceUtils.isHyperOS4) return
+        sModule = module
+        sClassLoader = classLoader
+
+        try {
+            val wmsClass = Class.forName("com.android.server.wallpaper.WallpaperManagerService", false, classLoader)
+            for (m in wmsClass.declaredMethods) {
+                if (m.name == "sendWallpaperCommand") {
+                    module.hook(m).intercept(object : XposedInterface.Hooker {
+                        override fun intercept(chain: XposedInterface.Chain): Any? {
+                            val rawArgs = chain.args
+                            val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as Array<Any?>
+                            val action = args.getOrNull(1) as? String
+                            val extras = args.getOrNull(5) as? android.os.Bundle
+
+                            if (action == "miui.wallpaper.animation" && extras != null) {
+                                val cfg = LauncherConfigHolder.unlockConfig
+                                if (cfg.enabled) {
+                                    val (damp, resp) = calculatePhysicsValues(cfg)
+                                    extras.putFloat("damping", damp)
+                                    extras.putFloat("response", resp)
+                                    extras.putString("type", "spring_phy")
+                                    Log.d(TAG, "HyperOS 4: Intercepted wallpaper command: damping=$damp, response=$resp, mode=${cfg.animMode}")
+                                }
+                            }
+                            return chain.proceed()
+                        }
+                    })
+                    Log.d(TAG, "HyperOS 4: Hooked WallpaperManagerService.sendWallpaperCommand successfully")
+                }
+            }
+        } catch (t: Throwable) {
+            Log.e(TAG, "HyperOS 4: Failed to hook WallpaperManagerService", t)
+        }
+    }
+
+    fun calculatePhysicsValues(cfg: UnlockConfig): Pair<Float, Float> {
+        return if (cfg.animMode == 0) {
+            // Mode 0: iOS Radial
+            val damp = cfg.centerDamping.coerceIn(0.10f, 1.2f)
+            val resp = cfg.centerResponse.coerceIn(0.10f, 2.0f)
+            Pair(damp, resp)
+        } else {
+            // Mode 1: Y-Axis Cascade
+            val damp = cfg.cascadeDamping.coerceIn(0.25f, 1.0f)
+            val baseSettle = ScreenUnlockDefaults.rowSettle(0, cfg.gridRows, false)
+            val resp = (baseSettle * cfg.durationScale).coerceIn(0.15f, 1.5f)
+            Pair(damp, resp)
+        }
+    }
+
+    fun syncNativeConfig() {
+        val cfg = LauncherConfigHolder.unlockConfig
+        val (damp, resp) = calculatePhysicsValues(cfg)
+        NativeHookBridge.syncConfig(
+            enabled = cfg.enabled,
+            mode = cfg.animMode,
+            damping = damp,
+            response = resp,
+            velocity = cfg.velocityInfluence
+        )
     }
 }

@@ -392,6 +392,31 @@ object NotificationSheetHook {
 
         // 22. Hook NotificationStackScrollLayout.getScrollRange() for stacked headroom
         hookStackScrollLayoutRange(module, classLoader)
+
+        // 23. HyperOS 4: Capture KeyguardUnlockAnimationController for in-window launcher unlock trigger
+        if (dev.hyperios.app.common.DeviceUtils.isHyperOS4) {
+            hookKeyguardUnlockAnimationController(module, classLoader)
+        }
+    }
+
+    private var sKeyguardUnlockAnimationController: Any? = null
+
+    private fun hookKeyguardUnlockAnimationController(module: XposedModule, classLoader: ClassLoader) {
+        try {
+            val kuacClass = Class.forName("com.android.systemui.keyguard.KeyguardUnlockAnimationController", false, classLoader)
+            for (c in kuacClass.declaredConstructors) {
+                module.hook(c).intercept(object : XposedInterface.Hooker {
+                    override fun intercept(chain: XposedInterface.Chain): Any? {
+                        val result = chain.proceed()
+                        sKeyguardUnlockAnimationController = chain.thisObject
+                        Log.d(TAG, "HyperOS 4: Captured KeyguardUnlockAnimationController instance successfully")
+                        return result
+                    }
+                })
+            }
+        } catch (t: Throwable) {
+            Log.e(TAG, "HyperOS 4: Failed to hook KeyguardUnlockAnimationController", t)
+        }
     }
 
     private fun hookWakeUpCoordinator(module: XposedModule, classLoader: ClassLoader) {
@@ -1500,6 +1525,40 @@ object NotificationSheetHook {
                 Log.d(TAG, "Dispatched ACTION_TRIGGER_UNLOCK_ANIMATION to launcher (velocity=$velocity, forced=true)")
             } catch (t: Throwable) {
                 Log.e(TAG, "Failed to send unlock broadcast", t)
+            }
+
+            // HyperOS 4: Trigger in-window launcher unlock animation via KeyguardUnlockAnimationController
+            if (dev.hyperios.app.common.DeviceUtils.isHyperOS4) {
+                try {
+                    val ctrl = sKeyguardUnlockAnimationController
+                    if (ctrl != null) {
+                        try {
+                            val unlockMethod = ctrl.javaClass.getMethod("unlockToLauncherWithInWindowAnimations")
+                            unlockMethod.invoke(ctrl)
+                            Log.d(TAG, "HyperOS 4: Triggered unlockToLauncherWithInWindowAnimations from notifyCloseOverHomescreen")
+                        } catch (_: Throwable) {
+                            val fCtrl = ctrl.javaClass.getDeclaredField("launcherUnlockController").apply { isAccessible = true }
+                            val launcherProxy = fCtrl.get(ctrl)
+                            if (launcherProxy != null) {
+                                for (m in launcherProxy.javaClass.declaredMethods) {
+                                    if (m.name == "playUnlockAnimation") {
+                                        m.isAccessible = true
+                                        val paramCount = m.parameterTypes.size
+                                        when (paramCount) {
+                                            1 -> m.invoke(launcherProxy, 25L)
+                                            2 -> m.invoke(launcherProxy, 25L, false)
+                                            3 -> m.invoke(launcherProxy, 25L, false, 0L)
+                                        }
+                                        Log.d(TAG, "HyperOS 4: Triggered playUnlockAnimation on launcher proxy")
+                                        break
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } catch (t: Throwable) {
+                    Log.e(TAG, "HyperOS 4: Failed to trigger unlockToLauncherWithInWindowAnimations", t)
+                }
             }
         } else {
             Log.d(TAG, "notifyCloseOverHomescreen: not over homescreen, skipping unlock animation")

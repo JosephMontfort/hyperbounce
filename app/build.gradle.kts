@@ -18,6 +18,16 @@ android {
         targetSdk = 37
         versionCode = 1
         versionName = "1.0.0"
+        ndk {
+            abiFilters.addAll(listOf("arm64-v8a"))
+        }
+    }
+
+    externalNativeBuild {
+        cmake {
+            path = file("src/main/cpp/CMakeLists.txt")
+            version = "3.22.1"
+        }
     }
 
     buildFeatures {

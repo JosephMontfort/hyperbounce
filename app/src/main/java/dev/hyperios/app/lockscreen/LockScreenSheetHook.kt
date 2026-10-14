@@ -733,6 +733,10 @@ object LockScreenSheetHook {
                                         lockscreenFlingVelocity,
                                         dev.hyperios.app.notification.NotificationSheetHook.latestFlingVelocity
                                     )
+                                    if (dev.hyperios.app.common.DeviceUtils.isHyperOS4) {
+                                        dev.hyperios.app.launcher.ScreenUnlockHook.updateVelocity(vel)
+                                        dev.hyperios.app.launcher.ScreenUnlockHook.syncNativeConfig()
+                                    }
                                     bgExecutor.execute {
                                         listOf("com.miui.home", "com.mi.android.globallauncher").forEach { pkg ->
                                             try {
