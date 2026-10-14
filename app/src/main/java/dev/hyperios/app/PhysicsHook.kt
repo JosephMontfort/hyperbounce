@@ -175,7 +175,7 @@ class PhysicsHook : XposedModule() {
                 param.packageName == "system" ||
                 param.packageName == "system_server" -> {
                     val processName = try {
-                        android.app.ActivityThread.currentProcessName()
+                        android.app.Application.getProcessName()
                     } catch (_: Throwable) { null }
                     if (processName == null || processName == "system" || processName == "android" || processName == "com.android.server.telecom") {
                         dev.hyperios.app.haptics.ringtone.TelecomRingtoneHapticHook.init(this, param.classLoader)
