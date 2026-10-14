@@ -665,8 +665,13 @@ object ScreenUnlockHook {
      * HyperOS 4 Architecture Support (Native Rust Launcher + SystemUI Interception)
      * ========================================================================= */
 
+    private var isSystemUIHooked = false
+    private var isSystemServerHooked = false
+
     fun initSystemUI(module: XposedInterface, classLoader: ClassLoader) {
         if (!dev.hyperios.app.common.DeviceUtils.isHyperOS4) return
+        if (isSystemUIHooked) return
+        isSystemUIHooked = true
         sModule = module
         sClassLoader = classLoader
 
@@ -714,6 +719,8 @@ object ScreenUnlockHook {
 
     fun initSystemServer(module: XposedInterface, classLoader: ClassLoader) {
         if (!dev.hyperios.app.common.DeviceUtils.isHyperOS4) return
+        if (isSystemServerHooked) return
+        isSystemServerHooked = true
         sModule = module
         sClassLoader = classLoader
 

@@ -400,8 +400,10 @@ object NotificationSheetHook {
     }
 
     private var sKeyguardUnlockAnimationController: Any? = null
+    private var isKuacHooked = false
 
     private fun hookKeyguardUnlockAnimationController(module: XposedModule, classLoader: ClassLoader) {
+        if (isKuacHooked) return
         try {
             val kuacClass = Class.forName("com.android.systemui.keyguard.KeyguardUnlockAnimationController", false, classLoader)
             for (c in kuacClass.declaredConstructors) {
@@ -414,6 +416,7 @@ object NotificationSheetHook {
                     }
                 })
             }
+            isKuacHooked = true
         } catch (t: Throwable) {
             Log.e(TAG, "HyperOS 4: Failed to hook KeyguardUnlockAnimationController", t)
         }

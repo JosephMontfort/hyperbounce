@@ -174,10 +174,15 @@ class PhysicsHook : XposedModule() {
                 param.packageName == "android" ||
                 param.packageName == "system" ||
                 param.packageName == "system_server" -> {
-                    dev.hyperios.app.haptics.ringtone.TelecomRingtoneHapticHook.init(this, param.classLoader)
-                    dev.hyperios.app.haptics.ringtone.XiaomiRingtoneHapticHook.init(this, param.classLoader)
-                    if (dev.hyperios.app.common.DeviceUtils.isHyperOS4) {
-                        dev.hyperios.app.launcher.ScreenUnlockHook.initSystemServer(this, param.classLoader)
+                    val processName = try {
+                        android.app.ActivityThread.currentProcessName()
+                    } catch (_: Throwable) { null }
+                    if (processName == null || processName == "system" || processName == "android" || processName == "com.android.server.telecom") {
+                        dev.hyperios.app.haptics.ringtone.TelecomRingtoneHapticHook.init(this, param.classLoader)
+                        dev.hyperios.app.haptics.ringtone.XiaomiRingtoneHapticHook.init(this, param.classLoader)
+                        if (dev.hyperios.app.common.DeviceUtils.isHyperOS4) {
+                            dev.hyperios.app.launcher.ScreenUnlockHook.initSystemServer(this, param.classLoader)
+                        }
                     }
                 }
             }
