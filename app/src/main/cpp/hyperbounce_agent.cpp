@@ -40,27 +40,7 @@ static uintptr_t g_libapp_base = 0;
 #define OFFSET_CALL_GET_DAMPING 0x1a7b770
 #define OFFSET_IS_LOW_LEVEL 0xd11a7c
 #define OFFSET_SHOULD_SHOW_USER_PRESENT 0xd12fc0
-#define OFFSET_ON_USER_PRESENT 0xe55ab0
 #define OFFSET_SLACK_TRAMPOLINE 0x1b47800
-
-extern "C" void patch_dart_doubles(void *damping_obj, void *response_obj) {
-    if (!g_cfg.enabled.load(std::memory_order_relaxed)) {
-        return;
-    }
-    if (damping_obj != nullptr && response_obj != nullptr) {
-        double custom_damp = g_cfg.damping.load(std::memory_order_relaxed);
-        double custom_resp = g_cfg.response.load(std::memory_order_relaxed);
-
-        double *p_damp = (double *)((char *)damping_obj + 7);
-        double *p_resp = (double *)((char *)response_obj + 7);
-
-        LOGD("patch_dart_doubles: orig(damping=%f, resp=%f) -> custom(damping=%f, resp=%f, mode=%d)",
-             *p_damp, *p_resp, custom_damp, custom_resp, g_cfg.mode.load(std::memory_order_relaxed));
-
-        *p_damp = custom_damp;
-        *p_resp = custom_resp;
-    }
-}
 
 static bool unprotect_memory(uintptr_t addr, size_t size) {
     uintptr_t page_start = addr & ~(4096 - 1);
@@ -92,6 +72,19 @@ static bool find_libapp_base() {
     return false;
 }
 
+static void update_trampoline_literals(bool enabled, double damp, double resp) {
+    if (g_libapp_base == 0) return;
+    uintptr_t tramp_addr = g_libapp_base + OFFSET_SLACK_TRAMPOLINE;
+    uint32_t *t = (uint32_t *)tramp_addr;
+
+    *(uint64_t *)(&t[8]) = enabled ? 1 : 0;
+    *(double *)(&t[10]) = damp;
+    *(double *)(&t[12]) = resp;
+
+    __builtin___clear_cache((char *)(tramp_addr + 0x20), (char *)(tramp_addr + 0x38));
+    LOGI("Updated trampoline literals: enabled=%d, damp=%f, resp=%f", enabled, damp, resp);
+}
+
 static void install_hooks() {
     if (g_libapp_base == 0) return;
 
@@ -120,37 +113,32 @@ static void install_hooks() {
     }
 
     // 3. Hook getDampingResponse callsite at showUserPresentAnimation2 (0x1a7b770)
-    // Write trampoline into slack space at 0x1b47800
+    // Write pure-assembly trampoline into slack space at 0x1b47800
     uintptr_t callsite = g_libapp_base + OFFSET_CALL_GET_DAMPING;
-    uintptr_t ret_target = callsite + 4;
     uintptr_t tramp_addr = g_libapp_base + OFFSET_SLACK_TRAMPOLINE;
 
     if (unprotect_memory(tramp_addr, 0x100)) {
         uint32_t *t = (uint32_t *)tramp_addr;
-        t[0] = 0xa9be7bfd; // stp x29, x30, [sp, #-32]!
-        t[1] = 0xa90153f3; // stp x19, x20, [sp, #16]
-        t[2] = 0x910003fd;   // mov x29, sp
-        t[3] = 0x97e22429; // bl 0x13d08a4 (calls getDampingResponse)
-        t[4] = 0xaa0003f3; // mov x19, x0
-        t[5] = 0xaa0103f4; // mov x20, x1
-        t[6] = 0x58000110; // ldr x16, [pc, #32] -> lit_patch
-        t[7] = 0xd63f0200; // blr x16
-        t[8] = 0xaa1303e0; // mov x0, x19
-        t[9] = 0xaa1403e1; // mov x1, x20
-        t[10] = 0xa94153f3; // ldp x19, x20, [sp, #16]
-        t[11] = 0xa8c27bfd; // ldp x29, x30, [sp], #32
-        t[12] = 0x58000090; // ldr x16, [pc, #16] -> lit_ret
-        t[13] = 0xd61f0200; // br x16
+        t[0] = 0x97e22429; // bl 0x13d08a4 (calls getDampingResponse)
+        t[1] = 0x580000f0; // ldr x16, [pc, #30] (lit_enabled at 0x20)
+        t[2] = 0xb40000b0; // cbz x16, skip_patch (at 0x1c)
+        t[3] = 0x580000f0; // ldr x16, [pc, #30] (lit_damp at 0x28)
+        t[4] = 0xf8007010; // stur x16, [x0, #7]
+        t[5] = 0x580000f0; // ldr x16, [pc, #30] (lit_resp at 0x30)
+        t[6] = 0xf8007030; // stur x16, [x1, #7]
+        t[7] = 0x17fccfd6; // b 0x1a7b774 (skip_patch)
 
-        *(uint64_t *)(&t[14]) = (uint64_t)patch_dart_doubles;
-        *(uint64_t *)(&t[16]) = (uint64_t)ret_target;
+        // Initial literals
+        *(uint64_t *)(&t[8]) = g_cfg.enabled.load() ? 1 : 0;
+        *(double *)(&t[10]) = g_cfg.damping.load();
+        *(double *)(&t[12]) = g_cfg.response.load();
 
         __builtin___clear_cache((char *)tramp_addr, (char *)tramp_addr + 0x100);
 
         // At callsite (0x1a7b770): b 0x1b47800
         if (unprotect_memory(callsite, 4)) {
             uint32_t *cs = (uint32_t *)callsite;
-            *cs = 0x14030024; // b 0x1b47800
+            *cs = 0x14033024; // b 0x1b47800
             __builtin___clear_cache((char *)callsite, (char *)callsite + 4);
             LOGI("Hooked getDampingResponse callsite at 0x%lx -> trampoline at 0x%lx", callsite, tramp_addr);
         } else {
@@ -225,11 +213,16 @@ static void *socket_server_thread(void *) {
             } __attribute__((packed)) payload;
 
             if (read(client_fd, &payload, sizeof(payload)) == sizeof(payload)) {
-                g_cfg.enabled.store(payload.enabled != 0, std::memory_order_relaxed);
+                bool en = payload.enabled != 0;
+                double d = (double)payload.damping;
+                double r = (double)payload.response;
+                g_cfg.enabled.store(en, std::memory_order_relaxed);
                 g_cfg.mode.store(payload.mode, std::memory_order_relaxed);
-                g_cfg.damping.store((double)payload.damping, std::memory_order_relaxed);
-                g_cfg.response.store((double)payload.response, std::memory_order_relaxed);
+                g_cfg.damping.store(d, std::memory_order_relaxed);
+                g_cfg.response.store(r, std::memory_order_relaxed);
                 g_cfg.velocity.store((double)payload.velocity, std::memory_order_relaxed);
+
+                update_trampoline_literals(en, d, r);
 
                 LOGI("Received Config Update: enabled=%d, mode=%d, damping=%f, resp=%f, vel=%f",
                      payload.enabled, payload.mode, payload.damping, payload.response, payload.velocity);
