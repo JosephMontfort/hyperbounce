@@ -1,6 +1,8 @@
 package dev.hyperios.app.controlcenter
 
 import android.content.Context
+import dev.hyperios.app.common.DeviceUtils
+import dev.hyperios.app.controlcenter.hos4.ControlCenterTileDetectorHos4
 import android.content.SharedPreferences
 import android.content.res.Configuration
 import android.os.Handler
@@ -638,6 +640,26 @@ object ControlCenterFullUnlock {
                 if (list.isNotEmpty()) {
                     sUnifiedSlotOrder.clear()
                     sUnifiedSlotOrder.addAll(list)
+                    if (DeviceUtils.isHyperOS4) {
+                        var orderModified = false
+                        if (!sUnifiedSlotOrder.contains("card:bt")) {
+                            val cellIdx = sUnifiedSlotOrder.indexOf("card:cell")
+                            val insertIdx = if (cellIdx >= 0) cellIdx + 1 else sUnifiedSlotOrder.size
+                            sUnifiedSlotOrder.add(insertIdx, "card:bt")
+                            orderModified = true
+                        }
+                        if (!sUnifiedSlotOrder.contains("card:quietmode")) {
+                            val btIdx = sUnifiedSlotOrder.indexOf("card:bt")
+                            val insertIdx = if (btIdx >= 0) btIdx + 1 else sUnifiedSlotOrder.size
+                            sUnifiedSlotOrder.add(insertIdx, "card:quietmode")
+                            orderModified = true
+                        }
+                        if (sUnifiedSlotOrder.remove("tile:bt")) orderModified = true
+                        if (sUnifiedSlotOrder.remove("tile:quietmode")) orderModified = true
+                        if (orderModified) {
+                            saveOrder(context)
+                        }
+                    }
                     cleanStaleSlots()
                     Log.i(TAG, "Loaded saved unified slot order (${sUnifiedSlotOrder.size} items): $sUnifiedSlotOrder")
                     return
@@ -732,6 +754,16 @@ object ControlCenterFullUnlock {
             sUnifiedSlotOrder.remove("tile:cell")
             sProxyCache.remove("tile:cell")
             sProxyHandlers.remove("tile:cell")
+            if (DeviceUtils.isHyperOS4) {
+                sKnownSlots.remove("tile:bt")
+                sUnifiedSlotOrder.remove("tile:bt")
+                sProxyCache.remove("tile:bt")
+                sProxyHandlers.remove("tile:bt")
+                sKnownSlots.remove("tile:quietmode")
+                sUnifiedSlotOrder.remove("tile:quietmode")
+                sProxyCache.remove("tile:quietmode")
+                sProxyHandlers.remove("tile:quietmode")
+            }
 
             // 3. Deduplicate sUnifiedSlotOrder while preserving order
             val seen = HashSet<String>()
@@ -815,10 +847,6 @@ object ControlCenterFullUnlock {
      * with the new group slot and purges standalone slots.
      */
     fun onGroupCreated(groupId: String, specs: List<String>, context: Context?) {
-        if (dev.hyperios.app.common.DeviceUtils.isHyperOS4) {
-            dev.hyperios.app.controlcenter.hos4.ControlCenterFullUnlockHos4.onGroupCreated(groupId, specs, context)
-            return
-        }
         try {
             val groupSlotId = "group:$groupId"
             val anchorSpec = specs.firstOrNull()
@@ -870,10 +898,6 @@ object ControlCenterFullUnlock {
      * with the member tiles and purges the group slot.
      */
     fun onGroupsDisassembled(removedGroups: List<TileGroup>, context: Context?) {
-        if (dev.hyperios.app.common.DeviceUtils.isHyperOS4) {
-            dev.hyperios.app.controlcenter.hos4.ControlCenterFullUnlockHos4.onGroupsDisassembled(removedGroups, context)
-            return
-        }
         try {
             for (g in removedGroups) {
                 val groupSlotId = "group:${g.id}"
@@ -883,7 +907,14 @@ object ControlCenterFullUnlock {
                 val idx = sUnifiedSlotOrder.indexOf(groupSlotId)
                 sUnifiedSlotOrder.remove(groupSlotId)
 
-                val memberTileIds = g.specs.map { if (it == "wifi" || it == "cell") "card:$it" else "tile:$it" }
+                val memberTileIds = g.specs.map {
+                    val isCard = if (DeviceUtils.isHyperOS4) {
+                        ControlCenterTileDetectorHos4.isCard(it)
+                    } else {
+                        (it == "wifi" || it == "cell")
+                    }
+                    if (isCard) "card:$it" else "tile:$it"
+                }
                 if (idx >= 0 && idx <= sUnifiedSlotOrder.size) {
                     sUnifiedSlotOrder.addAll(idx, memberTileIds)
                 } else {
@@ -915,18 +946,28 @@ object ControlCenterFullUnlock {
      * Resets unified order state and restores the exact stock layout sequence live.
      */
     fun resetOrder(context: Context?) {
-        if (dev.hyperios.app.common.DeviceUtils.isHyperOS4) {
-            dev.hyperios.app.controlcenter.hos4.ControlCenterFullUnlockHos4.resetOrder(context)
-            return
-        }
         try {
-            val stockList = mutableListOf(
-                "card:wifi",
-                "card:cell",
-                "component:media",
-                "component:brightness",
-                "component:volume"
-            )
+            val stockList = if (DeviceUtils.isHyperOS4) {
+                mutableListOf(
+                    "card:wifi",
+                    "card:cell",
+                    "card:bt",
+                    "card:quietmode",
+                    "component:media",
+                    "component:brightness",
+                    "component:volume",
+                    "component:device_center",
+                    "component:device_controls"
+                )
+            } else {
+                mutableListOf(
+                    "card:wifi",
+                    "card:cell",
+                    "component:media",
+                    "component:brightness",
+                    "component:volume"
+                )
+            }
             val seen = stockList.toMutableSet()
             for (id in sUnifiedSlotOrder) {
                 if (seen.add(id)) {
@@ -1060,8 +1101,12 @@ object ControlCenterFullUnlock {
             if (ControlCenterConfigHolder.sCircularCardSpecs.contains(spec)) return Pair(1, 1)
             if (ControlCenterConfigHolder.sLargeTileSpecs.contains(spec)) return Pair(2, 2)
             if (ControlCenterConfigHolder.sVerticalTileSpecs.contains(spec)) return Pair(1, 2)
-            if (ControlCenterConfigHolder.sExpandedTileSpecs.contains(spec)) return Pair(2, 1)
-            if (spec == "wifi" || spec == "cell") {
+            val actualSpec = if (spec.startsWith("card:")) spec.substring(5) else if (spec.startsWith("tile:")) spec.substring(5) else spec
+            if (ControlCenterConfigHolder.sExpandedTileSpecs.contains(actualSpec)) return Pair(2, 1)
+            if (actualSpec == "wifi" || actualSpec == "cell") {
+                return Pair(2, 1)
+            }
+            if (DeviceUtils.isHyperOS4 && ControlCenterTileDetectorHos4.isCard(actualSpec)) {
                 return Pair(2, 1)
             }
         }
@@ -1192,10 +1237,6 @@ object ControlCenterFullUnlock {
      * Intercepts and reorganizes MainPanelAdapter.contentMap.
      */
     fun reorganizeContentMap(adapter: Any, classLoader: ClassLoader) {
-        if (dev.hyperios.app.common.DeviceUtils.isHyperOS4) {
-            dev.hyperios.app.controlcenter.hos4.ControlCenterFullUnlockHos4.reorganizeContentMap(adapter, classLoader)
-            return
-        }
         if (!ControlCenterConfigHolder.config.isModularEditActive) return
 
         try {
@@ -1405,11 +1446,18 @@ object ControlCenterFullUnlock {
                                         continue
                                     }
                                 }
-                                val id = "tile:$spec"
-                                val spans = getItemSpans(item, vt, spec)
+                                val isCard = if (DeviceUtils.isHyperOS4) ControlCenterTileDetectorHos4.isCard(spec) else false
+                                val id = if (isCard) "card:$spec" else "tile:$spec"
+                                val spans = getItemSpans(item, vt, id)
                                 sKnownSlots[id] = SlotItem(id, controller, item, vt, spans.first, spans.second)
                             } else {
                                 if (spec != null) {
+                                    val isCard = if (DeviceUtils.isHyperOS4) ControlCenterTileDetectorHos4.isCard(spec) else false
+                                    val id = if (isCard) "card:$spec" else "tile:$spec"
+                                    sKnownSlots.remove(id)
+                                    if (sUnifiedSlotOrder.remove(id)) {
+                                        orderRemoved = true
+                                    }
                                     sKnownSlots.remove("tile:$spec")
                                     if (sUnifiedSlotOrder.remove("tile:$spec")) {
                                         orderRemoved = true
@@ -1611,10 +1659,6 @@ object ControlCenterFullUnlock {
      * Rebuilds and applies the new ContentMap to the adapter based on sUnifiedSlotOrder.
      */
     fun buildAndSetContentMap(adapter: Any, classLoader: ClassLoader) {
-        if (dev.hyperios.app.common.DeviceUtils.isHyperOS4) {
-            dev.hyperios.app.controlcenter.hos4.ControlCenterFullUnlockHos4.buildAndSetContentMap(adapter, classLoader)
-            return
-        }
         try {
             val adapterClass = adapter.javaClass
             val contentMapField = adapterClass.getDeclaredField("contentMap")
@@ -1669,15 +1713,29 @@ object ControlCenterFullUnlock {
 
             // If sUnifiedSlotOrder is empty, initialize it with the true stock layout sequence
             if (sUnifiedSlotOrder.isEmpty()) {
-                val stockPrio = listOf(
-                    "card:wifi",
-                    "card:cell",
-                    "component:media",
-                    "component:brightness",
-                    "component:volume",
-                    "component:device_center",
-                    "component:device_controls"
-                )
+                val stockPrio = if (DeviceUtils.isHyperOS4) {
+                    listOf(
+                        "card:wifi",
+                        "card:cell",
+                        "card:bt",
+                        "card:quietmode",
+                        "component:media",
+                        "component:brightness",
+                        "component:volume",
+                        "component:device_center",
+                        "component:device_controls"
+                    )
+                } else {
+                    listOf(
+                        "card:wifi",
+                        "card:cell",
+                        "component:media",
+                        "component:brightness",
+                        "component:volume",
+                        "component:device_center",
+                        "component:device_controls"
+                    )
+                }
                 for (pId in stockPrio) {
                     if (sKnownSlots.containsKey(pId) && !sUnifiedSlotOrder.contains(pId)) {
                         sUnifiedSlotOrder.add(pId)
@@ -2172,7 +2230,11 @@ object ControlCenterFullUnlock {
 
             // 3. Hook ItemTouchHelper.Callback methods
             try {
-                val helperClass = Class.forName("miui.systemui.controlcenter.panel.main.recyclerview.MainPanelAdapter\$itemTouchHelper\$2", false, classLoader)
+                val helperClass = try {
+                    Class.forName("miui.systemui.controlcenter.panel.main.recyclerview.MainPanelAdapter\$itemTouchHelper\$1", false, classLoader)
+                } catch (_: Throwable) {
+                    Class.forName("miui.systemui.controlcenter.panel.main.recyclerview.MainPanelAdapter\$itemTouchHelper\$2", false, classLoader)
+                }
                 val callbackClass = try {
                     Class.forName("androidx.recyclerview.widget.ItemTouchHelper\$Callback", false, classLoader)
                 } catch (t: Throwable) {

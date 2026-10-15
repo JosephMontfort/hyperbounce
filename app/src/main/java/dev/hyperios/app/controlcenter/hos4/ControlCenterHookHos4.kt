@@ -87,45 +87,7 @@ object ControlCenterHookHos4 {
                 }
             } catch (_: Throwable) {}
 
-            // 3. Hook MainPanelContentDistributor: DO NOT remove CompactQSCardController in HOS 4!
-            try {
-                val distClass = Class.forName("miui.systemui.controlcenter.panel.main.MainPanelContentDistributor", false, classLoader)
-                for (m in distClass.declaredMethods) {
-                    if (m.name == "distributePanels") {
-                        m.isAccessible = true
-                        module.hook(m).intercept { chain ->
-                            ControlCenterFullUnlockHos4.sDistributor = chain.thisObject
-                            val result = chain.proceed()
-                            try {
-                                val dist = chain.thisObject
-                                val rightContentField = distClass.getDeclaredField("rightPanelContent")
-                                rightContentField.isAccessible = true
-                                val rightList = rightContentField.get(dist) as? MutableList<Any>
-
-                                val leftContentField = distClass.getDeclaredField("leftPanelContent")
-                                leftContentField.isAccessible = true
-                                val leftList = leftContentField.get(dist) as? MutableList<Any>
-
-                                // Ensure CompactQSCardController is NEVER removed
-                                // Only filter out legacy flip CompactQSListController if present
-                                val removePredicate = { item: Any ->
-                                    val name = item.javaClass.name
-                                    name.contains("CompactQSListController")
-                                }
-                                rightList?.removeAll(removePredicate)
-                                leftList?.removeAll(removePredicate)
-                            } catch (t: Throwable) {
-                                Log.w(TAG, "distributePanels hook error", t)
-                            }
-                            result
-                        }
-                    }
-                }
-            } catch (t: Throwable) {
-                Log.w(TAG, "Failed hooking MainPanelContentDistributor", t)
-            }
-
-            // 4. Hook MainPanelAdapter: Crash-Safe onCreateViewHolder and onBindViewHolder
+            // 3. Hook MainPanelAdapter: Crash-Safe onCreateViewHolder and onBindViewHolder
             try {
                 val mainAdapterClass = Class.forName("miui.systemui.controlcenter.panel.main.recyclerview.MainPanelAdapter", false, classLoader)
                 for (m in mainAdapterClass.declaredMethods) {
@@ -169,26 +131,12 @@ object ControlCenterHookHos4 {
                             result
                         }
                     }
-
-                    if (m.name == "distributeContent") {
-                        m.isAccessible = true
-                        module.hook(m).intercept { chain ->
-                            val result = chain.proceed()
-                            try {
-                                ControlCenterConfigHolder.sMainPanelAdapter = chain.thisObject
-                                ControlCenterFullUnlockHos4.reorganizeContentMap(chain.thisObject, classLoader)
-                            } catch (t: Throwable) {
-                                Log.w(TAG, "distributeContent hook error", t)
-                            }
-                            result
-                        }
-                    }
                 }
             } catch (t: Throwable) {
                 Log.w(TAG, "Failed hooking MainPanelAdapter", t)
             }
 
-            // 5. Hook QSListController
+            // 4. Hook QSListController
             try {
                 val qsListClass = Class.forName("miui.systemui.controlcenter.panel.main.qs.QSListController", false, classLoader)
                 for (m in qsListClass.declaredMethods) {
@@ -245,52 +193,7 @@ object ControlCenterHookHos4 {
                 Log.w(TAG, "Failed hooking QSListController", t)
             }
 
-            // 6. Hook CompactQSCardController and QSCardsController for Edit Mode Availability
-            try {
-                val compactClass = Class.forName("miui.systemui.controlcenter.panel.main.qs.CompactQSCardController", false, classLoader)
-                for (m in compactClass.declaredMethods) {
-                    if (m.name == "available") {
-                        m.isAccessible = true
-                        module.hook(m).intercept { chain ->
-                            if (ControlCenterConfigHolder.config.masterEnabled) true else chain.proceed()
-                        }
-                    }
-                    if (m.name == "createViewHolder") {
-                        m.isAccessible = true
-                        module.hook(m).intercept { chain ->
-                            val res = chain.proceed()
-                            if (res == null) {
-                                val rawArgs = chain.args
-                                val args = if (rawArgs is List<*>) rawArgs.toTypedArray() else rawArgs as? Array<*>
-                                if (args != null && args.size >= 2) {
-                                    val h = ControlCenterGroupingHos4.createViewHolderSafe(
-                                        args[0] as ViewGroup,
-                                        args[1] as Int,
-                                        chain.thisObject,
-                                        classLoader
-                                    )
-                                    if (h != null) return@intercept h
-                                }
-                            }
-                            res
-                        }
-                    }
-                }
-            } catch (_: Throwable) {}
-
-            try {
-                val cardsClass = Class.forName("miui.systemui.controlcenter.panel.main.qs.QSCardsController", false, classLoader)
-                for (m in cardsClass.declaredMethods) {
-                    if (m.name == "available") {
-                        m.isAccessible = true
-                        module.hook(m).intercept { chain ->
-                            if (ControlCenterConfigHolder.config.masterEnabled) true else chain.proceed()
-                        }
-                    }
-                }
-            } catch (_: Throwable) {}
-
-            // 7. Hook QSRecord: Dynamic getType() and getSpanSize()
+            // 5. Hook QSRecord: Dynamic getType() and getSpanSize()
             try {
                 val qsRecordClass = Class.forName("miui.systemui.controlcenter.panel.main.qs.QSRecord", false, classLoader)
                 for (m in qsRecordClass.declaredMethods) {
@@ -367,7 +270,7 @@ object ControlCenterHookHos4 {
                 Log.w(TAG, "Failed hooking QSRecord", t)
             }
 
-            // 8. Hook CustomizeHeaderController for Group / Ungroup buttons in Edit Mode
+            // 6. Hook CustomizeHeaderController for Group / Ungroup buttons in Edit Mode
             try {
                 val headerCtrlClass = Class.forName("miui.systemui.controlcenter.panel.main.header.CustomizeHeaderController", false, classLoader)
                 for (m in headerCtrlClass.declaredMethods) {
@@ -384,6 +287,13 @@ object ControlCenterHookHos4 {
                     }
                 }
             } catch (_: Throwable) {}
+
+            // 7. Full Control Center Unlock (Dynamic Grid, Order, Drag-and-Drop)
+            try {
+                ControlCenterFullUnlock.init(module, classLoader)
+            } catch (t: Throwable) {
+                Log.e(TAG, "Failed to initialize ControlCenterFullUnlock", t)
+            }
 
             pluginHooked = true
             Log.i(TAG, "Control Center Hooks for HyperOS 4 successfully initialized!")

@@ -618,7 +618,7 @@ object ControlCenterGroupingHos4 {
     fun createViewHolderSafe(parent: ViewGroup, viewType: Int, qsListCtrl: Any?, classLoader: ClassLoader): Any? {
         return try {
             when (viewType) {
-                8399 -> ControlCenterFullUnlockHos4.createLandscapeDividerViewHolder(parent, classLoader)
+                8399 -> ControlCenterFullUnlock.createLandscapeDividerViewHolder(parent, classLoader)
                 2274 -> createGroupedCardViewHolder(parent, qsListCtrl, classLoader)
                 2275 -> createGrouped2TileViewHolder(parent, qsListCtrl, classLoader, false)
                 2276 -> createGrouped2TileViewHolder(parent, qsListCtrl, classLoader, true)
