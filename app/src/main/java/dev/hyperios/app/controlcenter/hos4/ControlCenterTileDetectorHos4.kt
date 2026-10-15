@@ -14,6 +14,8 @@ import java.util.LinkedHashSet
 object ControlCenterTileDetectorHos4 {
     private const val TAG = "HyperBounce_TileDetector4"
 
+    private val sInspecting = ThreadLocal.withInitial { false }
+
     // Set of known card-style (2x1) tile specs
     val sCardSpecs: MutableSet<String> = Collections.synchronizedSet(
         LinkedHashSet<String>().apply {
@@ -53,64 +55,59 @@ object ControlCenterTileDetectorHos4 {
     }
 
     /**
+     * Extracts the spec string from a runtime QSRecord without invoking hooked methods.
+     * GUARANTEED SAFE against recursion loops.
+     */
+    fun getRecordSpec(record: Any?): String? {
+        if (record == null) return null
+        return try {
+            val specField = record.javaClass.getDeclaredField("spec")
+            specField.isAccessible = true
+            (specField.get(record) as? String)?.lowercase()
+        } catch (_: Throwable) {
+            try {
+                val specMethod = record.javaClass.getMethod("getSpec")
+                (specMethod.invoke(record) as? String)?.lowercase()
+            } catch (_: Throwable) { null }
+        }
+    }
+
+    /**
      * Inspects a runtime QSRecord and dynamically learns its card status.
+     * NEVER calls getType() or getSpanSize() to avoid recursive interception cycles.
      */
     fun inspectRecord(record: Any?): String? {
         if (record == null) return null
+        if (sInspecting.get()) return getRecordSpec(record)
+
         try {
-            var spec: String? = null
+            sInspecting.set(true)
+            val s = getRecordSpec(record) ?: return null
+
+            var isCardRecord = false
+
+            // Check boolean isCard field / method
             try {
-                val specField = record.javaClass.getDeclaredField("spec")
-                specField.isAccessible = true
-                spec = specField.get(record) as? String
+                val isCardF = record.javaClass.getDeclaredField("isCard")
+                isCardF.isAccessible = true
+                isCardRecord = isCardF.getBoolean(record)
             } catch (_: Throwable) {
-                val specMethod = record.javaClass.getMethod("getSpec")
-                spec = specMethod.invoke(record) as? String
-            }
-
-            if (spec != null) {
-                val s = spec.lowercase()
-                var isCardRecord = false
-
-                // 1. Check isCard method / field
                 try {
                     val isCardM = record.javaClass.getMethod("isCard")
                     isCardRecord = java.lang.Boolean.TRUE == isCardM.invoke(record)
-                } catch (_: Throwable) {
-                    try {
-                        val isCardF = record.javaClass.getDeclaredField("isCard")
-                        isCardF.isAccessible = true
-                        isCardRecord = isCardF.getBoolean(record)
-                    } catch (_: Throwable) {}
-                }
-
-                // 2. Check getType() == 2273 (card type)
-                if (!isCardRecord) {
-                    try {
-                        val getTypeM = record.javaClass.getMethod("getType")
-                        val vt = getTypeM.invoke(record) as? Int
-                        if (vt == 2273) isCardRecord = true
-                    } catch (_: Throwable) {}
-                }
-
-                // 3. Check getSpanSize() == 2
-                if (!isCardRecord) {
-                    try {
-                        val getSpanM = record.javaClass.getMethod("getSpanSize")
-                        val span = getSpanM.invoke(record) as? Int
-                        if (span == 2) isCardRecord = true
-                    } catch (_: Throwable) {}
-                }
-
-                if (isCardRecord) {
-                    registerCardSpec(s)
-                }
-                return s
+                } catch (_: Throwable) {}
             }
+
+            if (isCardRecord) {
+                registerCardSpec(s)
+            }
+            return s
         } catch (t: Throwable) {
             Log.w(TAG, "inspectRecord error", t)
+        } finally {
+            sInspecting.set(false)
         }
-        return null
+        return getRecordSpec(record)
     }
 
     /**

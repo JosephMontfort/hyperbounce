@@ -298,7 +298,7 @@ object ControlCenterHookHos4 {
                         m.isAccessible = true
                         module.hook(m).intercept { chain ->
                             val record = chain.thisObject
-                            val spec = ControlCenterTileDetectorHos4.inspectRecord(record)
+                            val spec = ControlCenterTileDetectorHos4.getRecordSpec(record)
                             if (spec != null) {
                                 val g = ControlCenterConfigHolder.isGroupAnchor(spec)
                                 if (g != null) {
@@ -339,7 +339,7 @@ object ControlCenterHookHos4 {
                         m.isAccessible = true
                         module.hook(m).intercept { chain ->
                             val record = chain.thisObject
-                            val spec = ControlCenterTileDetectorHos4.inspectRecord(record)
+                            val spec = ControlCenterTileDetectorHos4.getRecordSpec(record)
                             if (spec != null) {
                                 val g = ControlCenterConfigHolder.isGroupAnchor(spec)
                                 if (g != null) {
@@ -403,7 +403,7 @@ object ControlCenterHookHos4 {
                         ?: try {
                             val itemF = holder.javaClass.getDeclaredField("item")
                             itemF.isAccessible = true
-                            ControlCenterTileDetectorHos4.inspectRecord(itemF.get(holder))
+                            ControlCenterTileDetectorHos4.getRecordSpec(itemF.get(holder))
                         } catch (t: Throwable) { null }
                     if (spec != null) {
                         itemView.setTag(0x7f099990, spec)

@@ -915,6 +915,10 @@ object ControlCenterFullUnlock {
      * Resets unified order state and restores the exact stock layout sequence live.
      */
     fun resetOrder(context: Context?) {
+        if (dev.hyperios.app.common.DeviceUtils.isHyperOS4) {
+            dev.hyperios.app.controlcenter.hos4.ControlCenterFullUnlockHos4.resetOrder(context)
+            return
+        }
         try {
             val stockList = mutableListOf(
                 "card:wifi",
@@ -1607,6 +1611,10 @@ object ControlCenterFullUnlock {
      * Rebuilds and applies the new ContentMap to the adapter based on sUnifiedSlotOrder.
      */
     fun buildAndSetContentMap(adapter: Any, classLoader: ClassLoader) {
+        if (dev.hyperios.app.common.DeviceUtils.isHyperOS4) {
+            dev.hyperios.app.controlcenter.hos4.ControlCenterFullUnlockHos4.buildAndSetContentMap(adapter, classLoader)
+            return
+        }
         try {
             val adapterClass = adapter.javaClass
             val contentMapField = adapterClass.getDeclaredField("contentMap")

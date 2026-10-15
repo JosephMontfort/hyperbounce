@@ -209,7 +209,16 @@ object ControlCenterFullUnlockHos4 {
                 if (ctrlName.contains("CompactQSListController")) continue
 
                 if (ctrlName.contains("QSCardsController") || ctrlName.contains("CompactQSCardController")) {
-                    for (item in items) {
+                    val recordList = if (ctrlName.contains("CompactQSCardController")) {
+                        try {
+                            val f = controller.javaClass.getDeclaredField("qsRecords")
+                            f.isAccessible = true
+                            (f.get(controller) as? List<*>) ?: items
+                        } catch (_: Throwable) { items }
+                    } else {
+                        items
+                    }
+                    for (item in recordList) {
                         if (item == null) continue
                         val spec = ControlCenterTileDetectorHos4.inspectRecord(item) ?: continue
 
@@ -457,6 +466,43 @@ object ControlCenterFullUnlockHos4 {
             }
         } catch (t: Throwable) {
             Log.e(TAG, "onGroupsDisassembled error", t)
+        }
+    }
+
+    /**
+     * Resets unified slot ordering to stock HyperOS 4 sequence.
+     */
+    fun resetOrder(context: Context?) {
+        try {
+            val stockList = mutableListOf(
+                "card:wifi",
+                "card:cell",
+                "card:bt",
+                "card:quietmode",
+                "component:media",
+                "component:brightness",
+                "component:volume",
+                "component:device_center",
+                "component:device_controls"
+            )
+            val seen = stockList.toMutableSet()
+            for (id in sUnifiedSlotOrder) {
+                if (seen.add(id)) {
+                    stockList.add(id)
+                }
+            }
+            for (id in sKnownSlots.keys) {
+                if (seen.add(id)) {
+                    stockList.add(id)
+                }
+            }
+            sUnifiedSlotOrder.clear()
+            sUnifiedSlotOrder.addAll(stockList)
+            if (context != null) {
+                ControlCenterConfigHolder.savePriorities(context)
+            }
+        } catch (t: Throwable) {
+            Log.e(TAG, "resetOrder error", t)
         }
     }
 }

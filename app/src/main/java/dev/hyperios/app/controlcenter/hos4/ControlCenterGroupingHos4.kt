@@ -342,7 +342,17 @@ object ControlCenterGroupingHos4 {
                     Log.w(TAG, "QSCardItemView init error", t)
                 }
             }
-            root.removeAllViews()
+            // Retain required viewBinding hierarchy (scale_content, label_container, title, status)
+            // but hide it so QsCardItemViewBinding.bind() never throws NullPointerException
+            val scaleContentId = ctx.resources.getIdentifier("scale_content", "id", ctx.packageName)
+            val scaleContent = if (scaleContentId != 0) root.findViewById<View>(scaleContentId) else null
+            if (scaleContent != null) {
+                scaleContent.visibility = View.GONE
+            } else {
+                for (ci in 0 until root.childCount) {
+                    root.getChildAt(ci).visibility = View.GONE
+                }
+            }
             return root
         } catch (t: Throwable) {
             Log.e(TAG, "inflateCardRoot error", t)
