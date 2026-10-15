@@ -79,7 +79,11 @@ object KeypadPhysicsHook {
             if (name.contains("SimPin") || name.contains("SimPuk") || name.contains("KeyguardSim")) {
                 return false
             }
-            if (name == "com.android.keyguard.widget.MiuiKeyguardPINView" || name.endsWith(".MiuiKeyguardPINView")) {
+            if (name == "com.android.keyguard.widget.MiuiKeyguardPINView" ||
+                name.endsWith(".MiuiKeyguardPINView") ||
+                name == "com.android.keyguard.KeyguardPINView" ||
+                name.endsWith(".KeyguardPINView")
+            ) {
                 return true
             }
             p = (p as? View)?.parent
@@ -224,6 +228,8 @@ object KeypadPhysicsHook {
 
     private var cachedKeysAnimStartStateField: Field? = null
     private var cachedDisappearRunnableField: Field? = null
+    private var cachedInitAppearAnimedField: Field? = null
+    private var cachedAppearAnimatingField: Field? = null
     private var hasCachedPinViewFields = false
 
     private fun ensureCachedPinViewFields(pinViewClass: Class<*>) {
@@ -231,6 +237,20 @@ object KeypadPhysicsHook {
         hasCachedPinViewFields = true
         try {
             cachedKeysAnimStartStateField = pinViewClass.getField("keysAnimStartState").apply { isAccessible = true }
+        } catch (_: Throwable) {
+            try {
+                cachedKeysAnimStartStateField = pinViewClass.getDeclaredField("keysAnimStartState").apply { isAccessible = true }
+            } catch (_: Throwable) {}
+        }
+        try {
+            cachedInitAppearAnimedField = pinViewClass.getField("initAppearAnimed").apply { isAccessible = true }
+        } catch (_: Throwable) {
+            try {
+                cachedInitAppearAnimedField = pinViewClass.getDeclaredField("initAppearAnimed").apply { isAccessible = true }
+            } catch (_: Throwable) {}
+        }
+        try {
+            cachedAppearAnimatingField = pinViewClass.getDeclaredField("mAppearAnimating").apply { isAccessible = true }
         } catch (_: Throwable) {}
         try {
             cachedDisappearRunnableField = pinViewClass.getDeclaredField("mDisappearAnimationFinishRunnable").apply { isAccessible = true }
@@ -503,15 +523,20 @@ object KeypadPhysicsHook {
 
     fun init(module: XposedModule, classLoader: ClassLoader) {
         sModule = module
-        // 1. Hook MiuiNumPadKey touch events for Liquid Glass 2.0 Press Optics & Jelly Physics
-        try {
-            val numPadKeyClass = Class.forName("com.android.keyguard.widget.MiuiNumPadKey", false, classLoader)
-            for (m: Method in numPadKeyClass.declaredMethods) {
-                if (m.name == "onTouchEvent" &&
-                    m.parameterTypes.size == 1 &&
-                    m.parameterTypes[0] == MotionEvent::class.java
-                ) {
-                    module.hook(m).intercept(object : XposedInterface.Hooker {
+        // 1. Hook NumPadKey touch events for Liquid Glass 2.0 Press Optics & Jelly Physics (HyperOS 3 & HyperOS 4)
+        val numPadClassNames = listOf(
+            "com.android.keyguard.widget.MiuiNumPadKey",
+            "com.android.keyguard.NumPadKey"
+        )
+        for (numPadClassName in numPadClassNames) {
+            try {
+                val numPadKeyClass = Class.forName(numPadClassName, false, classLoader)
+                for (m: Method in numPadKeyClass.declaredMethods) {
+                    if (m.name == "onTouchEvent" &&
+                        m.parameterTypes.size == 1 &&
+                        m.parameterTypes[0] == MotionEvent::class.java
+                    ) {
+                        module.hook(m).intercept(object : XposedInterface.Hooker {
                         override fun intercept(chain: XposedInterface.Chain): Any? {
                             val view = chain.thisObject as? View
                             val rawArgs = chain.args
@@ -757,14 +782,15 @@ object KeypadPhysicsHook {
                         }
                     })
                 }
+                Log.d(TAG, "Successfully hooked NumPadKey touch events on $numPadClassName")
+            } catch (_: ClassNotFoundException) {
+                // Expected when class does not exist in the current OS version
+            } catch (t: Throwable) {
+                Log.e(TAG, "NumPadKey touch hook error on $numPadClassName", t)
             }
-        } catch (t: Throwable) {
-            Log.e(TAG, "MiuiNumPadKey Liquid Glass touch hook error", t)
         }
 
-        // 2. Hook MiuiKeyguardPINView for Liquid Glass 2.0 Button Injection, Sizing & Layout
-        try {
-            val pinViewClass = Class.forName("com.android.keyguard.widget.MiuiKeyguardPINView", false, classLoader)
+        // 2. Hook KeyguardPINView for Liquid Glass 2.0 Button Injection, Sizing & Layout (HyperOS 3 & HyperOS 4)
 
             val styleKeyAsLiquidGlass: (View?) -> Unit = { keyView ->
                 val cfg = LockScreenConfigHolder.keypad
@@ -1023,7 +1049,15 @@ object KeypadPhysicsHook {
                 }
             }
 
-            for (m: Method in pinViewClass.declaredMethods) {
+            val pinViewClassNames = listOf(
+                "com.android.keyguard.widget.MiuiKeyguardPINView",
+                "com.android.keyguard.KeyguardPINView",
+                "com.android.keyguard.tinySecurity.TinyKeyguardPINView"
+            )
+            for (pinViewClassName in pinViewClassNames) {
+                try {
+                    val pinViewClass = Class.forName(pinViewClassName, false, classLoader)
+                    for (m: Method in pinViewClass.declaredMethods) {
                 if (m.name == "onFinishInflate" || m.name == "updatePositionForFod" || m.name == "updateLayoutParams" || m.name == "onAttachedToWindow") {
                     module.hook(m).intercept(object : XposedInterface.Hooker {
                         override fun intercept(chain: XposedInterface.Chain): Any? {
@@ -1048,6 +1082,10 @@ object KeypadPhysicsHook {
                             val cfg = LockScreenConfigHolder.keypad
                             if (!cfg.enabled) return chain.proceed()
 
+                            // Ensure pinView itself is visible and fully opaque
+                            pinView.visibility = View.VISIBLE
+                            pinView.alpha = 1f
+
                             try {
                                 applyPinLayoutAndStyles(pinView)
                             } catch (_: Throwable) {}
@@ -1060,6 +1098,7 @@ object KeypadPhysicsHook {
                                 val pairs = Array(4) { Array(3) { android.util.Pair(0, 0) } }
                                 ensureCachedPinViewFields(pinViewObj.javaClass)
                                 cachedKeysAnimStartStateField?.set(pinViewObj, pairs)
+                                cachedInitAppearAnimedField?.setBoolean(pinViewObj, true)
                             } catch (_: Throwable) {}
 
                             startIos26RadialBloomAnimation(pinView, cfg, density)
@@ -1079,6 +1118,14 @@ object KeypadPhysicsHook {
                                 }
                             }
 
+                            val bloomDuration = cfg.iosBloomDuration.toLong().coerceIn(300L, 1000L)
+                            Handler(Looper.getMainLooper()).postDelayed({
+                                try {
+                                    ensureCachedPinViewFields(pinViewObj.javaClass)
+                                    cachedAppearAnimatingField?.setBoolean(pinViewObj, false)
+                                } catch (_: Throwable) {}
+                            }, bloomDuration + 50L)
+
                             return null
                         }
                     })
@@ -1089,6 +1136,13 @@ object KeypadPhysicsHook {
                             val pinView = pinViewObj as? View ?: return chain.proceed()
                             val cfg = LockScreenConfigHolder.keypad
                             if (!cfg.enabled) return chain.proceed()
+
+                            val rawArgs = chain.args
+                            val runnableArg = if (rawArgs is List<*>) rawArgs.firstOrNull() as? Runnable else (rawArgs as? Array<*>)?.firstOrNull() as? Runnable
+                            val finishRunnable = runnableArg ?: (try {
+                                ensureCachedPinViewFields(pinViewObj.javaClass)
+                                cachedDisappearRunnableField?.get(pinViewObj) as? Runnable
+                            } catch (_: Throwable) { null })
 
                             for (anim in appearAnimators.values) {
                                 anim.cancel()
@@ -1138,9 +1192,7 @@ object KeypadPhysicsHook {
 
                             Handler(Looper.getMainLooper()).postDelayed({
                                 try {
-                                    ensureCachedPinViewFields(pinViewObj.javaClass)
-                                    val runnable = cachedDisappearRunnableField?.get(pinViewObj) as? Runnable
-                                    runnable?.run()
+                                    finishRunnable?.run()
                                 } catch (_: Throwable) {}
                             }, 200L)
 
@@ -1173,9 +1225,12 @@ object KeypadPhysicsHook {
                         }
                     })
                 }
+                Log.d(TAG, "Successfully hooked KeyguardPINView on $pinViewClassName")
+            } catch (_: ClassNotFoundException) {
+                // Expected when class does not exist in the current OS version
+            } catch (t: Throwable) {
+                Log.e(TAG, "KeyguardPINView Liquid Glass hook error on $pinViewClassName", t)
             }
-        } catch (t: Throwable) {
-            Log.e(TAG, "MiuiKeyguardPINView Liquid Glass hook error", t)
         }
 
         // 3. Remove Stock Bouncer Wallpaper Blur: KeyguardPanelViewController
