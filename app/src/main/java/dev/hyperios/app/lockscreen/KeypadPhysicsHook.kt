@@ -782,13 +782,14 @@ object KeypadPhysicsHook {
                         }
                     })
                 }
-                Log.d(TAG, "Successfully hooked NumPadKey touch events on $numPadClassName")
-            } catch (_: ClassNotFoundException) {
-                // Expected when class does not exist in the current OS version
-            } catch (t: Throwable) {
-                Log.e(TAG, "NumPadKey touch hook error on $numPadClassName", t)
             }
+            Log.d(TAG, "Successfully hooked NumPadKey touch events on $numPadClassName")
+        } catch (ignored: ClassNotFoundException) {
+            // Expected when class does not exist in the current OS version
+        } catch (t: Throwable) {
+            Log.e(TAG, "NumPadKey touch hook error on $numPadClassName", t)
         }
+    }
 
         // 2. Hook KeyguardPINView for Liquid Glass 2.0 Button Injection, Sizing & Layout (HyperOS 3 & HyperOS 4)
 
@@ -1225,13 +1226,14 @@ object KeypadPhysicsHook {
                         }
                     })
                 }
-                Log.d(TAG, "Successfully hooked KeyguardPINView on $pinViewClassName")
-            } catch (_: ClassNotFoundException) {
-                // Expected when class does not exist in the current OS version
-            } catch (t: Throwable) {
-                Log.e(TAG, "KeyguardPINView Liquid Glass hook error on $pinViewClassName", t)
             }
+            Log.d(TAG, "Successfully hooked KeyguardPINView on $pinViewClassName")
+        } catch (ignored: ClassNotFoundException) {
+            // Expected when class does not exist in the current OS version
+        } catch (t: Throwable) {
+            Log.e(TAG, "KeyguardPINView Liquid Glass hook error on $pinViewClassName", t)
         }
+    }
 
         // 3. Remove Stock Bouncer Wallpaper Blur: KeyguardPanelViewController
         try {
