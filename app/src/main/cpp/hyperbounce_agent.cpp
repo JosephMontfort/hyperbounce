@@ -129,7 +129,7 @@ static void install_hooks() {
         uint32_t *t = (uint32_t *)tramp_addr;
         t[0] = 0xa9be7bfd; // stp x29, x30, [sp, #-32]!
         t[1] = 0xa90153f3; // stp x19, x20, [sp, #16]
-        t[2] = 910003fd;   // mov x29, sp
+        t[2] = 0x910003fd;   // mov x29, sp
         t[3] = 0x97e22429; // bl 0x13d08a4 (calls getDampingResponse)
         t[4] = 0xaa0003f3; // mov x19, x0
         t[5] = 0xaa0103f4; // mov x20, x1
