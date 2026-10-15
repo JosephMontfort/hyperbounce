@@ -1530,8 +1530,23 @@ object NotificationSheetHook {
                 Log.e(TAG, "Failed to send unlock broadcast", t)
             }
 
-            // HyperOS 4: Trigger in-window launcher unlock animation via KeyguardUnlockAnimationController
+            // HyperOS 4: Trigger in-window launcher unlock animation via Native Agent & Keyguard Controller
             if (dev.hyperios.app.common.DeviceUtils.isHyperOS4) {
+                try {
+                    // 1. Direct trigger via local abstract socket to native agent in com.miui.home
+                    dev.hyperios.app.launcher.NativeHookBridge.triggerUnlockInLauncher()
+
+                    // 2. Dispatch USER_PRESENT broadcast directly to com.miui.home with FOREGROUND flag
+                    val presentIntent = Intent(Intent.ACTION_USER_PRESENT).apply {
+                        setPackage("com.miui.home")
+                        addFlags(Intent.FLAG_RECEIVER_FOREGROUND)
+                    }
+                    context.sendBroadcast(presentIntent)
+                    Log.d(TAG, "HyperOS 4: Triggered native launcher agent & broadcasted USER_PRESENT")
+                } catch (t: Throwable) {
+                    Log.e(TAG, "HyperOS 4: Failed to trigger native launcher agent", t)
+                }
+
                 try {
                     val ctrl = sKeyguardUnlockAnimationController
                     if (ctrl != null) {
