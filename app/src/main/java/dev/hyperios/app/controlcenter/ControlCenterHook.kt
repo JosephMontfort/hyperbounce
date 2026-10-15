@@ -531,6 +531,10 @@ object ControlCenterHook {
     @Synchronized
     fun initPluginHooks(module: XposedModule, classLoader: ClassLoader?) {
         if (classLoader == null || hookedPluginLoaders.contains(classLoader)) return
+        if (dev.hyperios.app.common.DeviceUtils.isHyperOS4) {
+            dev.hyperios.app.controlcenter.hos4.ControlCenterHookHos4.initPluginHooks(module, classLoader)
+            return
+        }
         if (!ControlCenterConfigHolder.config.masterEnabled) {
             Log.i(TAG, "Control Center master toggle disabled. Skipping initPluginHooks.")
             return

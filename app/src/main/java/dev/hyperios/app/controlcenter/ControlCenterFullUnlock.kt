@@ -815,6 +815,10 @@ object ControlCenterFullUnlock {
      * with the new group slot and purges standalone slots.
      */
     fun onGroupCreated(groupId: String, specs: List<String>, context: Context?) {
+        if (dev.hyperios.app.common.DeviceUtils.isHyperOS4) {
+            dev.hyperios.app.controlcenter.hos4.ControlCenterFullUnlockHos4.onGroupCreated(groupId, specs, context)
+            return
+        }
         try {
             val groupSlotId = "group:$groupId"
             val anchorSpec = specs.firstOrNull()
@@ -866,6 +870,10 @@ object ControlCenterFullUnlock {
      * with the member tiles and purges the group slot.
      */
     fun onGroupsDisassembled(removedGroups: List<TileGroup>, context: Context?) {
+        if (dev.hyperios.app.common.DeviceUtils.isHyperOS4) {
+            dev.hyperios.app.controlcenter.hos4.ControlCenterFullUnlockHos4.onGroupsDisassembled(removedGroups, context)
+            return
+        }
         try {
             for (g in removedGroups) {
                 val groupSlotId = "group:${g.id}"
@@ -1180,6 +1188,10 @@ object ControlCenterFullUnlock {
      * Intercepts and reorganizes MainPanelAdapter.contentMap.
      */
     fun reorganizeContentMap(adapter: Any, classLoader: ClassLoader) {
+        if (dev.hyperios.app.common.DeviceUtils.isHyperOS4) {
+            dev.hyperios.app.controlcenter.hos4.ControlCenterFullUnlockHos4.reorganizeContentMap(adapter, classLoader)
+            return
+        }
         if (!ControlCenterConfigHolder.config.isModularEditActive) return
 
         try {

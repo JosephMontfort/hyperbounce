@@ -165,6 +165,10 @@ object ControlCenterConfigHolder {
     val sExpandedTileSpecs = LinkedHashSet<String>().apply {
         add("wifi")
         add("cell")
+        if (dev.hyperios.app.common.DeviceUtils.isHyperOS4) {
+            add("bt")
+            add("quietmode")
+        }
     }
     val sVerticalTileSpecs = LinkedHashSet<String>()
     val sLargeTileSpecs = LinkedHashSet<String>()
@@ -757,6 +761,10 @@ object ControlCenterConfigHolder {
             sExpandedTileSpecs.clear()
             sExpandedTileSpecs.add("wifi")
             sExpandedTileSpecs.add("cell")
+            if (dev.hyperios.app.common.DeviceUtils.isHyperOS4) {
+                sExpandedTileSpecs.add("bt")
+                sExpandedTileSpecs.add("quietmode")
+            }
             sVerticalTileSpecs.clear()
             sLargeTileSpecs.clear()
             sCircularCardSpecs.clear()

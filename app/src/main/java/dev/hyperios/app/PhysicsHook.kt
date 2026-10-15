@@ -96,7 +96,11 @@ class PhysicsHook : XposedModule() {
                             Log.e("HyperiOS", "Failed to bind remote preferences in Control Center Plugin", t)
                         }
                     }
-                    dev.hyperios.app.controlcenter.ControlCenterHook.initPluginHooks(this, param.classLoader)
+                    if (dev.hyperios.app.common.DeviceUtils.isHyperOS4) {
+                        dev.hyperios.app.controlcenter.hos4.ControlCenterHookHos4.initPluginHooks(this, param.classLoader)
+                    } else {
+                        dev.hyperios.app.controlcenter.ControlCenterHook.initPluginHooks(this, param.classLoader)
+                    }
                 }
 
                 param.packageName == "com.miui.home" || param.packageName == "com.mi.android.globallauncher" -> {
