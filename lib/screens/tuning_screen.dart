@@ -70,7 +70,7 @@ class _TuningScreenState extends State<TuningScreen> {
     TuningFeatureItem(
       title: 'Control Centre',
       description: 'Enhanced Control centre customisation',
-      icon: CupertinoIcons.switch_2,
+      icon: CupertinoIcons.slider_horizontal_below_rectangle,
       iconColor: const Color(0xFFFF2D55),
       destinationBuilder: () => const ControlCenterScreen(),
     ),

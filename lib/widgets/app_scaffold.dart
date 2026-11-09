@@ -97,11 +97,13 @@ class AppScaffold extends StatelessWidget {
       ),
       appBar: GlassAppBar.pinned(
         leading: isRoot
-            ? null
-            : GlassBarItem.icon(
-                icon: const Icon(CupertinoIcons.chevron_left, size: 22),
-                onTap: () => Navigator.of(context).pop(),
-              ),
+            ? const []
+            : [
+                GlassBarItem.icon(
+                  icon: const Icon(CupertinoIcons.chevron_left, size: 22),
+                  onTap: () => Navigator.of(context).pop(),
+                ),
+              ],
         title: Text(
           title,
           style: const TextStyle(

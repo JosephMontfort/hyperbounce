@@ -102,7 +102,7 @@ class _RootNavigationScreenState extends State<RootNavigationScreen> {
           ),
         ],
         selectedIndex: _selectedTabIndex,
-        onTap: _onTabSelected,
+        onTabSelected: _onTabSelected,
       ),
       body: PageView(
         controller: _pageController,
