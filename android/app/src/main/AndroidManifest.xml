@@ -16,6 +16,10 @@
         android:largeHeap="true"
         android:supportsRtl="true">
 
+        <meta-data
+            android:name="flutterEmbedding"
+            android:value="2" />
+
         <!-- Companion settings UI. Purely additive: LSPosed loads hooks via
              java_init.list/scope.list regardless of this activity's presence, so this
              does not change hook behavior. See docs/UI_DESIGN_NOTES.md. -->
@@ -24,7 +28,13 @@
             android:exported="true"
             android:label="@string/app_name"
             android:theme="@android:style/Theme.Material.NoActionBar"
-            android:windowSoftInputMode="adjustResize" />
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
+            android:hardwareAccelerated="true"
+            android:windowSoftInputMode="adjustResize">
+            <meta-data
+                android:name="io.flutter.embedding.android.NormalTheme"
+                android:resource="@android:style/Theme.Material.NoActionBar" />
+        </activity>
 
         <!-- Monet Icon Launcher Entry (Default enabled) -->
         <activity-alias
