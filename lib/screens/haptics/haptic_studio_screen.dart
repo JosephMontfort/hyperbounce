@@ -114,7 +114,7 @@ class HapticStudioScreen extends StatelessWidget {
                         context: context,
                         builder: (ctx) => CupertinoAlertDialog(
                           title: const Text('Export Ringtone Module'),
-                          message: const Text(
+                          content: const Text(
                               'Haptic track successfully packaged for system audio server.'),
                           actions: [
                             CupertinoDialogAction(

@@ -74,7 +74,7 @@ class SafeModeScreen extends StatelessWidget {
                         context: context,
                         builder: (ctx) => CupertinoAlertDialog(
                           title: const Text('Reset Crash Aliases?'),
-                          message: const Text(
+                          content: const Text(
                               'This will re-enable all previously disabled feature aliases that crashed repeatedly.'),
                           actions: [
                             CupertinoDialogAction(

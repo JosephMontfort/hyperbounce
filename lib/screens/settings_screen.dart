@@ -109,7 +109,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           context: context,
                           builder: (ctx) => CupertinoAlertDialog(
                             title: const Text('Backup Exported'),
-                            message: const Text(
+                            content: const Text(
                                 'Settings JSON has been copied to your clipboard.'),
                             actions: [
                               CupertinoDialogAction(
@@ -126,7 +126,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           context: context,
                           builder: (ctx) => CupertinoAlertDialog(
                             title: const Text('Backup Failed'),
-                            message: Text('$e'),
+                            content: Text('$e'),
                             actions: [
                               CupertinoDialogAction(
                                 child: const Text('OK'),
@@ -158,7 +158,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           context: context,
                           builder: (ctx) => CupertinoAlertDialog(
                             title: Text(ok ? 'Success' : 'Invalid Backup'),
-                            message: Text(ok
+                            content: Text(ok
                                 ? 'Settings successfully restored.'
                                 : 'Failed to apply settings JSON.'),
                             actions: [
@@ -176,7 +176,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           context: context,
                           builder: (ctx) => CupertinoAlertDialog(
                             title: const Text('Restore Failed'),
-                            message: Text('$e'),
+                            content: Text('$e'),
                             actions: [
                               CupertinoDialogAction(
                                 child: const Text('OK'),

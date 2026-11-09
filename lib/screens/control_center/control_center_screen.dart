@@ -228,7 +228,7 @@ class ControlCenterScreen extends StatelessWidget {
                         context: context,
                         builder: (ctx) => CupertinoAlertDialog(
                           title: const Text('Reset Layout to Stock?'),
-                          message: const Text(
+                          content: const Text(
                               'This will reset the custom sizing of all tiles, media player and sliders to stock, and dissolve all dynamic groups.'),
                           actions: [
                             CupertinoDialogAction(
