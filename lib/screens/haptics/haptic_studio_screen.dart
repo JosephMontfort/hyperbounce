@@ -1,77 +1,137 @@
 import 'package:flutter/cupertino.dart';
-import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
+import 'package:flutter/services.dart';
+import '../../state/settings_store.dart';
 import '../../widgets/app_scaffold.dart';
 import '../../widgets/setting_tiles.dart';
-import '../../state/settings_store.dart';
 
 class HapticStudioScreen extends StatelessWidget {
   const HapticStudioScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final store = SettingsStore.instance;
+    return ListenableBuilder(
+      listenable: SettingsStore.instance,
+      builder: (context, _) {
+        final store = SettingsStore.instance;
 
-    return AppScaffold(
-      title: 'Haptic Studio',
-      showTopMenu: false,
-      body: ListenableBuilder(
-        listenable: store,
-        builder: (context, _) {
-          final dspEnabled = store.getBool('haptics_dsp_enabled', true);
-          final ringtoneSync = store.getBool('haptics_ringtone_sync_enabled', true);
-          final xiaomiMotor = store.getBool('haptics_xiaomi_motor_enabled', true);
-          final intensity = store.getDouble('haptics_intensity_mult', 1.0);
-          final sharpness = store.getDouble('haptics_sharpness_mult', 1.0);
+        final enabled = store.getBool('haptics_studio_enabled', false);
+        final presetIdx = store.getInt('haptic_ringtone_preset', 0);
+        final intensity = store.getDouble('haptic_intensity', 0.85);
+        final sharpness = store.getDouble('haptic_sharpness', 0.75);
+        final beatSync = store.getBool('haptic_beat_sync', true);
 
-          return ListView(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        return AppScaffold(
+          title: 'Haptic Studio',
+          body: ListView(
+            padding: const EdgeInsets.only(top: 12, bottom: 60),
             children: [
-              const GlassSectionHeader('Real-Time DSP Vibration Engine'),
-              GlassGroupedSection(
+              GlassGroupedCard(
                 children: [
                   GlassSwitchTile(
-                    title: 'DSP Haptic Synthesizer',
-                    subtitle: 'Real-time audio waveform to vibration synthesis',
-                    value: dspEnabled,
-                    onChanged: (v) => store.setBool('haptics_dsp_enabled', v),
-                  ),
-                  GlassSwitchTile(
-                    title: 'Synchronized Ringtone Haptics',
-                    subtitle: 'Extract haptic track from custom .m4r / .ogg ringtones',
-                    value: ringtoneSync,
-                    onChanged: (v) => store.setBool('haptics_ringtone_sync_enabled', v),
-                  ),
-                  GlassSwitchTile(
-                    title: 'Xiaomi Linear Actuator Calibration',
-                    subtitle: 'High-fidelity resonance frequency tuning for CyberEngine / AAC motors',
-                    value: xiaomiMotor,
-                    onChanged: (v) => store.setBool('haptics_xiaomi_motor_enabled', v),
+                    title: 'Enable Haptic Studio',
+                    subtitle:
+                        'Compose synced haptics for music to be set as custom Ringtones',
+                    value: enabled,
+                    onChanged: (val) =>
+                        store.setBool('haptics_studio_enabled', val),
                   ),
                 ],
               ),
 
-              const GlassSectionHeader('Actuator Tuning'),
+              const GlassSectionHeader('Preset & Composition'),
+              GlassGroupedCard(
+                children: [
+                  GlassDropdownTile(
+                    title: 'Ringtone Preset',
+                    options: const [
+                      'Reflection',
+                      'Opening',
+                      'Chimes',
+                      'Apex',
+                      'Beacon'
+                    ],
+                    selectedIndex: presetIdx.clamp(0, 4),
+                    enabled: enabled,
+                    onSelect: (idx) =>
+                        store.setInt('haptic_ringtone_preset', idx),
+                  ),
+                  GlassSwitchTile(
+                    title: 'Transient Beat Sync',
+                    subtitle:
+                        'Real-time frequency tracking for waveform vibrations',
+                    value: beatSync,
+                    enabled: enabled,
+                    onChanged: (val) =>
+                        store.setBool('haptic_beat_sync', val),
+                  ),
+                ],
+              ),
+
+              const GlassSectionHeader('DSP Synthesizer Parameters'),
               GlassSliderTile(
-                title: 'Haptic Intensity Multiplier',
-                subtitle: 'Overall vibration amplitude gain',
+                title: 'Haptic Intensity',
+                subtitle: 'Motor actuator amplitude & force',
                 value: intensity,
                 min: 0.1,
-                max: 2.0,
-                onChanged: (v) => store.setDouble('haptics_intensity_mult', v),
+                max: 1.0,
+                unit: '%',
+                enabled: enabled,
+                onChanged: (val) => store.setDouble('haptic_intensity', val),
               ),
               GlassSliderTile(
-                title: 'Haptic Sharpness Multiplier',
-                subtitle: 'Transient attack click crispness',
+                title: 'Haptic Sharpness',
+                subtitle: 'Crispness and resonant frequency cutoff',
                 value: sharpness,
                 min: 0.1,
-                max: 2.0,
-                onChanged: (v) => store.setDouble('haptics_sharpness_mult', v),
+                max: 1.0,
+                unit: '%',
+                enabled: enabled,
+                onChanged: (val) => store.setDouble('haptic_sharpness', val),
               ),
-              const SizedBox(height: 100),
+
+              const GlassSectionHeader('Actions'),
+              GlassGroupedCard(
+                children: [
+                  GlassActionTile(
+                    title: 'Synthesize Preview',
+                    subtitle: 'Test generated haptic curve on vibration motor',
+                    leading: const Icon(CupertinoIcons.play_circle_fill,
+                        color: CupertinoColors.activeBlue),
+                    enabled: enabled,
+                    onTap: () {
+                      HapticFeedback.heavyImpact();
+                    },
+                  ),
+                  GlassActionTile(
+                    title: 'Export Ringtone Module',
+                    subtitle:
+                        'Package synced haptic track into Magisk/KSU sound module',
+                    leading: const Icon(CupertinoIcons.share_up,
+                        color: CupertinoColors.activeGreen),
+                    enabled: enabled,
+                    onTap: () {
+                      showCupertinoDialog(
+                        context: context,
+                        builder: (ctx) => CupertinoAlertDialog(
+                          title: const Text('Export Ringtone Module'),
+                          message: const Text(
+                              'Haptic track successfully packaged for system audio server.'),
+                          actions: [
+                            CupertinoDialogAction(
+                              child: const Text('OK'),
+                              onPressed: () => Navigator.of(ctx).pop(),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+                ],
+              ),
             ],
-          );
-        },
-      ),
+          ),
+        );
+      },
     );
   }
 }

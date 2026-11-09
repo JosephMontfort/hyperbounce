@@ -2,8 +2,8 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 import '../state/settings_store.dart';
-import '../bridge/native_bridge.dart';
 import '../widgets/setting_tiles.dart';
+import 'safemode/safe_mode_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -13,214 +13,203 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
-  final _store = SettingsStore.instance;
-
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
-      listenable: _store,
+      listenable: SettingsStore.instance,
       builder: (context, _) {
-        final isBound = _store.isBound;
-        final hotReload = _store.getBool('hot_reload_enabled', false);
-        final settingsAppEntry = _store.getBool('settings_app_entry_enabled', false);
-        final iconStyle = _store.getString('app_icon_style', 'Flat');
-        final scoped = _store.scopedPackages;
+        final store = SettingsStore.instance;
+
+        final appTheme = store.getInt('app_theme', 0);
+        final componentStyle = store.getInt('component_style', 0);
+        final miuixBottomBar = store.getBool('miuix_liquid_glass_bottom_bar', true);
+        final appIconStyle = store.getInt('app_icon_style', 0);
+        final hapticsEnabled = store.getBool('haptics_enabled', true);
+
+        final hotReload = store.getBool('hot_reload_enabled', false);
+        final settingsAppEntry = store.getBool('settings_app_entry_enabled', true);
 
         return ListView(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          padding: const EdgeInsets.only(top: 8, bottom: 120),
           children: [
-            const GlassSectionHeader('Module Status'),
-            GlassGroupedSection(
+            // --- Card 1: Appearance ---
+            const GlassSectionHeader('Appearance'),
+            GlassGroupedCard(
               children: [
-                GlassListTile(
-                  leading: Icon(
-                    isBound ? CupertinoIcons.checkmark_seal_fill : CupertinoIcons.exclamationmark_shield_fill,
-                    color: isBound ? CupertinoColors.activeGreen : CupertinoColors.systemRed,
-                  ),
-                  title: const Text('LSPosed Framework'),
-                  subtitle: Text(isBound
-                      ? 'Remote Preferences Service Active'
-                      : 'Service Unbound (Local Preferences Mode)'),
-                  trailing: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: (isBound ? CupertinoColors.activeGreen : CupertinoColors.systemRed)
-                          .withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(
-                      isBound ? 'BOUND' : 'INACTIVE',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                        color: isBound ? CupertinoColors.activeGreen : CupertinoColors.systemRed,
-                      ),
-                    ),
-                  ),
+                GlassDropdownTile(
+                  title: 'App Theme',
+                  options: const ['Follow System', 'Light', 'Dark'],
+                  selectedIndex: appTheme.clamp(0, 2),
+                  onSelect: (index) => store.setInt('app_theme', index),
                 ),
-                GlassListTile(
-                  leading: const Icon(CupertinoIcons.square_stack_3d_up, color: CupertinoColors.activeBlue),
-                  title: const Text('Active Scope'),
-                  subtitle: Text(scoped.isNotEmpty
-                      ? '${scoped.length} scoped packages attached'
-                      : 'No scope configured in LSPosed manager'),
+                GlassDropdownTile(
+                  title: 'Component Style',
+                  options: const ['Liquid Glass', 'MIUIX'],
+                  selectedIndex: componentStyle.clamp(0, 1),
+                  onSelect: (index) => store.setInt('component_style', index),
+                ),
+                if (componentStyle == 1)
+                  GlassSwitchTile(
+                    title: 'Liquid Glass Bottom Bar',
+                    subtitle: 'Use Liquid Glass style for the floating nav bar',
+                    value: miuixBottomBar,
+                    onChanged: (val) =>
+                        store.setBool('miuix_liquid_glass_bottom_bar', val),
+                  ),
+                GlassDropdownTile(
+                  title: 'App Icon Style',
+                  options: const ['Monet', 'Flat'],
+                  selectedIndex: appIconStyle.clamp(0, 1),
+                  onSelect: (index) => store.setInt('app_icon_style', index),
+                ),
+                GlassSwitchTile(
+                  title: 'Haptic Feedback',
+                  value: hapticsEnabled,
+                  onChanged: (val) => store.setBool('haptics_enabled', val),
                 ),
               ],
             ),
 
-            const GlassSectionHeader('Preferences Synchronization'),
-            GlassGroupedSection(
+            // --- Card 2: System Integration ---
+            const GlassSectionHeader('System Integration'),
+            GlassGroupedCard(
               children: [
                 GlassSwitchTile(
-                  leading: const Icon(CupertinoIcons.bolt_horizontal_fill, color: CupertinoColors.systemOrange),
-                  title: 'Instant Hot Reload',
-                  subtitle: 'Broadcast setting edits directly to active processes',
+                  title: 'Hot Reloading',
+                  subtitle:
+                      'Apply visual changes immediately without restarting apps. Turning off saves battery (apps require restart to apply changes).',
                   value: hotReload,
-                  onChanged: (v) => _store.setBool('hot_reload_enabled', v),
+                  onChanged: (val) => store.setBool('hot_reload_enabled', val),
                 ),
                 GlassSwitchTile(
-                  leading: const Icon(CupertinoIcons.slider_horizontal_below_rectangle, color: CupertinoColors.systemPurple),
-                  title: 'Settings App Entry',
-                  subtitle: 'Embed Hyper iOS launcher directly in System Settings',
+                  title: 'Add entry in Settings',
+                  subtitle: 'Display HyperiOS in system Settings app',
                   value: settingsAppEntry,
-                  onChanged: (v) => _store.setBool('settings_app_entry_enabled', v),
+                  onChanged: (val) =>
+                      store.setBool('settings_app_entry_enabled', val),
                 ),
               ],
             ),
 
-            const GlassSectionHeader('Appearance & Launcher Icon'),
-            GlassGroupedSection(
-              children: [
-                GlassListTile(
-                  leading: const Icon(CupertinoIcons.app_badge, color: CupertinoColors.systemIndigo),
-                  title: const Text('App Launcher Icon'),
-                  subtitle: Text('Current: $iconStyle'),
-                  trailing: CupertinoSlidingSegmentedControl<String>(
-                    groupValue: iconStyle,
-                    children: const {
-                      'Flat': Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 10),
-                        child: Text('Flat', style: TextStyle(fontSize: 13)),
-                      ),
-                      'Monet': Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 10),
-                        child: Text('Monet', style: TextStyle(fontSize: 13)),
-                      ),
-                    },
-                    onValueChanged: (val) {
-                      if (val != null) {
-                        _store.setString('app_icon_style', val);
-                        NativeBridge.setAppIconStyle(val);
-                      }
-                    },
-                  ),
-                ),
-              ],
-            ),
-
+            // --- Card 3: Backup & Restore ---
             const GlassSectionHeader('Backup & Restore'),
-            GlassGroupedSection(
+            GlassGroupedCard(
               children: [
-                GlassListTile(
-                  leading: const Icon(CupertinoIcons.square_arrow_up, color: CupertinoColors.activeBlue),
-                  title: const Text('Export Settings (JSON)'),
-                  subtitle: const Text('Copy full JSON snapshot to clipboard'),
+                GlassActionTile(
+                  title: 'Backup Module Settings',
+                  subtitle: 'Export current settings configuration as JSON',
+                  leading: const Icon(CupertinoIcons.arrow_down_doc,
+                      color: CupertinoColors.activeBlue),
                   onTap: () async {
-                    final json = await _store.exportJson();
-                    await Clipboard.setData(ClipboardData(text: json));
-                    if (context.mounted) {
-                      showCupertinoDialog(
-                        context: context,
-                        builder: (_) => CupertinoAlertDialog(
-                          title: const Text('Exported'),
-                          content: const Text('Settings JSON copied to clipboard.'),
-                          actions: [
-                            CupertinoDialogAction(
-                              child: const Text('OK'),
-                              onPressed: () => Navigator.pop(context),
-                            ),
-                          ],
-                        ),
-                      );
-                    }
-                  },
-                ),
-                GlassListTile(
-                  leading: const Icon(CupertinoIcons.square_arrow_down, color: CupertinoColors.activeGreen),
-                  title: const Text('Import Settings (JSON)'),
-                  subtitle: const Text('Paste and restore JSON snapshot from clipboard'),
-                  onTap: () async {
-                    final data = await Clipboard.getData('text/plain');
-                    if (data?.text == null || data!.text!.isEmpty) {
+                    try {
+                      final json = await store.exportJson();
+                      await Clipboard.setData(ClipboardData(text: json));
                       if (context.mounted) {
                         showCupertinoDialog(
                           context: context,
-                          builder: (_) => CupertinoAlertDialog(
-                            title: const Text('Clipboard Empty'),
-                            content: const Text('Please copy a valid settings JSON before importing.'),
+                          builder: (ctx) => CupertinoAlertDialog(
+                            title: const Text('Backup Exported'),
+                            message: const Text(
+                                'Settings JSON has been copied to your clipboard.'),
                             actions: [
                               CupertinoDialogAction(
                                 child: const Text('OK'),
-                                onPressed: () => Navigator.pop(context),
+                                onPressed: () => Navigator.of(ctx).pop(),
                               ),
                             ],
                           ),
                         );
                       }
-                      return;
-                    }
-                    final ok = await _store.importJson(data.text!);
-                    if (context.mounted) {
-                      showCupertinoDialog(
-                        context: context,
-                        builder: (_) => CupertinoAlertDialog(
-                          title: Text(ok ? 'Success' : 'Import Failed'),
-                          content: Text(ok
-                              ? 'Settings restored successfully!'
-                              : 'Could not parse JSON. Check format.'),
-                          actions: [
-                            CupertinoDialogAction(
-                              child: const Text('OK'),
-                              onPressed: () => Navigator.pop(context),
-                            ),
-                          ],
-                        ),
-                      );
+                    } catch (e) {
+                      if (context.mounted) {
+                        showCupertinoDialog(
+                          context: context,
+                          builder: (ctx) => CupertinoAlertDialog(
+                            title: const Text('Backup Failed'),
+                            message: Text('$e'),
+                            actions: [
+                              CupertinoDialogAction(
+                                child: const Text('OK'),
+                                onPressed: () => Navigator.of(ctx).pop(),
+                              ),
+                            ],
+                          ),
+                        );
+                      }
                     }
                   },
                 ),
-                GlassListTile(
-                  leading: const Icon(CupertinoIcons.arrow_counterclockwise, color: CupertinoColors.systemRed),
-                  title: const Text('Reset All Settings to Defaults'),
-                  subtitle: const Text('Restore factory values across local and remote prefs'),
+                GlassActionTile(
+                  title: 'Restore Module Settings',
+                  subtitle: 'Import settings from clipboard JSON',
+                  leading: const Icon(CupertinoIcons.arrow_up_doc,
+                      color: CupertinoColors.activeGreen),
+                  onTap: () async {
+                    try {
+                      final data = await Clipboard.getData(Clipboard.kTextPlain);
+                      final text = data?.text ?? '';
+                      if (text.isEmpty || !text.trim().startsWith('{')) {
+                        throw Exception(
+                            'Clipboard does not contain valid settings JSON.');
+                      }
+                      final ok = await store.importJson(text);
+                      if (context.mounted) {
+                        showCupertinoDialog(
+                          context: context,
+                          builder: (ctx) => CupertinoAlertDialog(
+                            title: Text(ok ? 'Success' : 'Invalid Backup'),
+                            message: Text(ok
+                                ? 'Settings successfully restored.'
+                                : 'Failed to apply settings JSON.'),
+                            actions: [
+                              CupertinoDialogAction(
+                                child: const Text('OK'),
+                                onPressed: () => Navigator.of(ctx).pop(),
+                              ),
+                            ],
+                          ),
+                        );
+                      }
+                    } catch (e) {
+                      if (context.mounted) {
+                        showCupertinoDialog(
+                          context: context,
+                          builder: (ctx) => CupertinoAlertDialog(
+                            title: const Text('Restore Failed'),
+                            message: Text('$e'),
+                            actions: [
+                              CupertinoDialogAction(
+                                child: const Text('OK'),
+                                onPressed: () => Navigator.of(ctx).pop(),
+                              ),
+                            ],
+                          ),
+                        );
+                      }
+                    }
+                  },
+                ),
+              ],
+            ),
+
+            // --- Card 4: Diagnostics & Safety ---
+            const GlassSectionHeader('Diagnostics & Safety'),
+            GlassGroupedCard(
+              children: [
+                GlassNavTile(
+                  leading: const Icon(CupertinoIcons.shield_lefthalf_fill,
+                      color: CupertinoColors.systemRed),
+                  title: 'Safe Mode & Crash Recovery',
+                  subtitle: 'Module overrides, rescue loop mitigation',
                   onTap: () {
-                    showCupertinoDialog(
-                      context: context,
-                      builder: (_) => CupertinoAlertDialog(
-                        title: const Text('Reset to Defaults?'),
-                        content: const Text('This will reset all your tuning and preferences to initial values.'),
-                        actions: [
-                          CupertinoDialogAction(
-                            isDestructiveAction: true,
-                            child: const Text('Reset'),
-                            onPressed: () async {
-                              Navigator.pop(context);
-                              await _store.resetToDefaults();
-                            },
-                          ),
-                          CupertinoDialogAction(
-                            isDefaultAction: true,
-                            child: const Text('Cancel'),
-                            onPressed: () => Navigator.pop(context),
-                          ),
-                        ],
-                      ),
+                    Navigator.of(context).push(
+                      CupertinoPageRoute(
+                          builder: (_) => const SafeModeScreen()),
                     );
                   },
                 ),
               ],
             ),
-            const SizedBox(height: 100),
           ],
         );
       },

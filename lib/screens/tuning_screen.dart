@@ -1,132 +1,200 @@
 import 'package:flutter/cupertino.dart';
 import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
+import '../state/settings_store.dart';
 import '../widgets/setting_tiles.dart';
-import 'nav_bars/apps_list_screen.dart';
-import 'toggles_sliders/toggles_screen.dart';
-import 'toggles_sliders/sliders_screen.dart';
-import 'lockscreen/lockscreen_screen.dart';
-import 'launcher/launcher_screen.dart';
+
+import 'toggles_sliders/engine_screen.dart';
+import 'lockscreen/lockscreen_stuffs_screen.dart';
+import 'launcher/system_launcher_stuffs_screen.dart';
+import 'notification/notification_center_screen.dart';
 import 'control_center/control_center_screen.dart';
+import 'nav_bars/apps_list_screen.dart';
 import 'caller/caller_screen.dart';
 import 'haptics/haptic_studio_screen.dart';
-import 'safemode/safe_mode_screen.dart';
 
-class TuningScreen extends StatelessWidget {
+class TuningFeatureItem {
+  final String title;
+  final String description;
+  final IconData icon;
+  final Color iconColor;
+  final Widget Function() destinationBuilder;
+
+  const TuningFeatureItem({
+    required this.title,
+    required this.description,
+    required this.icon,
+    required this.iconColor,
+    required this.destinationBuilder,
+  });
+}
+
+class TuningScreen extends StatefulWidget {
   const TuningScreen({super.key});
 
   @override
+  State<TuningScreen> createState() => _TuningScreenState();
+}
+
+class _TuningScreenState extends State<TuningScreen> {
+  String _searchQuery = '';
+
+  static final List<TuningFeatureItem> _features = [
+    TuningFeatureItem(
+      title: 'Toggles and Sliders',
+      description: 'iOS 26 style toggles and sliders in system apps',
+      icon: CupertinoIcons.slider_horizontal_3,
+      iconColor: const Color(0xFF34C759),
+      destinationBuilder: () => const EngineScreen(),
+    ),
+    TuningFeatureItem(
+      title: 'LockScreen Stuffs',
+      description: 'iOS style liquid glass aesthetics on lockscreen and Pinpad',
+      icon: CupertinoIcons.lock_shield,
+      iconColor: const Color(0xFFAF52DE),
+      destinationBuilder: () => const LockscreenStuffsScreen(),
+    ),
+    TuningFeatureItem(
+      title: 'System Launcher Stuffs',
+      description: 'App transitions and Screen Unlock animation tuning',
+      icon: CupertinoIcons.square_grid_2x2,
+      iconColor: const Color(0xFF5856D6),
+      destinationBuilder: () => const SystemLauncherStuffsScreen(),
+    ),
+    TuningFeatureItem(
+      title: 'Notification Centre',
+      description: 'iOS 26 inspired aesthetics on Notification centre',
+      icon: CupertinoIcons.bell_fill,
+      iconColor: const Color(0xFFFF9500),
+      destinationBuilder: () => const NotificationCenterScreen(),
+    ),
+    TuningFeatureItem(
+      title: 'Control Centre',
+      description: 'Enhanced Control centre customisation',
+      icon: CupertinoIcons.switch_2,
+      iconColor: const Color(0xFFFF2D55),
+      destinationBuilder: () => const ControlCenterScreen(),
+    ),
+    TuningFeatureItem(
+      title: 'Floating Navigation Bar',
+      description:
+          'Liquid Glass Floating navigation bar in Instagram, WhatsApp and Youtube',
+      icon: CupertinoIcons.compass,
+      iconColor: const Color(0xFF007AFF),
+      destinationBuilder: () => const AppsListScreen(),
+    ),
+    TuningFeatureItem(
+      title: 'Dialer and Caller Screen',
+      description:
+          'Swipe gestures on dialer and iOS style full screen incoming calls',
+      icon: CupertinoIcons.phone_fill,
+      iconColor: const Color(0xFF30B0C7),
+      destinationBuilder: () => const CallerScreen(),
+    ),
+    TuningFeatureItem(
+      title: 'Haptic Studio',
+      description:
+          'Compose synced haptics for music to be set as custom Ringtones',
+      icon: CupertinoIcons.waveform,
+      iconColor: const Color(0xFFFFCC00),
+      destinationBuilder: () => const HapticStudioScreen(),
+    ),
+  ];
+
+  @override
   Widget build(BuildContext context) {
+    final store = SettingsStore.instance;
+    final isModuleActivated = store.isBound;
+
+    final filtered = _searchQuery.trim().isEmpty
+        ? _features
+        : _features.where((f) {
+            final q = _searchQuery.toLowerCase();
+            return f.title.toLowerCase().contains(q) ||
+                f.description.toLowerCase().contains(q);
+          }).toList();
+
     return ListView(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      padding: const EdgeInsets.only(top: 8, bottom: 120),
       children: [
-        const GlassSectionHeader('Interface Modules'),
-        GlassGroupedSection(
-          children: [
-            GlassNavTile(
-              leading: const Icon(CupertinoIcons.compass, color: CupertinoColors.activeBlue),
-              title: 'Floating Navigation Bars',
-              subtitle: 'Instagram, WhatsApp, YouTube liquid glass tabs',
-              onTap: () {
-                Navigator.of(context).push(
-                  CupertinoPageRoute(builder: (_) => const AppsListScreen()),
-                );
-              },
+        // LSPosed Module Binding Status Warning
+        if (!isModuleActivated)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+            child: GlassContainer.card(
+              surfaceStyle: GlassSurfaceStyle.solid,
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: const [
+                  Text(
+                    'This module is not activated',
+                    style: TextStyle(
+                      fontSize: 16.5,
+                      fontWeight: FontWeight.bold,
+                      color: CupertinoColors.systemRed,
+                    ),
+                  ),
+                  SizedBox(height: 4),
+                  Text(
+                    'Please enable this module in LSPosed and restart this app.',
+                    style: TextStyle(
+                      fontSize: 13.5,
+                      color: CupertinoColors.secondaryLabel,
+                    ),
+                  ),
+                ],
+              ),
             ),
-            GlassNavTile(
-              leading: const Icon(CupertinoIcons.switch_camera, color: CupertinoColors.activeGreen),
-              title: 'Liquid Toggles',
-              subtitle: 'iOS jump animation, spring physics, glass rim',
-              onTap: () {
-                Navigator.of(context).push(
-                  CupertinoPageRoute(builder: (_) => const TogglesScreen()),
-                );
-              },
-            ),
-            GlassNavTile(
-              leading: const Icon(CupertinoIcons.slider_horizontal_3, color: CupertinoColors.systemOrange),
-              title: 'Liquid Sliders',
-              subtitle: 'Jelly squash/stretch thumb, refraction, haptic ticks',
-              onTap: () {
-                Navigator.of(context).push(
-                  CupertinoPageRoute(builder: (_) => const SlidersScreen()),
-                );
-              },
-            ),
-          ],
+          ),
+
+        // iOS Search Bar
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: GlassSearchBar(
+            placeholder: 'Search',
+            surfaceStyle: GlassSurfaceStyle.solid,
+            onChanged: (val) => setState(() => _searchQuery = val),
+          ),
         ),
 
-        const GlassSectionHeader('System & Lockscreen'),
-        GlassGroupedSection(
-          children: [
-            GlassNavTile(
-              leading: const Icon(CupertinoIcons.lock_shield, color: CupertinoColors.systemPurple),
-              title: 'Lockscreen & Pinpad',
-              subtitle: 'Liquid sheet, lighting, bloom, button stretch',
-              onTap: () {
-                Navigator.of(context).push(
-                  CupertinoPageRoute(builder: (_) => const LockscreenScreen()),
-                );
-              },
-            ),
-            GlassNavTile(
-              leading: const Icon(CupertinoIcons.circle_grid_hex, color: CupertinoColors.systemIndigo),
-              title: 'Launcher & Unlock Kinetics',
-              subtitle: 'Cascade bounce, radial kinetics, 3D z-depth',
-              onTap: () {
-                Navigator.of(context).push(
-                  CupertinoPageRoute(builder: (_) => const LauncherScreen()),
-                );
-              },
-            ),
-            GlassNavTile(
-              leading: const Icon(CupertinoIcons.rectangle_grid_2x2, color: CupertinoColors.systemPink),
-              title: 'Control Center & Flashlight',
-              subtitle: 'Tile grouping, fluid resize, 2D grid engine',
-              onTap: () {
-                Navigator.of(context).push(
-                  CupertinoPageRoute(builder: (_) => const ControlCenterScreen()),
-                );
-              },
-            ),
-          ],
-        ),
+        const SizedBox(height: 4),
 
-        const GlassSectionHeader('Calling & Feedback'),
-        GlassGroupedSection(
-          children: [
-            GlassNavTile(
-              leading: const Icon(CupertinoIcons.phone_fill, color: CupertinoColors.systemTeal),
-              title: 'Caller Screen & Dialer',
-              subtitle: 'iOS incoming call slider, swipe gestures',
+        // The 8 Core Feature Items
+        GlassGroupedCard(
+          children: filtered.map((item) {
+            return GlassListTile(
+              leading: Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  color: item.iconColor.withValues(alpha: 0.18),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(item.icon, size: 19, color: item.iconColor),
+              ),
+              title: Text(
+                item.title,
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              subtitle: Text(
+                item.description,
+                style: const TextStyle(
+                  fontSize: 13,
+                  color: CupertinoColors.secondaryLabel,
+                ),
+              ),
+              trailing: GlassListTile.chevron,
               onTap: () {
                 Navigator.of(context).push(
-                  CupertinoPageRoute(builder: (_) => const CallerScreen()),
+                  CupertinoPageRoute(builder: (_) => item.destinationBuilder()),
                 );
               },
-            ),
-            GlassNavTile(
-              leading: const Icon(CupertinoIcons.waveform, color: CupertinoColors.systemYellow),
-              title: 'Haptic Studio',
-              subtitle: 'DSP synthesizer, synchronized ringtone haptics',
-              onTap: () {
-                Navigator.of(context).push(
-                  CupertinoPageRoute(builder: (_) => const HapticStudioScreen()),
-                );
-              },
-            ),
-            GlassNavTile(
-              leading: const Icon(CupertinoIcons.shield_lefthalf_fill, color: CupertinoColors.systemRed),
-              title: 'Safe Mode & Diagnostics',
-              subtitle: 'Crash protection, loop detection, overrides',
-              onTap: () {
-                Navigator.of(context).push(
-                  CupertinoPageRoute(builder: (_) => const SafeModeScreen()),
-                );
-              },
-            ),
-          ],
+            );
+          }).toList(),
         ),
-        const SizedBox(height: 100),
       ],
     );
   }

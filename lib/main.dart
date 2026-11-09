@@ -2,12 +2,10 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 
-import 'bridge/native_bridge.dart';
 import 'state/settings_store.dart';
 import 'widgets/app_scaffold.dart';
 import 'screens/tuning_screen.dart';
 import 'screens/settings_screen.dart';
-import 'screens/about_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -15,11 +13,11 @@ void main() async {
   // Initialize the Liquid Glass fragment shader engine & physics
   await LiquidGlassWidgets.initialize();
 
-  // Initialize native SharedPreferences & LSPosed remote preferences bridge
+  // Initialize native SharedPreferences & LSPosed bridge
   final store = SettingsStore.instance;
   await store.initialize();
 
-  // Set transparent status bar & navigation bar
+  // Set transparent system bars for edge-to-edge experience
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
       statusBarColor: CupertinoColors.transparent,
@@ -42,7 +40,7 @@ class HyperiOSApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return CupertinoApp(
-      title: 'Hyper iOS',
+      title: 'HyperiOS',
       debugShowCheckedModeBanner: false,
       theme: const CupertinoThemeData(
         brightness: Brightness.dark,
@@ -68,9 +66,10 @@ class _RootNavigationScreenState extends State<RootNavigationScreen> {
   int _selectedTabIndex = 0;
   final PageController _pageController = PageController();
 
-  final List<String> _titles = const ['Tuning', 'Settings', 'About'];
+  final List<String> _titles = const ['HyperiOS', 'Settings'];
 
   void _onTabSelected(int index) {
+    if (_selectedTabIndex == index) return;
     setState(() => _selectedTabIndex = index);
     _pageController.animateToPage(
       index,
@@ -88,6 +87,7 @@ class _RootNavigationScreenState extends State<RootNavigationScreen> {
   @override
   Widget build(BuildContext context) {
     return AppScaffold(
+      isRoot: true,
       title: _titles[_selectedTabIndex],
       showTopMenu: true,
       bottomBar: GlassTabBar.bottom(
@@ -100,24 +100,16 @@ class _RootNavigationScreenState extends State<RootNavigationScreen> {
             icon: Icon(CupertinoIcons.gear_alt),
             label: 'Settings',
           ),
-          GlassTab(
-            icon: Icon(CupertinoIcons.info_circle),
-            label: 'About',
-          ),
         ],
         selectedIndex: _selectedTabIndex,
-        onTabSelected: _onTabSelected,
+        onTap: _onTabSelected,
       ),
       body: PageView(
         controller: _pageController,
-        onPageChanged: (idx) {
-          setState(() => _selectedTabIndex = idx);
-        },
-        physics: const BouncingScrollPhysics(),
+        onPageChanged: (index) => setState(() => _selectedTabIndex = index),
         children: const [
           TuningScreen(),
           SettingsScreen(),
-          AboutScreen(),
         ],
       ),
     );

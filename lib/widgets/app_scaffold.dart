@@ -1,13 +1,13 @@
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/services.dart';
 import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 import '../bridge/native_bridge.dart';
-import '../state/settings_store.dart';
+import '../screens/about_screen.dart';
 
-/// Top-level Screen Scaffold with iOS 26 Glass Navigation Chrome and Morphing Dropdown Menu
+/// App Scaffold wrapping screens with iOS 26 Liquid Glass Chrome
 class AppScaffold extends StatelessWidget {
   final String title;
   final Widget body;
+  final bool isRoot;
   final bool showTopMenu;
   final Widget? bottomBar;
   final ScrollController? scrollController;
@@ -16,6 +16,7 @@ class AppScaffold extends StatelessWidget {
     super.key,
     required this.title,
     required this.body,
+    this.isRoot = false,
     this.showTopMenu = true,
     this.bottomBar,
     this.scrollController,
@@ -27,106 +28,88 @@ class AppScaffold extends StatelessWidget {
 
     if (showTopMenu) {
       actions.add(
-        GlassBarItem.menu(
-          icon: const Icon(CupertinoIcons.ellipsis),
-          id: 'root_overflow_menu',
-          label: 'More actions',
-          menuWidth: 230,
-          menuItems: [
-            GlassMenuItem(
-              title: 'Restart Scoped Apps',
-              icon: const Icon(CupertinoIcons.arrow_clockwise),
-              onTap: () {},
-              submenu: [
-                GlassMenuItem(
-                  title: 'System UI',
-                  icon: const Icon(CupertinoIcons.sparkles),
-                  onTap: () => NativeBridge.restartSystemUI(),
+        GlassBarItem.custom(
+          id: 'overflow_morph_menu',
+          child: GlassMenu(
+            menuWidth: 250,
+            menuBorderRadius: 28,
+            quality: GlassQuality.premium,
+            triggerBuilder: (context, toggleMenu) {
+              return GlassButton(
+                onTap: toggleMenu,
+                width: 38,
+                height: 38,
+                shape: const LiquidOval(),
+                icon: const Icon(
+                  CupertinoIcons.ellipsis,
+                  size: 20,
+                  color: CupertinoColors.white,
                 ),
-                GlassMenuItem(
-                  title: 'System Launcher',
-                  icon: const Icon(CupertinoIcons.square_grid_2x2),
-                  onTap: () => NativeBridge.restartLauncher(),
-                ),
-                GlassMenuItem(
-                  title: 'Instagram',
-                  icon: const Icon(CupertinoIcons.camera),
-                  onTap: () => NativeBridge.restartPackage('com.instagram.android', 'Instagram'),
-                ),
-                GlassMenuItem(
-                  title: 'WhatsApp',
-                  icon: const Icon(CupertinoIcons.chat_bubble_2),
-                  onTap: () => NativeBridge.restartPackage('com.whatsapp', 'WhatsApp'),
-                ),
-                GlassMenuItem(
-                  title: 'YouTube',
-                  icon: const Icon(CupertinoIcons.play_rectangle),
-                  onTap: () => NativeBridge.restartPackage('com.google.android.youtube', 'YouTube'),
-                ),
-                const GlassMenuDivider(),
-                GlassMenuItem(
-                  title: 'Restart All Scoped',
-                  icon: const Icon(CupertinoIcons.arrow_clockwise_circle_fill),
-                  onTap: () {
-                    final scoped = SettingsStore.instance.scopedPackages;
-                    NativeBridge.restartScopedApps(scoped.isNotEmpty
-                        ? scoped
-                        : [
-                            'com.android.systemui',
-                            'com.miui.home',
-                            'com.instagram.android',
-                            'com.whatsapp',
-                            'com.google.android.youtube',
-                          ]);
-                  },
-                ),
-              ],
-            ),
-            GlassMenuItem(
-              title: 'Restart System UI',
-              icon: const Icon(CupertinoIcons.bolt),
-              onTap: () => NativeBridge.restartSystemUI(),
-            ),
-            GlassMenuItem(
-              title: 'Restart Launcher',
-              icon: const Icon(CupertinoIcons.house),
-              onTap: () => NativeBridge.restartLauncher(),
-            ),
-            GlassMenuItem(
-              title: 'Reboot Device',
-              icon: const Icon(CupertinoIcons.power),
-              onTap: () => NativeBridge.rebootDevice(),
-            ),
-            const GlassMenuDivider(),
-            GlassMenuItem(
-              title: 'Copy Debug Info',
-              icon: const Icon(CupertinoIcons.doc_on_clipboard),
-              onTap: () {
-                final store = SettingsStore.instance;
-                final info = StringBuffer()
-                  ..writeln('Hyper iOS v${store.versionName}')
-                  ..writeln('Xposed Bound: ${store.isBound}')
-                  ..writeln('Scoped Apps: ${store.scopedPackages.length}')
-                  ..writeln('Hot Reload: ${store.getBool('hot_reload_enabled')}')
-                  ..writeln('Android SDK: ${store.sdkInt}');
-                Clipboard.setData(ClipboardData(text: info.toString()));
-              },
-            ),
-            GlassMenuItem(
-              title: 'Reset to Defaults',
-              icon: const Icon(CupertinoIcons.arrow_counterclockwise),
-              isDestructive: true,
-              onTap: () => SettingsStore.instance.resetToDefaults(),
-            ),
-          ],
+              );
+            },
+            items: [
+              GlassMenuItem(
+                title: 'Restart System UI',
+                icon: const Icon(CupertinoIcons.sparkles),
+                onTap: () => NativeBridge.restartSystemUI(),
+              ),
+              GlassMenuItem(
+                title: 'Restart System Launcher',
+                icon: const Icon(CupertinoIcons.square_grid_2x2),
+                onTap: () => NativeBridge.restartLauncher(),
+              ),
+              GlassMenuItem(
+                title: 'System Reboot',
+                icon: const Icon(CupertinoIcons.power),
+                isDestructive: true,
+                onTap: () => NativeBridge.rebootDevice(),
+              ),
+              const GlassMenuDivider(),
+              GlassMenuItem(
+                title: 'About',
+                icon: const Icon(CupertinoIcons.info_circle),
+                onTap: () {
+                  Navigator.of(context).push(
+                    CupertinoPageRoute(builder: (_) => const AboutScreen()),
+                  );
+                },
+              ),
+            ],
+          ),
         ),
       );
     }
 
     return GlassScaffold(
       headerScrollController: scrollController,
+      background: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              Color(0xFF14151C),
+              Color(0xFF090A0D),
+              Color(0xFF000000),
+            ],
+          ),
+        ),
+      ),
       appBar: GlassAppBar.pinned(
-        title: Text(title),
+        leading: isRoot
+            ? null
+            : GlassBarItem.icon(
+                icon: const Icon(CupertinoIcons.chevron_left, size: 22),
+                onTap: () => Navigator.of(context).pop(),
+              ),
+        title: Text(
+          title,
+          style: const TextStyle(
+            fontSize: 17,
+            fontWeight: FontWeight.w600,
+            letterSpacing: -0.4,
+          ),
+        ),
         actions: actions,
       ),
       bottomBar: bottomBar,

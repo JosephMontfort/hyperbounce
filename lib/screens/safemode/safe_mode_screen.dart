@@ -1,88 +1,105 @@
 import 'package:flutter/cupertino.dart';
-import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
+import '../../state/settings_store.dart';
 import '../../widgets/app_scaffold.dart';
 import '../../widgets/setting_tiles.dart';
-import '../../state/settings_store.dart';
-import '../../bridge/native_bridge.dart';
 
 class SafeModeScreen extends StatelessWidget {
   const SafeModeScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final store = SettingsStore.instance;
+    return ListenableBuilder(
+      listenable: SettingsStore.instance,
+      builder: (context, _) {
+        final store = SettingsStore.instance;
 
-    return AppScaffold(
-      title: 'Safe Mode & Diagnostics',
-      showTopMenu: false,
-      body: ListenableBuilder(
-        listenable: store,
-        builder: (context, _) {
-          final bypass = store.getBool('safemode_bypass_emergency', false);
+        final global = store.getBool('safe_mode_global', false);
+        final systemUi = store.getBool('safe_mode_systemui', false);
+        final launcher = store.getBool('safe_mode_launcher', false);
+        final settings = store.getBool('safe_mode_settings', false);
 
-          return ListView(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        return AppScaffold(
+          title: 'Safe Mode & Diagnostics',
+          body: ListView(
+            padding: const EdgeInsets.only(top: 12, bottom: 60),
             children: [
-              const GlassSectionHeader('Crash Loop Protection'),
-              GlassGroupedSection(
+              const GlassSectionHeader('Safe Mode Overrides'),
+              GlassGroupedCard(
                 children: [
-                  const GlassListTile(
-                    leading: Icon(CupertinoIcons.shield_fill, color: CupertinoColors.activeGreen),
-                    title: Text('Automated Recovery Guardian'),
-                    subtitle: Text('Monitors SystemUI boot crashes. If 5 consecutive crashes happen within 5s, all hooks self-disable to prevent bootloops.'),
+                  GlassSwitchTile(
+                    title: 'Global Safe Mode',
+                    subtitle:
+                        'Disables all hooks immediately across every application',
+                    value: global,
+                    onChanged: (val) =>
+                        store.setBool('safe_mode_global', val),
                   ),
                   GlassSwitchTile(
-                    title: 'Emergency Bypass All Hooks',
-                    subtitle: 'Forcefully turn off all hook injections globally',
-                    value: bypass,
-                    onChanged: (v) => store.setBool('safemode_bypass_emergency', v),
+                    title: 'System UI Safe Mode',
+                    subtitle: 'Bypasses hooks inside com.android.systemui',
+                    value: systemUi,
+                    onChanged: (val) =>
+                        store.setBool('safe_mode_systemui', val),
+                  ),
+                  GlassSwitchTile(
+                    title: 'Launcher Safe Mode',
+                    subtitle: 'Bypasses hooks inside com.miui.home',
+                    value: launcher,
+                    onChanged: (val) =>
+                        store.setBool('safe_mode_launcher', val),
+                  ),
+                  GlassSwitchTile(
+                    title: 'Settings Safe Mode',
+                    subtitle: 'Bypasses hooks inside com.android.settings',
+                    value: settings,
+                    onChanged: (val) =>
+                        store.setBool('safe_mode_settings', val),
                   ),
                 ],
               ),
+              const GlassSectionFooter(
+                'When Safe Mode is enabled for a target package, HyperBounce unhooks all reflection engines and lets the stock OS process start natively without intervention.',
+              ),
 
-              const GlassSectionHeader('System Rescue Actions'),
-              GlassGroupedSection(
+              const GlassSectionHeader('Crash Recovery Diagnostics'),
+              GlassGroupedCard(
                 children: [
-                  GlassListTile(
-                    leading: const Icon(CupertinoIcons.refresh_circled, color: CupertinoColors.activeBlue),
-                    title: const Text('Clear Safe Mode Flag'),
-                    subtitle: const Text('Reset crash loop counter and restore hook injections'),
+                  GlassActionTile(
+                    title: 'Reset All Crashing Aliases',
+                    subtitle:
+                        'Clears automated crash loop protection counters and blacklists',
+                    titleColor: CupertinoColors.systemRed,
                     onTap: () {
-                      store.setBool('safemode_bypass_emergency', false);
                       showCupertinoDialog(
                         context: context,
-                        builder: (_) => CupertinoAlertDialog(
-                          title: const Text('Flags Cleared'),
-                          content: const Text('Crash loop state reset to 0.'),
+                        builder: (ctx) => CupertinoAlertDialog(
+                          title: const Text('Reset Crash Aliases?'),
+                          message: const Text(
+                              'This will re-enable all previously disabled feature aliases that crashed repeatedly.'),
                           actions: [
                             CupertinoDialogAction(
-                              child: const Text('OK'),
-                              onPressed: () => Navigator.pop(context),
+                              child: const Text('Cancel'),
+                              onPressed: () => Navigator.of(ctx).pop(),
+                            ),
+                            CupertinoDialogAction(
+                              isDestructiveAction: true,
+                              child: const Text('Reset'),
+                              onPressed: () {
+                                Navigator.of(ctx).pop();
+                                store.setString('crashing_aliases', '');
+                              },
                             ),
                           ],
                         ),
                       );
                     },
                   ),
-                  GlassListTile(
-                    leading: const Icon(CupertinoIcons.arrow_clockwise_circle, color: CupertinoColors.systemOrange),
-                    title: const Text('Soft Reboot System UI'),
-                    subtitle: const Text('Restart SystemUI to test clean startup'),
-                    onTap: () => NativeBridge.restartSystemUI(),
-                  ),
-                  GlassListTile(
-                    leading: const Icon(CupertinoIcons.power, color: CupertinoColors.systemRed),
-                    title: const Text('Reboot Device'),
-                    subtitle: const Text('Execute root reboot command'),
-                    onTap: () => NativeBridge.rebootDevice(),
-                  ),
                 ],
               ),
-              const SizedBox(height: 100),
             ],
-          );
-        },
-      ),
+          ),
+        );
+      },
     );
   }
 }

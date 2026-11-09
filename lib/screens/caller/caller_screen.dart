@@ -1,83 +1,108 @@
 import 'package:flutter/cupertino.dart';
-import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
+import '../../state/settings_store.dart';
 import '../../widgets/app_scaffold.dart';
 import '../../widgets/setting_tiles.dart';
-import '../../state/settings_store.dart';
 
 class CallerScreen extends StatelessWidget {
   const CallerScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final store = SettingsStore.instance;
+    return ListenableBuilder(
+      listenable: SettingsStore.instance,
+      builder: (context, _) {
+        final store = SettingsStore.instance;
 
-    return AppScaffold(
-      title: 'Caller & Dialer',
-      showTopMenu: false,
-      body: ListenableBuilder(
-        listenable: store,
-        builder: (context, _) {
-          final callerEnabled = store.getBool('caller_screen_enabled', true);
-          final buttonSize = store.getDouble('caller_button_size', 70.0);
-          final bottomOffset = store.getDouble('caller_bottom_offset', 80.0);
-          final recentsSwipe = store.getBool('dialer_recents_swipe_enabled', true);
-          final dialerHaptics = store.getBool('dialer_haptics_enabled', true);
+        final enabled = store.getBool('caller_screen_enabled', false);
+        final width = store.getDouble('caller_slider_width', 300.0);
+        final height = store.getDouble('caller_slider_height', 72.0);
+        final bottomOffset =
+            store.getDouble('caller_slider_bottom_offset', 64.0);
+        final cornerRadius =
+            store.getDouble('caller_track_corner_radius', 36.0);
+        final dialerSwipe =
+            store.getBool('dialer_recents_swipe_enabled', false);
 
-          return ListView(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        return AppScaffold(
+          title: 'Dialer & Caller Screen',
+          body: ListView(
+            padding: const EdgeInsets.only(top: 12, bottom: 60),
             children: [
-              const GlassSectionHeader('iOS Incoming Call Interface'),
-              GlassGroupedSection(
+              GlassGroupedCard(
                 children: [
                   GlassSwitchTile(
-                    title: 'Enable iOS Call Screen',
-                    subtitle: 'Replace MIUI in-call UI with iOS liquid slider & circular accept buttons',
-                    value: callerEnabled,
-                    onChanged: (v) => store.setBool('caller_screen_enabled', v),
+                    title: 'Enable iOS Caller Screen',
+                    subtitle: 'Dual sliders for full-screen incoming calls',
+                    value: enabled,
+                    onChanged: (val) =>
+                        store.setBool('caller_screen_enabled', val),
                   ),
                 ],
-              ),
-              GlassSliderTile(
-                title: 'Call Button Diameter',
-                subtitle: 'Size of Accept and Decline glass buttons',
-                value: buttonSize,
-                min: 50.0,
-                max: 95.0,
-                unit: 'dp',
-                onChanged: (v) => store.setDouble('caller_button_size', v),
-              ),
-              GlassSliderTile(
-                title: 'Bottom Padding Offset',
-                subtitle: 'Distance from bottom navigation / gesture pill',
-                value: bottomOffset,
-                min: 20.0,
-                max: 140.0,
-                unit: 'dp',
-                onChanged: (v) => store.setDouble('caller_bottom_offset', v),
               ),
 
-              const GlassSectionHeader('Dialer Call Log Gestures'),
-              GlassGroupedSection(
+              const GlassSectionHeader('Dimensions & Position'),
+              GlassSliderTile(
+                title: 'Slider Width',
+                subtitle: 'Horizontal width of incoming call slider capsule',
+                value: width,
+                min: 200,
+                max: 400,
+                unit: 'dp',
+                enabled: enabled,
+                onChanged: (val) =>
+                    store.setDouble('caller_slider_width', val),
+              ),
+              GlassSliderTile(
+                title: 'Slider Height',
+                subtitle: 'Vertical height of incoming call slider capsule',
+                value: height,
+                min: 50,
+                max: 100,
+                unit: 'dp',
+                enabled: enabled,
+                onChanged: (val) =>
+                    store.setDouble('caller_slider_height', val),
+              ),
+              GlassSliderTile(
+                title: 'Bottom Offset',
+                subtitle: 'Clearance from bottom screen edge',
+                value: bottomOffset,
+                min: 20,
+                max: 150,
+                unit: 'dp',
+                enabled: enabled,
+                onChanged: (val) =>
+                    store.setDouble('caller_slider_bottom_offset', val),
+              ),
+              GlassSliderTile(
+                title: 'Track Corner Radius',
+                subtitle: 'Curvature radius of slider track ends',
+                value: cornerRadius,
+                min: 15,
+                max: 50,
+                unit: 'dp',
+                enabled: enabled,
+                onChanged: (val) =>
+                    store.setDouble('caller_track_corner_radius', val),
+              ),
+
+              const GlassSectionHeader('Swipe Gestures'),
+              GlassGroupedCard(
                 children: [
                   GlassSwitchTile(
-                    title: 'Swipe Recents Action',
-                    subtitle: 'Swipe left to delete, swipe right to call directly',
-                    value: recentsSwipe,
-                    onChanged: (v) => store.setBool('dialer_recents_swipe_enabled', v),
-                  ),
-                  GlassSwitchTile(
-                    title: 'Dialer Keypad Haptics',
-                    subtitle: 'Tactile mechanical vibration on number press',
-                    value: dialerHaptics,
-                    onChanged: (v) => store.setBool('dialer_haptics_enabled', v),
+                    title: 'Dialer Recents Swipe Actions',
+                    subtitle:
+                        'iOS-style left/right swipe gestures on dialer recents list',
+                    value: dialerSwipe,
+                    onChanged: (val) =>
+                        store.setBool('dialer_recents_swipe_enabled', val),
                   ),
                 ],
               ),
-              const SizedBox(height: 100),
             ],
-          );
-        },
-      ),
+          ),
+        );
+      },
     );
   }
 }
