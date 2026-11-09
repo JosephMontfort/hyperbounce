@@ -5,7 +5,16 @@
 .DS_Store
 /build
 /app/build
+/android/app/build
+/android/.gradle
 *.keystore
+
+# Flutter ignores
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+
 # Added by code-review-graph
 .code-review-graph/
 hyperbounce-diagnostics/

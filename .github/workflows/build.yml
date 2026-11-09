@@ -21,6 +21,15 @@ jobs:
           distribution: 'temurin'
           cache: gradle
 
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - name: Get Flutter dependencies
+        run: flutter pub get
+
       - name: Restore release keystore
         run: |
           mkdir -p "$HOME/keystore"
@@ -32,11 +41,11 @@ jobs:
           RELEASE_KEY_ALIAS: hyperbounce
           RELEASE_STORE_PASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD }}
           RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD }}
-        run: ./gradlew assembleRelease --stacktrace
+        run: flutter build apk --release --target-platform android-arm64
 
       - name: Rename APK for Release
         run: |
-          mv app/build/outputs/apk/release/app-release.apk app/build/outputs/apk/release/HyperBounce-v1.0.${{ github.run_number }}.apk
+          mv build/app/outputs/flutter-apk/app-release.apk build/app/outputs/flutter-apk/HyperBounce-v1.0.${{ github.run_number }}.apk
 
       - name: Create release tag
         env:
@@ -56,6 +65,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           TAG_NAME: v1.0.${{ github.run_number }}
-          APK_FILE: app/build/outputs/apk/release/HyperBounce-v1.0.${{ github.run_number }}.apk
+          APK_FILE: build/app/outputs/flutter-apk/HyperBounce-v1.0.${{ github.run_number }}.apk
         run: |
-          gh release create "$TAG_NAME" "$APK_FILE"             --verify-tag             --title "HyperBounce Release #${{ github.run_number }}"             --notes "Automated HyperBounce LSPosed build - Unified Instagram + WhatsApp + YouTube floating nav, plus HyperOS liquid glass toggles/sliders/keypad"
+          gh release create "$TAG_NAME" "$APK_FILE" \
+            --verify-tag \
+            --title "HyperBounce Release #${{ github.run_number }} (Liquid Glass Flutter UI)" \
+            --notes "Automated HyperBounce LSPosed build with iOS 26 Liquid Glass Flutter UI (SDF morph dropdown, floating nav, jelly sliders/toggles)"
