@@ -36,6 +36,7 @@ class AppScaffold extends StatelessWidget {
             GlassMenuItem(
               title: 'Restart Scoped Apps',
               icon: const Icon(CupertinoIcons.arrow_clockwise),
+              onTap: () {},
               submenu: [
                 GlassMenuItem(
                   title: 'System UI',
@@ -123,7 +124,7 @@ class AppScaffold extends StatelessWidget {
     }
 
     return GlassScaffold(
-      scrollController: scrollController,
+      headerScrollController: scrollController,
       appBar: GlassAppBar.pinned(
         title: Text(title),
         actions: actions,
