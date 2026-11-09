@@ -41,6 +41,10 @@
 -keep class dev.hyperios.app.safemode.CrashActivity { *; }
 -keep class dev.hyperios.app.safemode.ExceptionCrashActivity { *; }
 
+# Flutter Engine & Embedding
+-keep class io.flutter.** { *; }
+-dontwarn io.flutter.**
+
 # Jetpack Compose & Miuix Rules
 -keep class androidx.compose.** { *; }
 -dontwarn androidx.compose.**
