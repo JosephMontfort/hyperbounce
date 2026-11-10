@@ -3,6 +3,7 @@ import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 import '../bridge/native_bridge.dart';
 import '../screens/about_screen.dart';
 import 'liquid_bubble/liquid_bubble_menu.dart';
+import 'liquid_bubble/navigation_key.dart';
 
 const bool kWallpaperTest =
     bool.fromEnvironment('WALLPAPER_TEST', defaultValue: false);
@@ -58,7 +59,9 @@ class AppScaffold extends StatelessWidget {
                 title: 'About',
                 icon: CupertinoIcons.info_circle,
                 onTap: () {
-                  Navigator.of(context).push(
+                  final nav = Navigator.maybeOf(context) ??
+                      liquidNavigatorKey.currentState;
+                  nav?.push(
                     CupertinoPageRoute(builder: (_) => const AboutScreen()),
                   );
                 },

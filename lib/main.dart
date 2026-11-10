@@ -6,6 +6,7 @@ import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 
 import 'state/settings_store.dart';
 import 'widgets/app_scaffold.dart';
+import 'widgets/liquid_bubble/navigation_key.dart';
 import 'screens/tuning_screen.dart';
 import 'screens/settings_screen.dart';
 
@@ -45,6 +46,7 @@ class HyperiOSApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return CupertinoApp(
+      navigatorKey: liquidNavigatorKey,
       title: 'HyperiOS',
       debugShowCheckedModeBanner: false,
       theme: const CupertinoThemeData(

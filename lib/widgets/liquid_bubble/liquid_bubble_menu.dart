@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'glass_panel.dart';
 import 'liquid_bubble_route.dart';
+import 'navigation_key.dart';
 import 'squircle.dart';
 
 /// Interactive entry inside a [LiquidBubbleMenuCard].
@@ -51,7 +52,8 @@ class _LiquidBubbleMenuItemState extends State<LiquidBubbleMenuItem> {
       },
       onTapUp: (_) {
         setState(() => _isPressed = false);
-        Navigator.of(context).pop();
+        final nav = Navigator.maybeOf(context) ?? liquidNavigatorKey.currentState;
+        nav?.pop();
         widget.onTap();
       },
       onTapCancel: () => setState(() => _isPressed = false),
@@ -167,6 +169,12 @@ class _LiquidBubbleMenuTriggerState extends State<LiquidBubbleMenuTrigger> {
       }
     }
 
+    final nav = Navigator.maybeOf(context, rootNavigator: true) ??
+        Navigator.maybeOf(context) ??
+        liquidNavigatorKey.currentState;
+
+    if (nav == null) return;
+
     setState(() => _isMenuOpen = true);
 
     final route = LiquidBubbleMenuRoute<void>(
@@ -175,11 +183,21 @@ class _LiquidBubbleMenuTriggerState extends State<LiquidBubbleMenuTrigger> {
       menuContent: LiquidBubbleMenuCard(items: widget.items),
     );
 
-    Navigator.of(context, rootNavigator: true).push(route).then((_) {
+    try {
+      nav.push(route).then((_) {
+        if (mounted) {
+          setState(() => _isMenuOpen = false);
+        }
+      }).catchError((_) {
+        if (mounted) {
+          setState(() => _isMenuOpen = false);
+        }
+      });
+    } catch (_) {
       if (mounted) {
         setState(() => _isMenuOpen = false);
       }
-    });
+    }
   }
 
   @override
