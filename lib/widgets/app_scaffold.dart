@@ -2,6 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 import '../bridge/native_bridge.dart';
 import '../screens/about_screen.dart';
+import 'liquid_bubble/liquid_bubble_menu.dart';
 
 const bool kWallpaperTest =
     bool.fromEnvironment('WALLPAPER_TEST', defaultValue: false);
@@ -33,47 +34,32 @@ class AppScaffold extends StatelessWidget {
       actions.add(
         GlassBarItem.custom(
           id: 'overflow_morph_menu',
-          child: GlassMenu(
+          child: LiquidBubbleMenuTrigger(
             menuWidth: 250,
-            menuBorderRadius: 28,
-            quality: GlassQuality.premium,
-            triggerBuilder: (context, toggleMenu) {
-              return GlassButton(
-                onTap: toggleMenu,
-                width: 38,
-                height: 38,
-                shape: const LiquidOval(),
-                icon: const Icon(
-                  CupertinoIcons.ellipsis,
-                  size: 20,
-                  color: CupertinoColors.white,
-                ),
-              );
-            },
             items: [
-              GlassMenuItem(
+              LiquidBubbleMenuItem(
                 title: 'Restart System UI',
-                icon: const Icon(CupertinoIcons.sparkles),
+                icon: CupertinoIcons.sparkles,
                 onTap: () => NativeBridge.restartSystemUI(),
               ),
-              GlassMenuItem(
+              LiquidBubbleMenuItem(
                 title: 'Restart System Launcher',
-                icon: const Icon(CupertinoIcons.square_grid_2x2),
+                icon: CupertinoIcons.square_grid_2x2,
                 onTap: () => NativeBridge.restartLauncher(),
               ),
-              GlassMenuItem(
+              LiquidBubbleMenuItem(
                 title: 'System Reboot',
-                icon: const Icon(CupertinoIcons.power),
+                icon: CupertinoIcons.power,
                 isDestructive: true,
                 onTap: () => NativeBridge.rebootDevice(),
               ),
-              const GlassMenuDivider(),
-              GlassMenuItem(
+              const LiquidBubbleMenuDivider(),
+              LiquidBubbleMenuItem(
                 title: 'About',
-                icon: const Icon(CupertinoIcons.info_circle),
+                icon: CupertinoIcons.info_circle,
                 onTap: () {
                   Navigator.of(context).push(
-                    GlassPageRoute(builder: (_) => const AboutScreen()),
+                    CupertinoPageRoute(builder: (_) => const AboutScreen()),
                   );
                 },
               ),
