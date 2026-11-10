@@ -18,13 +18,26 @@ class NativeBridge {
     }
   }
 
+  /// Fetches the native settings schema defining keys, types, defaults, and enum options.
+  static Future<Map<String, dynamic>> getSchema() async {
+    try {
+      final res = await _channel.invokeMethod<Map<dynamic, dynamic>>('getSchema');
+      if (res == null) return {};
+      return Map<String, dynamic>.from(res);
+    } catch (e) {
+      debugPrint('[NativeBridge] getSchema error: $e');
+      return {};
+    }
+  }
+
   /// Writes a setting value to SharedPreferences, LSPosed remote preferences,
-  /// and broadcasts hot-reload to hooked applications.
-  static Future<bool> setSetting(String key, dynamic value) async {
+  /// and optionally broadcasts hot-reload to hooked applications.
+  static Future<bool> setSetting(String key, dynamic value, {bool broadcast = true}) async {
     try {
       await _channel.invokeMethod('setSetting', {
         'key': key,
         'value': value,
+        'broadcast': broadcast,
       });
       return true;
     } catch (e) {
@@ -136,6 +149,46 @@ class NativeBridge {
       await _channel.invokeMethod('setAppIconStyle', {'style': style});
     } catch (e) {
       debugPrint('[NativeBridge] setAppIconStyle error: $e');
+    }
+  }
+
+  /// Safe Mode bridge methods
+  static Future<Map<String, dynamic>> getSafeModeStatus() async {
+    try {
+      final res = await _channel.invokeMethod<Map<dynamic, dynamic>>('getSafeModeStatus');
+      if (res == null) return {};
+      return Map<String, dynamic>.from(res);
+    } catch (e) {
+      debugPrint('[NativeBridge] getSafeModeStatus error: $e');
+      return {};
+    }
+  }
+
+  static Future<void> setSafeMode(String scope, bool enabled) async {
+    try {
+      await _channel.invokeMethod('setSafeMode', {
+        'scope': scope,
+        'enabled': enabled,
+      });
+    } catch (e) {
+      debugPrint('[NativeBridge] setSafeMode error: $e');
+    }
+  }
+
+  static Future<void> clearCrashingAliases() async {
+    try {
+      await _channel.invokeMethod('clearCrashingAliases');
+    } catch (e) {
+      debugPrint('[NativeBridge] clearCrashingAliases error: $e');
+    }
+  }
+
+  static Future<String?> buildRingtoneModule() async {
+    try {
+      return await _channel.invokeMethod<String>('buildRingtoneModule');
+    } catch (e) {
+      debugPrint('[NativeBridge] buildRingtoneModule error: $e');
+      return null;
     }
   }
 }

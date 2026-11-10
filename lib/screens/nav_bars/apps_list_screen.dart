@@ -1,4 +1,5 @@
 import 'package:flutter/cupertino.dart';
+import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 import '../../widgets/app_scaffold.dart';
 import '../../widgets/setting_tiles.dart';
 import 'app_detail_screen.dart';
@@ -17,8 +18,7 @@ class AppsListScreen extends StatelessWidget {
             children: [
               GlassNavTile(
                 title: 'Instagram',
-                subtitle:
-                    'Liquid Glass Floating Bottom Bar in Instagram',
+                subtitle: 'Liquid Glass Floating Bottom Bar in Instagram',
                 leading: Container(
                   width: 32,
                   height: 32,
@@ -31,7 +31,7 @@ class AppsListScreen extends StatelessWidget {
                 ),
                 onTap: () {
                   Navigator.of(context).push(
-                    CupertinoPageRoute(
+                    GlassPageRoute(
                       builder: (_) => const AppDetailScreen(
                         displayName: 'Instagram',
                         packageName: 'com.instagram.android',
@@ -42,8 +42,7 @@ class AppsListScreen extends StatelessWidget {
               ),
               GlassNavTile(
                 title: 'WhatsApp',
-                subtitle:
-                    'Liquid Glass Floating Bottom Bar in WhatsApp',
+                subtitle: 'Liquid Glass Floating Bottom Bar in WhatsApp',
                 leading: Container(
                   width: 32,
                   height: 32,
@@ -56,7 +55,7 @@ class AppsListScreen extends StatelessWidget {
                 ),
                 onTap: () {
                   Navigator.of(context).push(
-                    CupertinoPageRoute(
+                    GlassPageRoute(
                       builder: (_) => const AppDetailScreen(
                         displayName: 'WhatsApp',
                         packageName: 'com.whatsapp',
@@ -67,8 +66,7 @@ class AppsListScreen extends StatelessWidget {
               ),
               GlassNavTile(
                 title: 'YouTube',
-                subtitle:
-                    'Liquid Glass Floating Bottom Bar in YouTube',
+                subtitle: 'Liquid Glass Floating Bottom Bar in YouTube',
                 leading: Container(
                   width: 32,
                   height: 32,
@@ -81,7 +79,7 @@ class AppsListScreen extends StatelessWidget {
                 ),
                 onTap: () {
                   Navigator.of(context).push(
-                    CupertinoPageRoute(
+                    GlassPageRoute(
                       builder: (_) => const AppDetailScreen(
                         displayName: 'YouTube',
                         packageName: 'com.google.android.youtube',

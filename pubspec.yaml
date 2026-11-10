@@ -14,7 +14,7 @@ dependencies:
   liquid_glass_widgets:
     git:
       url: https://github.com/JosephMontfort/liquid_glass_widgets.git
-      ref: main
+      ref: 62cca4691fee15c8a61c546e5888c6407cd03c23
 
 flutter:
   uses-material-design: true

@@ -376,6 +376,17 @@ class SettingsRepository(context: Context) {
 
     fun getAllSettingsMap(): Map<String, Any?> {
         val map = HashMap<String, Any?>()
+        for (delegate in reloadablePrefs) {
+            map[delegate.key] = delegate.defaultValue
+        }
+        val rows = ModuleDefaults.ScreenUnlock.GRID_ROWS
+        for (r in 0 until 32) {
+            map["unlock_r${r}_z"] = ScreenUnlockDefaults.rowZ(r, rows)
+            map["unlock_r${r}_center_bounce"] = ScreenUnlockDefaults.rowBounce(r, rows, false)
+            map["unlock_r${r}_outer_bounce"] = ScreenUnlockDefaults.rowBounce(r, rows, true)
+            map["unlock_r${r}_center_settle"] = ScreenUnlockDefaults.rowSettle(r, rows, false)
+            map["unlock_r${r}_outer_settle"] = ScreenUnlockDefaults.rowSettle(r, rows, true)
+        }
         for ((k, v) in prefs.all) {
             if (k !in DEPRECATED_KEYS) {
                 map[k] = v
@@ -384,45 +395,107 @@ class SettingsRepository(context: Context) {
         return map
     }
 
-    fun setSettingDynamic(key: String, value: Any?) {
+    fun getSchema(): Map<String, Map<String, Any?>> {
+        val schema = HashMap<String, Map<String, Any?>>()
+        for (delegate in reloadablePrefs) {
+            val entry = HashMap<String, Any?>()
+            entry["type"] = delegate.typeName
+            entry["default"] = delegate.defaultValue
+            delegate.enumOptions?.let {
+                entry["enumOptions"] = it
+            }
+            schema[delegate.key] = entry
+        }
+        val rows = ModuleDefaults.ScreenUnlock.GRID_ROWS
+        for (r in 0 until 32) {
+            val defZ = ScreenUnlockDefaults.rowZ(r, rows)
+            val defCenterBounce = ScreenUnlockDefaults.rowBounce(r, rows, false)
+            val defOuterBounce = ScreenUnlockDefaults.rowBounce(r, rows, true)
+            val defCenterSettle = ScreenUnlockDefaults.rowSettle(r, rows, false)
+            val defOuterSettle = ScreenUnlockDefaults.rowSettle(r, rows, true)
+            schema["unlock_r${r}_z"] = mapOf("type" to "float", "default" to defZ)
+            schema["unlock_r${r}_center_bounce"] = mapOf("type" to "float", "default" to defCenterBounce)
+            schema["unlock_r${r}_outer_bounce"] = mapOf("type" to "float", "default" to defOuterBounce)
+            schema["unlock_r${r}_center_settle"] = mapOf("type" to "float", "default" to defCenterSettle)
+            schema["unlock_r${r}_outer_settle"] = mapOf("type" to "float", "default" to defOuterSettle)
+        }
+        return schema
+    }
+
+    fun setSettingDynamic(key: String, value: Any?, broadcast: Boolean = true) {
         val localEditor = prefs.edit()
         val remote = XposedServiceBridge.remotePreferencesOrNull(PREFS_NAME)
         val remoteEditor = remote?.edit()
 
-        when (value) {
-            is Boolean -> {
-                localEditor.putBoolean(key, value)
-                remoteEditor?.putBoolean(key, value)
+        val targetPref = reloadablePrefs.find { it.key == key }
+        val targetType = targetPref?.typeName ?: when (value) {
+            is Boolean -> "boolean"
+            is Float, is Double -> "float"
+            is Int -> "int"
+            is Long -> "long"
+            is String -> "string"
+            else -> null
+        }
+
+        when (targetType) {
+            "boolean" -> {
+                val b = when (value) {
+                    is Boolean -> value
+                    is Number -> value.toInt() != 0
+                    else -> value?.toString()?.toBooleanStrictOrNull() ?: false
+                }
+                localEditor.putBoolean(key, b)
+                remoteEditor?.putBoolean(key, b)
             }
-            is Float -> {
-                localEditor.putFloat(key, value)
-                remoteEditor?.putFloat(key, value)
+            "int" -> {
+                val i = when (value) {
+                    is Number -> value.toInt()
+                    else -> value?.toString()?.toIntOrNull() ?: 0
+                }
+                localEditor.putInt(key, i)
+                remoteEditor?.putInt(key, i)
             }
-            is Double -> {
-                localEditor.putFloat(key, value.toFloat())
-                remoteEditor?.putFloat(key, value.toFloat())
+            "long" -> {
+                val l = when (value) {
+                    is Number -> value.toLong()
+                    else -> value?.toString()?.toLongOrNull() ?: 0L
+                }
+                localEditor.putLong(key, l)
+                remoteEditor?.putLong(key, l)
             }
-            is Int -> {
-                localEditor.putInt(key, value)
-                remoteEditor?.putInt(key, value)
+            "float" -> {
+                val f = when (value) {
+                    is Number -> value.toFloat()
+                    else -> value?.toString()?.toFloatOrNull() ?: 0f
+                }
+                localEditor.putFloat(key, f)
+                remoteEditor?.putFloat(key, f)
             }
-            is Long -> {
-                localEditor.putLong(key, value)
-                remoteEditor?.putLong(key, value)
+            "string", "enum" -> {
+                val s = value?.toString() ?: ""
+                localEditor.putString(key, s)
+                remoteEditor?.putString(key, s)
             }
-            is String -> {
-                localEditor.putString(key, value)
-                remoteEditor?.putString(key, value)
-            }
-            null -> {
-                localEditor.remove(key)
-                remoteEditor?.remove(key)
+            else -> {
+                if (value == null) {
+                    localEditor.remove(key)
+                    remoteEditor?.remove(key)
+                } else if (value is Boolean) {
+                    localEditor.putBoolean(key, value)
+                    remoteEditor?.putBoolean(key, value)
+                } else if (value is Number) {
+                    localEditor.putFloat(key, value.toFloat())
+                    remoteEditor?.putFloat(key, value.toFloat())
+                } else {
+                    localEditor.putString(key, value.toString())
+                    remoteEditor?.putString(key, value.toString())
+                }
             }
         }
         localEditor.apply()
         remoteEditor?.apply()
 
-        reloadablePrefs.find { it.key == key }?.reload()
+        targetPref?.reload()
 
         if (key == "app_icon_style") {
             val style = try {
@@ -431,9 +504,23 @@ class SettingsRepository(context: Context) {
                 AppIconStyle.Flat
             }
             appContext?.let { ctx -> AppIconManager.applyIconStyle(ctx, style) }
+        } else if (key == "prefs_key_global_safe_mode") {
+            val b = (value as? Boolean) ?: false
+            if (b) dev.hyperios.app.safemode.SafeModeHandler.updateCrashProp("all") else dev.hyperios.app.safemode.SafeModeHandler.removeCrashProp("all")
+        } else if (key == "prefs_key_systemui_safe_mode_enable") {
+            val b = (value as? Boolean) ?: false
+            if (b) dev.hyperios.app.safemode.SafeModeHandler.updateCrashProp("systemui") else dev.hyperios.app.safemode.SafeModeHandler.removeCrashProp("systemui")
+        } else if (key == "prefs_key_home_safe_mode_enable") {
+            val b = (value as? Boolean) ?: false
+            if (b) dev.hyperios.app.safemode.SafeModeHandler.updateCrashProp("home") else dev.hyperios.app.safemode.SafeModeHandler.removeCrashProp("home")
+        } else if (key == "prefs_key_system_settings_safe_mode_enable") {
+            val b = (value as? Boolean) ?: false
+            if (b) dev.hyperios.app.safemode.SafeModeHandler.updateCrashProp("settings") else dev.hyperios.app.safemode.SafeModeHandler.removeCrashProp("settings")
         }
 
-        sendSettingsChangedBroadcast(key, value)
+        if (broadcast) {
+            sendSettingsChangedBroadcast(key, value)
+        }
     }
 
     fun resetAllToDefaults() {
@@ -1850,6 +1937,9 @@ class SettingsRepository(context: Context) {
 
 internal sealed interface ReloadablePref {
     val key: String
+    val typeName: String
+    val defaultValue: Any?
+    val enumOptions: List<String>? get() = null
     fun reload()
     fun writeJsonValue(editor: SharedPreferences.Editor, rawValue: Any)
     fun exportValue(json: org.json.JSONObject)
@@ -1933,6 +2023,8 @@ private class PrefBooleanDelegate(
     override val key: String,
     private val default: Boolean
 ) : ReloadablePref {
+    override val typeName: String get() = "boolean"
+    override val defaultValue: Any? get() = default
     private var state by mutableStateOf(prefs.safeGetBoolean(key, default))
     operator fun getValue(thisRef: Any?, property: KProperty<*>): Boolean = state
     operator fun setValue(thisRef: Any?, property: KProperty<*>, value: Boolean) {
@@ -1966,6 +2058,8 @@ private class PrefLongDelegate(
     override val key: String,
     private val default: Long
 ) : ReloadablePref {
+    override val typeName: String get() = "long"
+    override val defaultValue: Any? get() = default
     private var state by mutableStateOf(prefs.safeGetLong(key, default))
     operator fun getValue(thisRef: Any?, property: KProperty<*>): Long = state
     operator fun setValue(thisRef: Any?, property: KProperty<*>, value: Long) {
@@ -1998,6 +2092,8 @@ private class PrefIntDelegate(
     override val key: String,
     private val default: Int
 ) : ReloadablePref {
+    override val typeName: String get() = "int"
+    override val defaultValue: Any? get() = default
     private var state by mutableStateOf(prefs.safeGetInt(key, default))
     operator fun getValue(thisRef: Any?, property: KProperty<*>): Int = state
     operator fun setValue(thisRef: Any?, property: KProperty<*>, value: Int) {
@@ -2030,6 +2126,8 @@ private class PrefFloatDelegate(
     override val key: String,
     private val default: Float
 ) : ReloadablePref {
+    override val typeName: String get() = "float"
+    override val defaultValue: Any? get() = default
     private var state by mutableStateOf(prefs.safeGetFloat(key, default))
     operator fun getValue(thisRef: Any?, property: KProperty<*>): Float = state
     operator fun setValue(thisRef: Any?, property: KProperty<*>, value: Float) {
@@ -2062,6 +2160,8 @@ private class PrefStringDelegate(
     override val key: String,
     private val default: String
 ) : ReloadablePref {
+    override val typeName: String get() = "string"
+    override val defaultValue: Any? get() = default
     private var state by mutableStateOf(prefs.safeGetString(key, default))
     operator fun getValue(thisRef: Any?, property: KProperty<*>): String = state
     operator fun setValue(thisRef: Any?, property: KProperty<*>, value: String) {
@@ -2090,6 +2190,9 @@ private class PrefEnumDelegate<E : Enum<E>>(
     private val default: E,
     private val values: Array<E>
 ) : ReloadablePref {
+    override val typeName: String get() = "enum"
+    override val defaultValue: Any? get() = default.name
+    override val enumOptions: List<String> get() = values.map { it.name }
     private var state by mutableStateOf(
         prefs.safeGetString(key, default.name).let { name -> values.find { it.name == name } } ?: default
     )

@@ -1,4 +1,5 @@
 import 'package:flutter/cupertino.dart';
+import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 import '../../state/settings_store.dart';
 import '../../widgets/app_scaffold.dart';
 import '../../widgets/setting_tiles.dart';
@@ -8,98 +9,82 @@ class SafeModeScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ListenableBuilder(
-      listenable: SettingsStore.instance,
-      builder: (context, _) {
-        final store = SettingsStore.instance;
+    final store = SettingsStore.instance;
 
-        final global = store.getBool('safe_mode_global', false);
-        final systemUi = store.getBool('safe_mode_systemui', false);
-        final launcher = store.getBool('safe_mode_launcher', false);
-        final settings = store.getBool('safe_mode_settings', false);
-
-        return AppScaffold(
-          title: 'Safe Mode & Diagnostics',
-          body: ListView(
-            padding: const EdgeInsets.only(top: 12, bottom: 60),
+    return AppScaffold(
+      title: 'Safe Mode & Diagnostics',
+      body: ListView(
+        padding: const EdgeInsets.only(top: 12, bottom: 60),
+        children: [
+          const GlassSectionHeader('Safe Mode Overrides'),
+          GlassGroupedCard(
             children: [
-              const GlassSectionHeader('Safe Mode Overrides'),
-              GlassGroupedCard(
-                children: [
-                  GlassSwitchTile(
-                    title: 'Global Safe Mode',
-                    subtitle:
-                        'Disables all hooks immediately across every application',
-                    value: global,
-                    onChanged: (val) =>
-                        store.setBool('safe_mode_global', val),
-                  ),
-                  GlassSwitchTile(
-                    title: 'System UI Safe Mode',
-                    subtitle: 'Bypasses hooks inside com.android.systemui',
-                    value: systemUi,
-                    onChanged: (val) =>
-                        store.setBool('safe_mode_systemui', val),
-                  ),
-                  GlassSwitchTile(
-                    title: 'Launcher Safe Mode',
-                    subtitle: 'Bypasses hooks inside com.miui.home',
-                    value: launcher,
-                    onChanged: (val) =>
-                        store.setBool('safe_mode_launcher', val),
-                  ),
-                  GlassSwitchTile(
-                    title: 'Settings Safe Mode',
-                    subtitle: 'Bypasses hooks inside com.android.settings',
-                    value: settings,
-                    onChanged: (val) =>
-                        store.setBool('safe_mode_settings', val),
-                  ),
-                ],
+              GlassSwitchTile(
+                title: 'Global Safe Mode',
+                subtitle:
+                    'Disables all hooks immediately across every application',
+                settingKey: 'prefs_key_global_safe_mode',
+                onChanged: (val) => store.setSafeMode('global', val),
               ),
-              const GlassSectionFooter(
-                'When Safe Mode is enabled for a target package, HyperBounce unhooks all reflection engines and lets the stock OS process start natively without intervention.',
+              GlassSwitchTile(
+                title: 'System UI Safe Mode',
+                subtitle: 'Bypasses hooks inside com.android.systemui',
+                settingKey: 'prefs_key_systemui_safe_mode_enable',
+                onChanged: (val) => store.setSafeMode('systemui', val),
               ),
-
-              const GlassSectionHeader('Crash Recovery Diagnostics'),
-              GlassGroupedCard(
-                children: [
-                  GlassActionTile(
-                    title: 'Reset All Crashing Aliases',
-                    subtitle:
-                        'Clears automated crash loop protection counters and blacklists',
-                    titleColor: CupertinoColors.systemRed,
-                    onTap: () {
-                      showCupertinoDialog(
-                        context: context,
-                        builder: (ctx) => CupertinoAlertDialog(
-                          title: const Text('Reset Crash Aliases?'),
-                          content: const Text(
-                              'This will re-enable all previously disabled feature aliases that crashed repeatedly.'),
-                          actions: [
-                            CupertinoDialogAction(
-                              child: const Text('Cancel'),
-                              onPressed: () => Navigator.of(ctx).pop(),
-                            ),
-                            CupertinoDialogAction(
-                              isDestructiveAction: true,
-                              child: const Text('Reset'),
-                              onPressed: () {
-                                Navigator.of(ctx).pop();
-                                store.setString('crashing_aliases', '');
-                              },
-                            ),
-                          ],
-                        ),
-                      );
-                    },
-                  ),
-                ],
+              GlassSwitchTile(
+                title: 'Launcher Safe Mode',
+                subtitle: 'Bypasses hooks inside com.miui.home',
+                settingKey: 'prefs_key_home_safe_mode_enable',
+                onChanged: (val) => store.setSafeMode('launcher', val),
+              ),
+              GlassSwitchTile(
+                title: 'Settings Safe Mode',
+                subtitle: 'Bypasses hooks inside com.android.settings',
+                settingKey: 'prefs_key_system_settings_safe_mode_enable',
+                onChanged: (val) => store.setSafeMode('settings', val),
               ),
             ],
           ),
-        );
-      },
+          const GlassSectionFooter(
+            'When Safe Mode is enabled for a target package, HyperBounce unhooks all reflection engines and lets the stock OS process start natively without intervention.',
+          ),
+
+          const GlassSectionHeader('Crash Recovery Diagnostics'),
+          GlassGroupedCard(
+            children: [
+              GlassActionTile(
+                title: 'Reset All Crashing Aliases',
+                subtitle:
+                    'Clears automated crash loop protection counters and blacklists',
+                titleColor: CupertinoColors.systemRed,
+                onTap: () {
+                  GlassDialog.show(
+                    context: context,
+                    title: 'Reset Crash Aliases?',
+                    message:
+                        'This will re-enable all previously disabled feature aliases that crashed repeatedly.',
+                    actions: [
+                      GlassDialogAction(
+                        label: 'Cancel',
+                        onPressed: () => Navigator.of(context).pop(),
+                      ),
+                      GlassDialogAction(
+                        label: 'Reset',
+                        isDestructive: true,
+                        onPressed: () {
+                          Navigator.of(context).pop();
+                          store.clearAllSafeModes();
+                        },
+                      ),
+                    ],
+                  );
+                },
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }

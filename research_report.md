@@ -1,5 +1,8 @@
 # Comprehensive Research Report: Kyant0 Backdrop (AndroidLiquidGlass) & Video Surfaces
 
+> [!NOTE]
+> **Historical Document**: This research document details the original Kyant0 AndroidLiquidGlass library used in the Compose companion UI. The active HyperBounce companion app uses Flutter with `liquid_glass_widgets` for UI rendering.
+
 ---
 
 ### 1. Repository Identification & Coordinates

@@ -3,6 +3,9 @@ import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 import '../bridge/native_bridge.dart';
 import '../screens/about_screen.dart';
 
+const bool kWallpaperTest =
+    bool.fromEnvironment('WALLPAPER_TEST', defaultValue: false);
+
 /// App Scaffold wrapping screens with iOS 26 Liquid Glass Chrome
 class AppScaffold extends StatelessWidget {
   final String title;
@@ -70,7 +73,7 @@ class AppScaffold extends StatelessWidget {
                 icon: const Icon(CupertinoIcons.info_circle),
                 onTap: () {
                   Navigator.of(context).push(
-                    CupertinoPageRoute(builder: (_) => const AboutScreen()),
+                    GlassPageRoute(builder: (_) => const AboutScreen()),
                   );
                 },
               ),
@@ -82,17 +85,31 @@ class AppScaffold extends StatelessWidget {
 
     return GlassScaffold(
       headerScrollController: scrollController,
+      contentAwareBrightness: true,
       background: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              Color(0xFF14151C),
-              Color(0xFF090A0D),
-              Color(0xFF000000),
-            ],
-          ),
+        decoration: BoxDecoration(
+          gradient: kWallpaperTest
+              ? const LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    Color(0xFF2E0854),
+                    Color(0xFF0F3057),
+                    Color(0xFF00587A),
+                    Color(0xFF008891),
+                  ],
+                )
+              : const LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Color(0xFF1E1035),
+                    Color(0xFF141936),
+                    Color(0xFF0D2137),
+                    Color(0xFF09131C),
+                    Color(0xFF04060A),
+                  ],
+                ),
         ),
       ),
       appBar: GlassAppBar.pinned(

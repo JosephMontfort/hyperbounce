@@ -44,22 +44,91 @@ class MainActivity : FlutterActivity() {
                     "setSetting" -> {
                         val key = call.argument<String>("key")
                         val value = call.argument<Any?>("value")
+                        val broadcast = call.argument<Boolean>("broadcast") ?: true
                         if (key != null) {
-                            repository.setSettingDynamic(key, value)
+                            val schema = repository.getSchema()
+                            if (!schema.containsKey(key)) {
+                                Log.w(TAG, "[WARN] Unknown setting key sent from Dart: '$key' (received type: ${value?.javaClass?.simpleName}, value: $value)")
+                            } else {
+                                Log.d(TAG, "[setSetting] key='$key', type=${value?.javaClass?.simpleName}, value=$value, broadcast=$broadcast")
+                            }
+                            repository.setSettingDynamic(key, value, broadcast)
                             result.success(true)
                         } else {
                             result.error("INVALID_ARG", "Key cannot be null", null)
                         }
                     }
+                    "getSchema" -> {
+                        try {
+                            val schema = repository.getSchema()
+                            result.success(schema)
+                        } catch (t: Throwable) {
+                            Log.e(TAG, "Error getting schema", t)
+                            result.error("ERROR", t.message, null)
+                        }
+                    }
                     "getModuleStatus" -> {
+                        val pm = packageManager
+                        val pInfo = try {
+                            pm.getPackageInfo(packageName, 0)
+                        } catch (_: Throwable) { null }
+                        val vName = pInfo?.versionName ?: "1.0.0"
+                        val isRoot = RootUtils.isRootAvailable()
+                        val marketName = dev.hyperios.app.safemode.SystemPropertiesHelper.get("ro.product.marketname", "").trim()
+                        val model = dev.hyperios.app.safemode.SystemPropertiesHelper.get("ro.product.model", "").trim()
+                        val devModel = if (marketName.isNotEmpty()) marketName else if (model.isNotEmpty()) model else Build.MODEL
+
+                        val miOs = dev.hyperios.app.safemode.SystemPropertiesHelper.get("ro.mi.os.version.name", "").trim()
+                        val miui = dev.hyperios.app.safemode.SystemPropertiesHelper.get("ro.miui.ui.version.name", "").trim()
+                        val hyperOs = if (miOs.isNotEmpty()) miOs else if (miui.isNotEmpty()) miui else "HyperOS"
+
                         val status = mapOf(
                             "isBound" to XposedServiceBridge.isBound,
                             "scopedPackages" to XposedServiceBridge.getScopedPackages(this),
-                            "versionName" to "1.0.0",
+                            "versionName" to vName,
                             "sdkInt" to Build.VERSION.SDK_INT,
-                            "isRootAvailable" to true
+                            "isRootAvailable" to isRoot,
+                            "deviceModel" to devModel,
+                            "hyperOsVersion" to hyperOs,
+                            "androidRelease" to Build.VERSION.RELEASE
                         )
                         result.success(status)
+                    }
+                    "getSafeModeStatus" -> {
+                        val status = mapOf(
+                            "global" to repository.safeMode.globalSafeMode,
+                            "systemui" to repository.safeMode.systemUiSafeMode,
+                            "launcher" to repository.safeMode.launcherSafeMode,
+                            "settings" to repository.safeMode.settingsSafeMode,
+                            "crashingAliases" to repository.safeMode.getCrashingAliases().toList()
+                        )
+                        result.success(status)
+                    }
+                    "setSafeMode" -> {
+                        val scope = call.argument<String>("scope")
+                        val enabled = call.argument<Boolean>("enabled") ?: false
+                        when (scope) {
+                            "global" -> repository.safeMode.setGlobalSafeMode(enabled)
+                            "systemui" -> repository.safeMode.setSystemUiSafeMode(enabled)
+                            "launcher" -> repository.safeMode.setLauncherSafeMode(enabled)
+                            "settings" -> repository.safeMode.setSettingsSafeMode(enabled)
+                            else -> Log.w(TAG, "Unknown safe mode scope: $scope")
+                        }
+                        result.success(true)
+                    }
+                    "clearCrashingAliases" -> {
+                        dev.hyperios.app.safemode.SafeModeHandler.clearAllSafeModes()
+                        result.success(true)
+                    }
+                    "buildRingtoneModule" -> {
+                        try {
+                            val presets = dev.hyperios.app.haptics.ringtone.HapticPresetStorage.loadPresets()
+                            val zipPath = dev.hyperios.app.haptics.ringtone.RingtoneModuleBuilder.buildModule(this, presets)
+                            result.success(zipPath)
+                        } catch (t: Throwable) {
+                            Log.e(TAG, "Error building ringtone module", t)
+                            result.error("ERROR", t.message, null)
+                        }
                     }
                     "restartScopedApps" -> {
                         val packages = call.argument<List<String>>("packages") ?: emptyList()

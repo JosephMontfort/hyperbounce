@@ -1,5 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
+import '../state/settings_store.dart';
 
 /// Section Header matching iOS Inset Grouped design
 class GlassSectionHeader extends StatelessWidget {
@@ -71,29 +72,88 @@ class GlassGroupedCard extends StatelessWidget {
   }
 }
 
+/// A reactive setting builder that listens only to a single key in SettingsStore.
+class SettingListener<T> extends StatelessWidget {
+  final String settingKey;
+  final T Function(SettingsStore store) getter;
+  final Widget Function(BuildContext context, T value) builder;
+
+  const SettingListener({
+    super.key,
+    required this.settingKey,
+    required this.getter,
+    required this.builder,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final store = SettingsStore.instance;
+    return ValueListenableBuilder<dynamic>(
+      valueListenable: store.listenKey(settingKey),
+      builder: (context, _, __) {
+        return builder(context, getter(store));
+      },
+    );
+  }
+}
+
 /// A GlassListTile with a trailing GlassSwitch
 class GlassSwitchTile extends StatelessWidget {
   final String title;
   final String? subtitle;
   final Widget? leading;
-  final bool value;
+  final bool? value;
+  final String? settingKey;
+  final String? enabledKey;
   final bool enabled;
-  final ValueChanged<bool> onChanged;
+  final ValueChanged<bool>? onChanged;
 
   const GlassSwitchTile({
     super.key,
     required this.title,
     this.subtitle,
     this.leading,
-    required this.value,
+    this.value,
+    this.settingKey,
+    this.enabledKey,
     this.enabled = true,
-    required this.onChanged,
+    this.onChanged,
   });
 
   @override
   Widget build(BuildContext context) {
+    if (enabledKey != null) {
+      return SettingListener<bool>(
+        settingKey: enabledKey!,
+        getter: (store) => store.getBool(enabledKey!, true),
+        builder: (ctx, isParentEnabled) =>
+            _buildWithEnabled(context, isParentEnabled && enabled),
+      );
+    }
+    return _buildWithEnabled(context, enabled);
+  }
+
+  Widget _buildWithEnabled(BuildContext context, bool isEffectiveEnabled) {
+    if (settingKey != null && value == null) {
+      return SettingListener<bool>(
+        settingKey: settingKey!,
+        getter: (store) => store.getBool(settingKey!),
+        builder: (ctx, val) => _buildRow(ctx, val, isEffectiveEnabled),
+      );
+    }
+    return _buildRow(context, value ?? false, isEffectiveEnabled);
+  }
+
+  Widget _buildRow(
+      BuildContext context, bool currentValue, bool isEffectiveEnabled) {
+    final store = SettingsStore.instance;
+    final handler = onChanged ??
+        (settingKey != null
+            ? (val) => store.setBool(settingKey!, val)
+            : (bool _) {});
+
     return Opacity(
-      opacity: enabled ? 1.0 : 0.45,
+      opacity: isEffectiveEnabled ? 1.0 : 0.45,
       child: GlassListTile(
         leading: leading,
         title: Text(
@@ -110,10 +170,10 @@ class GlassSwitchTile extends StatelessWidget {
               )
             : null,
         trailing: GlassSwitch(
-          value: value,
-          onChanged: enabled ? onChanged : (_) {},
+          value: currentValue,
+          onChanged: isEffectiveEnabled ? handler : (_) {},
         ),
-        onTap: enabled ? () => onChanged(!value) : null,
+        onTap: isEffectiveEnabled ? () => handler(!currentValue) : null,
       ),
     );
   }
@@ -123,36 +183,71 @@ class GlassSwitchTile extends StatelessWidget {
 class GlassSliderTile extends StatelessWidget {
   final String title;
   final String? subtitle;
-  final double value;
+  final Widget? leading;
+  final double? value;
+  final String? settingKey;
+  final String? enabledKey;
   final double min;
   final double max;
   final int? divisions;
   final String? unit;
   final bool enabled;
-  final ValueChanged<double> onChanged;
+  final ValueChanged<double>? onChanged;
+  final ValueChanged<double>? onChangeEnd;
 
   const GlassSliderTile({
     super.key,
     required this.title,
     this.subtitle,
-    required this.value,
+    this.leading,
+    this.value,
+    this.settingKey,
+    this.enabledKey,
     required this.min,
     required this.max,
     this.divisions,
     this.unit,
     this.enabled = true,
-    required this.onChanged,
+    this.onChanged,
+    this.onChangeEnd,
   });
 
   @override
   Widget build(BuildContext context) {
-    final displayValue = (value % 1 == 0)
-        ? value.toInt().toString()
-        : value.toStringAsFixed(2);
+    if (enabledKey != null) {
+      return SettingListener<bool>(
+        settingKey: enabledKey!,
+        getter: (store) => store.getBool(enabledKey!, true),
+        builder: (ctx, isParentEnabled) =>
+            _buildWithEnabled(context, isParentEnabled && enabled),
+      );
+    }
+    return _buildWithEnabled(context, enabled);
+  }
+
+  Widget _buildWithEnabled(BuildContext context, bool isEffectiveEnabled) {
+    if (settingKey != null && value == null) {
+      return SettingListener<double>(
+        settingKey: settingKey!,
+        getter: (store) => store.getDouble(settingKey!, min),
+        builder: (ctx, val) => _buildCard(ctx, val, isEffectiveEnabled),
+      );
+    }
+    return _buildCard(context, value ?? min, isEffectiveEnabled);
+  }
+
+  Widget _buildCard(
+      BuildContext context, double currentValue, bool isEffectiveEnabled) {
+    final store = SettingsStore.instance;
+    final clampedVal = currentValue.clamp(min, max);
+
+    final displayValue = (clampedVal % 1 == 0)
+        ? clampedVal.toInt().toString()
+        : clampedVal.toStringAsFixed(2);
     final unitStr = unit != null ? ' $unit' : '';
 
     return Opacity(
-      opacity: enabled ? 1.0 : 0.45,
+      opacity: isEffectiveEnabled ? 1.0 : 0.45,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
         child: GlassContainer.card(
@@ -195,11 +290,28 @@ class GlassSliderTile extends StatelessWidget {
               ],
               const SizedBox(height: 12),
               GlassSlider(
-                value: value.clamp(min, max),
+                value: clampedVal,
                 min: min,
                 max: max,
                 divisions: divisions,
-                onChanged: enabled ? onChanged : (_) {},
+                onChanged: isEffectiveEnabled
+                    ? (val) {
+                        FrameTimingMonitor.start();
+                        if (onChanged != null) {
+                          onChanged!(val);
+                        } else if (settingKey != null) {
+                          store.setDoubleThrottled(settingKey!, val);
+                        }
+                      }
+                    : (_) {},
+                onChangeEnd: (val) {
+                  FrameTimingMonitor.stop();
+                  if (onChangeEnd != null) {
+                    onChangeEnd!(val);
+                  } else if (settingKey != null) {
+                    store.flushDouble(settingKey!, val);
+                  }
+                },
               ),
             ],
           ),
@@ -209,27 +321,53 @@ class GlassSliderTile extends StatelessWidget {
   }
 }
 
-/// Navigation Tile pointing to subpage
+/// Navigation Tile pointing to subpage using GlassPageRoute
 class GlassNavTile extends StatelessWidget {
   final String title;
   final String? subtitle;
   final Widget? leading;
+  final String? enabledKey;
   final bool enabled;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
+  final WidgetBuilder? destination;
 
   const GlassNavTile({
     super.key,
     required this.title,
     this.subtitle,
     this.leading,
+    this.enabledKey,
     this.enabled = true,
-    required this.onTap,
+    this.onTap,
+    this.destination,
   });
 
   @override
   Widget build(BuildContext context) {
+    if (enabledKey != null) {
+      return SettingListener<bool>(
+        settingKey: enabledKey!,
+        getter: (store) => store.getBool(enabledKey!, true),
+        builder: (ctx, isParentEnabled) =>
+            _buildTile(context, isParentEnabled && enabled),
+      );
+    }
+    return _buildTile(context, enabled);
+  }
+
+  Widget _buildTile(BuildContext context, bool isEffectiveEnabled) {
+    final handleTap = () {
+      if (destination != null) {
+        Navigator.of(context).push(
+          GlassPageRoute(builder: destination!),
+        );
+      } else if (onTap != null) {
+        onTap!();
+      }
+    };
+
     return Opacity(
-      opacity: enabled ? 1.0 : 0.45,
+      opacity: isEffectiveEnabled ? 1.0 : 0.45,
       child: GlassListTile(
         leading: leading,
         title: Text(
@@ -246,7 +384,7 @@ class GlassNavTile extends StatelessWidget {
               )
             : null,
         trailing: GlassListTile.chevron,
-        onTap: enabled ? onTap : null,
+        onTap: isEffectiveEnabled ? handleTap : null,
       ),
     );
   }
@@ -258,6 +396,7 @@ class GlassActionTile extends StatelessWidget {
   final String? subtitle;
   final Widget? leading;
   final Color? titleColor;
+  final String? enabledKey;
   final bool enabled;
   final VoidCallback onTap;
 
@@ -267,14 +406,27 @@ class GlassActionTile extends StatelessWidget {
     this.subtitle,
     this.leading,
     this.titleColor,
+    this.enabledKey,
     this.enabled = true,
     required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
+    if (enabledKey != null) {
+      return SettingListener<bool>(
+        settingKey: enabledKey!,
+        getter: (store) => store.getBool(enabledKey!, true),
+        builder: (ctx, isParentEnabled) =>
+            _buildTile(context, isParentEnabled && enabled),
+      );
+    }
+    return _buildTile(context, enabled);
+  }
+
+  Widget _buildTile(BuildContext context, bool isEffectiveEnabled) {
     return Opacity(
-      opacity: enabled ? 1.0 : 0.45,
+      opacity: isEffectiveEnabled ? 1.0 : 0.45,
       child: GlassListTile(
         leading: leading,
         title: Text(
@@ -295,39 +447,110 @@ class GlassActionTile extends StatelessWidget {
               )
             : null,
         trailing: GlassListTile.chevron,
-        onTap: enabled ? onTap : null,
+        onTap: isEffectiveEnabled ? onTap : null,
       ),
     );
   }
 }
 
-/// Dropdown / Option Selector Tile
+/// Dropdown / Option Selector Tile using Liquid Glass Action Sheet
 class GlassDropdownTile extends StatelessWidget {
   final String title;
   final String? subtitle;
   final List<String> options;
-  final int selectedIndex;
+  final List<dynamic>? optionValues;
+  final int? selectedIndex;
+  final String? settingKey;
+  final String? enabledKey;
   final bool enabled;
-  final ValueChanged<int> onSelect;
+  final ValueChanged<int>? onSelect;
 
   const GlassDropdownTile({
     super.key,
     required this.title,
     this.subtitle,
     required this.options,
-    required this.selectedIndex,
+    this.optionValues,
+    this.selectedIndex,
+    this.settingKey,
+    this.enabledKey,
     this.enabled = true,
-    required this.onSelect,
+    this.onSelect,
   });
 
   @override
   Widget build(BuildContext context) {
-    final selectedOption = options.isNotEmpty && selectedIndex < options.length
-        ? options[selectedIndex]
+    if (enabledKey != null) {
+      return SettingListener<bool>(
+        settingKey: enabledKey!,
+        getter: (store) => store.getBool(enabledKey!, true),
+        builder: (ctx, isParentEnabled) =>
+            _buildWithEnabled(context, isParentEnabled && enabled),
+      );
+    }
+    return _buildWithEnabled(context, enabled);
+  }
+
+  Widget _buildWithEnabled(BuildContext context, bool isEffectiveEnabled) {
+    if (settingKey != null && selectedIndex == null) {
+      final store = SettingsStore.instance;
+      return SettingListener<dynamic>(
+        settingKey: settingKey!,
+        getter: (s) {
+          if (optionValues != null) {
+            final raw = s.getString(settingKey!);
+            final idx = optionValues!.indexOf(raw);
+            return idx >= 0 ? idx : 0;
+          }
+          final val = s.getString(settingKey!);
+          final idx = options.indexOf(val);
+          if (idx >= 0) return idx;
+          return s.getInt(settingKey!, 0);
+        },
+        builder: (ctx, selected) {
+          final idx = (selected is int) ? selected : 0;
+          return _buildTile(
+            context,
+            idx.clamp(0, options.length - 1),
+            isEffectiveEnabled,
+            (newIdx) {
+              if (onSelect != null) {
+                onSelect!(newIdx);
+              } else if (optionValues != null) {
+                store.setString(settingKey!, optionValues![newIdx].toString());
+              } else {
+                final isInt = store.schema[settingKey]?['type'] == 'int';
+                if (isInt) {
+                  store.setInt(settingKey!, newIdx);
+                } else {
+                  store.setString(settingKey!, options[newIdx]);
+                }
+              }
+            },
+          );
+        },
+      );
+    }
+    return _buildTile(
+      context,
+      selectedIndex ?? 0,
+      isEffectiveEnabled,
+      onSelect ?? (_) {},
+    );
+  }
+
+  Widget _buildTile(
+    BuildContext context,
+    int activeIndex,
+    bool isEffectiveEnabled,
+    ValueChanged<int> handleSelect,
+  ) {
+    final selectedOption = options.isNotEmpty && activeIndex < options.length
+        ? options[activeIndex]
         : '';
 
     return Opacity(
-      opacity: enabled ? 1.0 : 0.45,
+      opacity: isEffectiveEnabled ? 1.0 : 0.45,
       child: GlassListTile(
         title: Text(
           title,
@@ -356,45 +579,25 @@ class GlassDropdownTile extends StatelessWidget {
             GlassListTile.chevron,
           ],
         ),
-        onTap: enabled
+        onTap: isEffectiveEnabled
             ? () {
-                showCupertinoModalPopup(
+                showGlassActionSheet<int>(
                   context: context,
-                  builder: (ctx) => CupertinoActionSheet(
-                    title: Text(title),
-                    message: subtitle != null ? Text(subtitle!) : null,
-                    actions: options.asMap().entries.map((e) {
-                      final isSelected = e.key == selectedIndex;
-                      return CupertinoActionSheetAction(
-                        onPressed: () {
-                          Navigator.of(ctx).pop();
-                          onSelect(e.key);
-                        },
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Text(
-                              e.value,
-                              style: TextStyle(
-                                fontWeight: isSelected
-                                    ? FontWeight.bold
-                                    : FontWeight.normal,
-                              ),
-                            ),
-                            if (isSelected) ...[
-                              const SizedBox(width: 8),
-                              const Icon(CupertinoIcons.checkmark, size: 18),
-                            ],
-                          ],
-                        ),
-                      );
-                    }).toList(),
-                    cancelButton: CupertinoActionSheetAction(
-                      isDefaultAction: true,
-                      onPressed: () => Navigator.of(ctx).pop(),
-                      child: const Text('Cancel'),
-                    ),
-                  ),
+                  title: title,
+                  message: subtitle,
+                  actions: options.asMap().entries.map((e) {
+                    final isSelected = e.key == activeIndex;
+                    return GlassActionSheetAction(
+                      label: e.value,
+                      icon: isSelected
+                          ? const Icon(CupertinoIcons.checkmark, size: 18)
+                          : null,
+                      onPressed: () {
+                        Navigator.of(context).pop();
+                        handleSelect(e.key);
+                      },
+                    );
+                  }).toList(),
                 );
               }
             : null,

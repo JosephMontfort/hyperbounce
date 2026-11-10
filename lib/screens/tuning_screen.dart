@@ -2,6 +2,8 @@ import 'package:flutter/cupertino.dart';
 import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 import '../state/settings_store.dart';
 import '../widgets/setting_tiles.dart';
+import 'spec/all_specs.dart';
+import 'spec/spec_screen.dart';
 
 import 'toggles_sliders/engine_screen.dart';
 import 'lockscreen/lockscreen_stuffs_screen.dart';
@@ -104,13 +106,28 @@ class _TuningScreenState extends State<TuningScreen> {
   Widget build(BuildContext context) {
     final store = SettingsStore.instance;
     final isModuleActivated = store.isBound;
+    final q = _searchQuery.trim().toLowerCase();
 
-    final filtered = _searchQuery.trim().isEmpty
+    final filteredFeatures = q.isEmpty
         ? _features
         : _features.where((f) {
-            final q = _searchQuery.toLowerCase();
             return f.title.toLowerCase().contains(q) ||
                 f.description.toLowerCase().contains(q);
+          }).toList();
+
+    final matchingSpecs = q.isEmpty
+        ? const <ScreenSpec>[]
+        : allRegisteredSpecs.where((s) {
+            if (s.title.toLowerCase().contains(q)) return true;
+            if (s.subtitle?.toLowerCase().contains(q) ?? false) return true;
+            for (final sec in s.sections) {
+              if (sec.header?.toLowerCase().contains(q) ?? false) return true;
+              for (final item in sec.items) {
+                if (item.title.toLowerCase().contains(q)) return true;
+                if (item.subtitle?.toLowerCase().contains(q) ?? false) return true;
+              }
+            }
+            return false;
           }).toList();
 
     return ListView(
@@ -147,11 +164,11 @@ class _TuningScreenState extends State<TuningScreen> {
             ),
           ),
 
-        // iOS Search Bar
+        // Search Bar
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           child: GlassSearchBar(
-            placeholder: 'Search',
+            placeholder: 'Search settings, optics & kinetics',
             surfaceStyle: GlassSurfaceStyle.solid,
             onChanged: (val) => setState(() => _searchQuery = val),
           ),
@@ -159,42 +176,91 @@ class _TuningScreenState extends State<TuningScreen> {
 
         const SizedBox(height: 4),
 
-        // The 8 Core Feature Items
-        GlassGroupedCard(
-          children: filtered.map((item) {
-            return GlassListTile(
-              leading: Container(
-                width: 32,
-                height: 32,
-                decoration: BoxDecoration(
-                  color: item.iconColor.withValues(alpha: 0.18),
-                  borderRadius: BorderRadius.circular(8),
+        // Matching Specs Section (when searching)
+        if (matchingSpecs.isNotEmpty) ...[
+          const GlassSectionHeader('Settings & Fine Tuning Pages'),
+          GlassGroupedCard(
+            children: matchingSpecs.map((spec) {
+              return GlassListTile(
+                leading: Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF007AFF).withValues(alpha: 0.18),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(CupertinoIcons.slider_horizontal_3,
+                      size: 18, color: Color(0xFF007AFF)),
                 ),
-                child: Icon(item.icon, size: 19, color: item.iconColor),
-              ),
-              title: Text(
-                item.title,
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w500,
+                title: Text(
+                  spec.title,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
-              ),
-              subtitle: Text(
-                item.description,
-                style: const TextStyle(
-                  fontSize: 13,
-                  color: CupertinoColors.secondaryLabel,
+                subtitle: spec.subtitle != null
+                    ? Text(
+                        spec.subtitle!,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          color: CupertinoColors.secondaryLabel,
+                        ),
+                      )
+                    : null,
+                trailing: GlassListTile.chevron,
+                onTap: () {
+                  Navigator.of(context).push(
+                    GlassPageRoute(
+                      builder: (_) => SpecScreen(spec: spec),
+                    ),
+                  );
+                },
+              );
+            }).toList(),
+          ),
+          const SizedBox(height: 12),
+        ],
+
+        // Core Features
+        if (filteredFeatures.isNotEmpty) ...[
+          if (q.isNotEmpty) const GlassSectionHeader('Categories'),
+          GlassGroupedCard(
+            children: filteredFeatures.map((item) {
+              return GlassListTile(
+                leading: Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    color: item.iconColor.withValues(alpha: 0.18),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(item.icon, size: 19, color: item.iconColor),
                 ),
-              ),
-              trailing: GlassListTile.chevron,
-              onTap: () {
-                Navigator.of(context).push(
-                  CupertinoPageRoute(builder: (_) => item.destinationBuilder()),
-                );
-              },
-            );
-          }).toList(),
-        ),
+                title: Text(
+                  item.title,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                subtitle: Text(
+                  item.description,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: CupertinoColors.secondaryLabel,
+                  ),
+                ),
+                trailing: GlassListTile.chevron,
+                onTap: () {
+                  Navigator.of(context).push(
+                    GlassPageRoute(builder: (_) => item.destinationBuilder()),
+                  );
+                },
+              );
+            }).toList(),
+          ),
+        ],
       ],
     );
   }

@@ -8,6 +8,31 @@ import android.widget.Toast
 object RootUtils {
     private val mainHandler = Handler(Looper.getMainLooper())
 
+    fun isRootAvailable(): Boolean {
+        val paths = arrayOf(
+            "/system/bin/su",
+            "/system/xbin/su",
+            "/sbin/su",
+            "/data/local/xbin/su",
+            "/data/local/bin/su",
+            "/system/sd/xbin/su",
+            "/system/bin/failsafe/su",
+            "/data/local/su"
+        )
+        for (path in paths) {
+            try {
+                if (java.io.File(path).exists()) return true
+            } catch (_: Throwable) {}
+        }
+        return try {
+            val process = Runtime.getRuntime().exec(arrayOf("which", "su"))
+            val exit = process.waitFor()
+            exit == 0
+        } catch (_: Throwable) {
+            false
+        }
+    }
+
     fun restartSystemUI(context: Context) {
         runCommand(
             context = context,

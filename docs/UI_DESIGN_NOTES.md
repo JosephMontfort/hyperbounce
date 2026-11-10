@@ -1,5 +1,8 @@
 # HyperBounce UI — Phase 1 design notes
 
+> [!NOTE]
+> **Historical Document**: This document outlines the initial Jetpack Compose settings UI implementation. The UI has been ported to Flutter with `liquid_glass_widgets` on branch `flutter-ui`.
+
 Phase 1 scope: a full settings UI for the module, built purely from AndroidLiquidGlass
 components, with every control persisted to SharedPreferences — but nothing on the Xposed
 hook side reads these values yet. That wiring, plus splitting the shared Instagram/

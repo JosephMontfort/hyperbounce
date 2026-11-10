@@ -1,5 +1,8 @@
 # HyperBounce merge notes
 
+> [!NOTE]
+> **Historical Document**: This document describes the historical Compose UI architecture (`full-merge-102-ui`). The active companion UI has been ported to Flutter with `liquid_glass_widgets` on the `flutter-ui` branch. Native hooks and reflection engines remain identical.
+
 This repo is a manual, line-by-line merge of two unrelated branches:
 
 - **`hyperbounce-liquid-glass-floating-nav-102`** — floating liquid-glass nav bar

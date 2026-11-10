@@ -12,7 +12,7 @@ class SlidersScreen extends StatefulWidget {
 }
 
 class _SlidersScreenState extends State<SlidersScreen> {
-  double _previewSlider = 0.65;
+  double _previewSlider = 0.6;
 
   static const _presets = [
     MapEntry('Blue', Color(0xFF007AFF)),
@@ -24,29 +24,26 @@ class _SlidersScreenState extends State<SlidersScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return ListenableBuilder(
-      listenable: SettingsStore.instance,
-      builder: (context, _) {
-        final store = SettingsStore.instance;
+    final store = SettingsStore.instance;
 
-        final selectedPreset = store.getInt('slider_accent', 0);
-        final blur = store.getDouble('slider_glass_blur', 14.0);
-        final lensSize = store.getDouble('slider_glass_lens_size', 12.0);
-        final lensDepth = store.getDouble('slider_glass_lens_depth', 8.0);
-        final highlight = store.getDouble('slider_glass_highlight', 0.90);
-        final shadow = store.getDouble('slider_glass_shadow', 10.0);
+    return AppScaffold(
+      title: 'Sliders Appearance',
+      body: ListView(
+        padding: const EdgeInsets.only(top: 12, bottom: 60),
+        children: [
+          // Live Interactive Preview
+          SettingListener<String>(
+            settingKey: 'slider_accent',
+            getter: (s) => s.getString('slider_accent', 'Blue'),
+            builder: (ctx, accentStr) {
+              final activeColor = _presets
+                  .firstWhere((p) => p.key == accentStr,
+                      orElse: () => _presets.first)
+                  .value;
 
-        final activeColor =
-            _presets[selectedPreset.clamp(0, _presets.length - 1)].value;
-
-        return AppScaffold(
-          title: 'Sliders Appearance',
-          body: ListView(
-            padding: const EdgeInsets.only(top: 12, bottom: 60),
-            children: [
-              // Live Interactive Preview
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              return Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 child: GlassContainer.card(
                   surfaceStyle: GlassSurfaceStyle.solid,
                   padding: const EdgeInsets.all(20),
@@ -71,28 +68,33 @@ class _SlidersScreenState extends State<SlidersScreen> {
                     ],
                   ),
                 ),
-              ),
+              );
+            },
+          ),
 
-              const GlassSectionHeader('Accent Color'),
-              GlassGroupedCard(
+          const GlassSectionHeader('Accent Color'),
+          SettingListener<String>(
+            settingKey: 'slider_accent',
+            getter: (s) => s.getString('slider_accent', 'Blue'),
+            builder: (ctx, selectedStr) {
+              return GlassGroupedCard(
                 children: [
                   Padding(
                     padding: const EdgeInsets.symmetric(
                         horizontal: 16, vertical: 14),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceAround,
-                      children: _presets.asMap().entries.map((entry) {
-                        final idx = entry.key;
-                        final color = entry.value.value;
-                        final isSelected = selectedPreset == idx;
+                      children: _presets.map((entry) {
+                        final isSelected = selectedStr == entry.key;
 
                         return GestureDetector(
-                          onTap: () => store.setInt('slider_accent', idx),
+                          onTap: () =>
+                              store.setString('slider_accent', entry.key),
                           child: Container(
                             width: 44,
                             height: 44,
                             decoration: BoxDecoration(
-                              color: color,
+                              color: entry.value,
                               shape: BoxShape.circle,
                               border: isSelected
                                   ? Border.all(
@@ -105,61 +107,53 @@ class _SlidersScreenState extends State<SlidersScreen> {
                     ),
                   ),
                 ],
-              ),
-
-              const GlassSectionHeader('Liquid Glass Optics'),
-              GlassSliderTile(
-                title: 'Blur',
-                subtitle: 'Backdrop gaussian blur radius',
-                value: blur,
-                min: 0,
-                max: 30,
-                unit: 'dp',
-                onChanged: (val) => store.setDouble('slider_glass_blur', val),
-              ),
-              GlassSliderTile(
-                title: 'Lens Size',
-                subtitle: 'Curvature radius of refraction lens',
-                value: lensSize,
-                min: 0,
-                max: 24,
-                unit: 'dp',
-                onChanged: (val) =>
-                    store.setDouble('slider_glass_lens_size', val),
-              ),
-              GlassSliderTile(
-                title: 'Lens Depth',
-                subtitle: 'Optical refraction extrusion depth',
-                value: lensDepth,
-                min: 0,
-                max: 16,
-                unit: 'dp',
-                onChanged: (val) =>
-                    store.setDouble('slider_glass_lens_depth', val),
-              ),
-              GlassSliderTile(
-                title: 'Highlight Strength',
-                subtitle: 'Specular Fresnel rim highlight intensity',
-                value: highlight,
-                min: 0,
-                max: 1.0,
-                unit: '%',
-                onChanged: (val) =>
-                    store.setDouble('slider_glass_highlight', val),
-              ),
-              GlassSliderTile(
-                title: 'Shadow Radius',
-                subtitle: 'Diffusion radius of glass drop shadow',
-                value: shadow,
-                min: 0,
-                max: 24,
-                unit: 'dp',
-                onChanged: (val) => store.setDouble('slider_glass_shadow', val),
-              ),
-            ],
+              );
+            },
           ),
-        );
-      },
+
+          const GlassSectionHeader('Liquid Glass Optics'),
+          const GlassSliderTile(
+            title: 'Blur',
+            subtitle: 'Backdrop gaussian blur radius',
+            settingKey: 'slider_glass_blur',
+            min: 0,
+            max: 30,
+            unit: 'dp',
+          ),
+          const GlassSliderTile(
+            title: 'Lens Size',
+            subtitle: 'Curvature radius of refraction lens',
+            settingKey: 'slider_glass_lens_size',
+            min: 0,
+            max: 24,
+            unit: 'dp',
+          ),
+          const GlassSliderTile(
+            title: 'Lens Depth',
+            subtitle: 'Optical refraction extrusion depth',
+            settingKey: 'slider_glass_lens_depth',
+            min: 0,
+            max: 16,
+            unit: 'dp',
+          ),
+          const GlassSliderTile(
+            title: 'Highlight Strength',
+            subtitle: 'Specular Fresnel rim highlight intensity',
+            settingKey: 'slider_glass_highlight',
+            min: 0,
+            max: 1.0,
+            unit: '%',
+          ),
+          const GlassSliderTile(
+            title: 'Shadow Radius',
+            subtitle: 'Diffusion radius of glass drop shadow',
+            settingKey: 'slider_glass_shadow',
+            min: 0,
+            max: 24,
+            unit: 'dp',
+          ),
+        ],
+      ),
     );
   }
 }
@@ -176,69 +170,49 @@ class _SliderPhysicsScreenState extends State<SliderPhysicsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return ListenableBuilder(
-      listenable: SettingsStore.instance,
-      builder: (context, _) {
-        final store = SettingsStore.instance;
-
-        final sensitivity =
-            store.getDouble('slider_glass_drag_sensitivity', 1.0);
-        final damping =
-            store.getDouble('slider_glass_spring_damping', 0.86);
-        final stiffness =
-            store.getDouble('slider_glass_spring_stiffness', 380.0);
-
-        return AppScaffold(
-          title: 'Sliders Drag Physics',
-          body: ListView(
-            padding: const EdgeInsets.only(top: 12, bottom: 60),
-            children: [
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                child: GlassContainer.card(
-                  surfaceStyle: GlassSurfaceStyle.solid,
-                  padding: const EdgeInsets.all(20),
-                  child: GlassSlider(
-                    value: _previewSlider,
-                    onChanged: (val) => setState(() => _previewSlider = val),
-                  ),
-                ),
+    return AppScaffold(
+      title: 'Sliders Drag Physics',
+      body: ListView(
+        padding: const EdgeInsets.only(top: 12, bottom: 60),
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: GlassContainer.card(
+              surfaceStyle: GlassSurfaceStyle.solid,
+              padding: const EdgeInsets.all(20),
+              child: GlassSlider(
+                value: _previewSlider,
+                onChanged: (val) => setState(() => _previewSlider = val),
               ),
-
-              const GlassSectionHeader('Drag Physics'),
-              GlassSliderTile(
-                title: 'Drag Sensitivity',
-                subtitle: 'Touch tracking movement ratio',
-                value: sensitivity,
-                min: 0.2,
-                max: 2.5,
-                onChanged: (val) =>
-                    store.setDouble('slider_glass_drag_sensitivity', val),
-              ),
-              GlassSliderTile(
-                title: 'Spring Bounciness',
-                subtitle:
-                    'Lower = more overshoot bounce, Higher = stiffer vibration damping',
-                value: damping,
-                min: 0.3,
-                max: 1.5,
-                onChanged: (val) =>
-                    store.setDouble('slider_glass_spring_damping', val),
-              ),
-              GlassSliderTile(
-                title: 'Spring Stiffness',
-                subtitle:
-                    'Lower = slower return oscillation, Higher = rapid snap settling',
-                value: stiffness,
-                min: 50,
-                max: 800,
-                onChanged: (val) =>
-                    store.setDouble('slider_glass_spring_stiffness', val),
-              ),
-            ],
+            ),
           ),
-        );
-      },
+
+          const GlassSectionHeader('Drag Physics'),
+          const GlassSliderTile(
+            title: 'Drag Sensitivity',
+            subtitle: 'Touch tracking movement ratio',
+            settingKey: 'slider_glass_drag_sensitivity',
+            min: 0.2,
+            max: 2.5,
+          ),
+          const GlassSliderTile(
+            title: 'Spring Bounciness',
+            subtitle:
+                'Lower = more overshoot bounce, Higher = stiffer vibration damping',
+            settingKey: 'slider_glass_spring_damping',
+            min: 0.3,
+            max: 1.5,
+          ),
+          const GlassSliderTile(
+            title: 'Spring Stiffness',
+            subtitle:
+                'Lower = slower return oscillation, Higher = rapid snap settling',
+            settingKey: 'slider_glass_spring_stiffness',
+            min: 50,
+            max: 800,
+          ),
+        ],
+      ),
     );
   }
 }

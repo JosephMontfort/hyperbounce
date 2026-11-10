@@ -1,4 +1,6 @@
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/material.dart'
+    show Theme, ThemeData, PageTransitionsTheme, TargetPlatform;
 import 'package:flutter/services.dart';
 import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 
@@ -6,6 +8,9 @@ import 'state/settings_store.dart';
 import 'widgets/app_scaffold.dart';
 import 'screens/tuning_screen.dart';
 import 'screens/settings_screen.dart';
+
+const bool kAdaptiveQuality =
+    bool.fromEnvironment('ADAPTIVE_QUALITY', defaultValue: true);
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -28,7 +33,7 @@ void main() async {
 
   runApp(
     LiquidGlassWidgets.wrap(
-      adaptiveQuality: true,
+      adaptiveQuality: kAdaptiveQuality,
       child: const HyperiOSApp(),
     ),
   );
@@ -48,8 +53,21 @@ class HyperiOSApp extends StatelessWidget {
         scaffoldBackgroundColor: Color(0xFF000000),
         barBackgroundColor: Color(0xCC1A1A1A),
       ),
-      // GlassNavigationShell provides iOS 26 pinned navigation chrome across route changes
-      builder: (context, child) => GlassNavigationShell(child: child!),
+      // GlassNavigationShell & GlassPageTransitionsBuilder provide authentic iOS 26 navigation transitions
+      builder: (context, child) {
+        return Theme(
+          data: ThemeData(
+            brightness: Brightness.dark,
+            pageTransitionsTheme: const PageTransitionsTheme(
+              builders: {
+                TargetPlatform.android: GlassPageTransitionsBuilder(),
+                TargetPlatform.iOS: GlassPageTransitionsBuilder(),
+              },
+            ),
+          ),
+          child: GlassNavigationShell(child: child!),
+        );
+      },
       home: const RootNavigationScreen(),
     );
   }
