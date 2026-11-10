@@ -1,4 +1,5 @@
 import 'screen_spec.dart';
+export 'screen_spec.dart';
 
 // ============================================================================
 // BATCH (a): KEYPAD SPECS

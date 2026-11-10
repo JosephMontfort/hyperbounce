@@ -3,6 +3,7 @@ import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 import '../state/settings_store.dart';
 import '../widgets/setting_tiles.dart';
 import 'spec/all_specs.dart';
+import 'spec/screen_spec.dart';
 import 'spec/spec_screen.dart';
 
 import 'toggles_sliders/engine_screen.dart';
