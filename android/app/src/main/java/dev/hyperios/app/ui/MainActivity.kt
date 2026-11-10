@@ -3,6 +3,8 @@ package dev.hyperios.app.ui
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
 import dev.hyperios.app.ui.state.AppIconStyle
 import dev.hyperios.app.ui.state.SettingsRepository
 import dev.hyperios.app.ui.state.XposedServiceBridge
@@ -121,13 +123,19 @@ class MainActivity : FlutterActivity() {
                         result.success(true)
                     }
                     "buildRingtoneModule" -> {
-                        try {
-                            val presets = dev.hyperios.app.haptics.ringtone.HapticPresetStorage.loadPresets()
-                            val zipPath = dev.hyperios.app.haptics.ringtone.RingtoneModuleBuilder.buildModule(this, presets)
-                            result.success(zipPath)
-                        } catch (t: Throwable) {
-                            Log.e(TAG, "Error building ringtone module", t)
-                            result.error("ERROR", t.message, null)
+                        lifecycleScope.launch {
+                            try {
+                                val presets = dev.hyperios.app.haptics.ringtone.HapticPresetStorage.listPresets(this@MainActivity)
+                                val buildResult = dev.hyperios.app.haptics.ringtone.RingtoneModuleBuilder.buildModule(this@MainActivity, presets)
+                                if (buildResult.success && buildResult.zipFile != null) {
+                                    result.success(buildResult.zipFile.absolutePath)
+                                } else {
+                                    result.error("BUILD_FAILED", buildResult.errorMessage ?: "Build failed", null)
+                                }
+                            } catch (t: Throwable) {
+                                Log.e(TAG, "Error building ringtone module", t)
+                                result.error("ERROR", t.message, null)
+                            }
                         }
                     }
                     "restartScopedApps" -> {
