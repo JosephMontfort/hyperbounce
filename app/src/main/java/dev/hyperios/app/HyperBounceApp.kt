@@ -13,7 +13,7 @@ class HyperBounceApp : Application() {
         XposedServiceBridge.init()
         XposedServiceBridge.onBind {
             Log.i("HyperiOS", "HyperBounceApp: XposedService bound, triggering pending push flush")
-            SettingsRepository.PrefMirrorSyncManager.drainDirtyQueue()
+            SettingsRepository.drainDirtyQueue()
         }
     }
 }
