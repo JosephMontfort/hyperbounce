@@ -6,6 +6,7 @@ import android.graphics.Insets
 import android.util.Log
 import android.view.View
 import android.view.ViewGroup
+import android.view.ViewTreeObserver
 import android.view.WindowInsets
 import android.widget.FrameLayout
 import androidx.compose.ui.platform.ComposeView
@@ -175,15 +176,27 @@ class FacebookHook(
                 val result = chain.proceed()
                 val child = chain.args[0] as? View
                 if (child is ViewGroup && isReelsActive) {
-                    applyReelsTranslationToReelTree(child)
-                    val key = 0x7F0B9903
-                    if (child.getTag(key) == null) {
-                        child.setTag(key, true)
-                        child.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
-                            if (isReelsActive) {
-                                applyReelsTranslationToReelTree(child)
+                    val vto = child.viewTreeObserver
+                    if (vto.isAlive) {
+                        var attempts = 0
+                        val preDrawListener = object : ViewTreeObserver.OnPreDrawListener {
+                            override fun onPreDraw(): Boolean {
+                                if (!isReelsActive || !child.isAttachedToWindow || attempts++ > 15) {
+                                    if (child.viewTreeObserver.isAlive) child.viewTreeObserver.removeOnPreDrawListener(this)
+                                    return true
+                                }
+                                val shifted = applyReelsTranslationToReelTree(child)
+                                if (shifted) {
+                                    if (child.viewTreeObserver.isAlive) child.viewTreeObserver.removeOnPreDrawListener(this)
+                                }
+                                return true
                             }
                         }
+                        vto.addOnPreDrawListener(preDrawListener)
+                    }
+                    applyReelsTranslationToReelTree(child)
+                    child.post {
+                        if (isReelsActive && child.isAttachedToWindow) applyReelsTranslationToReelTree(child)
                     }
                 }
                 result
@@ -380,7 +393,13 @@ class FacebookHook(
         return false
     }
 
-    private fun applyReelsTranslationToReelTree(root: ViewGroup) {
+    private fun hasTapControls(view: View): Boolean {
+        val name = view.javaClass.name.lowercase()
+        return name.contains("gesture") || name.contains("playbackgesture") || name.contains("taphandler")
+    }
+
+    private fun applyReelsTranslationToReelTree(root: ViewGroup): Boolean {
+        var didShiftAny = false
         val containers = mutableListOf<ViewGroup>()
         findReelContainers(root, containers)
         for (reelButton in containers) {
@@ -391,38 +410,44 @@ class FacebookHook(
                 it.clipToPadding = false
             }
 
-            var child2: ViewGroup? = null
+            var overlayContainer: ViewGroup? = null
             for (i in 0 until reelButton.childCount) {
                 val c = reelButton.getChildAt(i)
-                if (c is ViewGroup && !hasSurfaceView(c)) {
-                    if (c.top > reelButton.top + (reelButton.height * 0.3f) || (reelButton.childCount >= 3 && i == 2)) {
-                        child2 = c
-                        break
+                if (c is ViewGroup && !hasSurfaceView(c) && !hasTapControls(c)) {
+                    if (c.childCount > 0 || overlayContainer == null) {
+                        overlayContainer = c
+                        if (c.childCount > 0) break
                     }
                 }
             }
-            if (child2 == null && reelButton.childCount >= 3) {
-                val c = reelButton.getChildAt(2)
-                if (c is ViewGroup && !hasSurfaceView(c)) {
-                    child2 = c
-                }
-            }
 
-            if (child2 != null) {
-                child2.clipChildren = false
-                child2.clipToPadding = false
-                if (child2.translationY != 0f) child2.translationY = 0f // MUST STAY AT 0f!
+            if (overlayContainer != null) {
+                overlayContainer.clipChildren = false
+                overlayContainer.clipToPadding = false
+                if (overlayContainer.translationY != 0f) overlayContainer.translationY = 0f
 
-                for (j in 0 until child2.childCount) {
-                    val sc = child2.getChildAt(j) ?: continue
+                for (j in 0 until overlayContainer.childCount) {
+                    val sc = overlayContainer.getChildAt(j) ?: continue
+                    val h = if (sc.height > 0) sc.height else (sc.layoutParams?.height ?: 0)
                     if (sc is ViewGroup && sc.childCount > 0) {
-                        sc.translationY = -190f // Subchild 0: Metadata + Side Buttons
-                        sShiftedReelViews.add(sc)
-                    } else if (sc.height in 1..120 || j == child2.childCount - 1) {
-                        sc.translationY = -190f // Subchild 2: Progress bar / Scrubber
-                        sShiftedReelViews.add(sc)
+                        // Subchild 0: Metadata + Side Buttons -> Shift Up
+                        if (sc.translationY != -190f) {
+                            sc.translationY = -190f
+                            sShiftedReelViews.add(sc)
+                        }
+                        didShiftAny = true
+                    } else if ((sc !is ViewGroup || sc.childCount == 0) && h in 1..120) {
+                        // Subchild 2: Progress bar / Scrubber -> Shift Up
+                        if (sc.translationY != -190f) {
+                            sc.translationY = -190f
+                            sShiftedReelViews.add(sc)
+                        }
+                        didShiftAny = true
                     } else {
-                        if (sc.translationY != 0f) sc.translationY = 0f // Subchild 1: 300px Dark Dimming Scrim stays at 0f!
+                        // Subchild 1: 300px Dark Dimming Scrim -> MUST REMAIN AT 0f GROUNDED!
+                        if (sc.translationY != 0f) {
+                            sc.translationY = 0f
+                        }
                     }
                 }
             }
@@ -432,10 +457,14 @@ class FacebookHook(
         for (id in seekbarIds) {
             val v = root.findViewById<View>(id)
             if (v != null) {
-                v.translationY = -190f
-                sShiftedReelViews.add(v)
+                if (v.translationY != -190f) {
+                    v.translationY = -190f
+                    sShiftedReelViews.add(v)
+                }
+                didShiftAny = true
             }
         }
+        return didShiftAny
     }
 
     private fun resetShiftedReelsOverlays() {

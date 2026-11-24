@@ -60,52 +60,113 @@ private fun findImageView(g: ViewGroup): ImageView? {
 }
 
 private fun extractTabDrawables(child: View): Pair<Drawable?, Drawable?> {
-    var activeDrawable: Drawable? = null
-    var inactiveDrawable: Drawable? = null
+    var outlineDrawable: Drawable? = null
+    var filledDrawable: Drawable? = null
 
-    // Strategy 1: Reflect field A0T (C03LV) which holds A00 (active) and A01 (inactive)
-    val fieldA0T = child.javaClass.findFieldRecursively("A0T")
-    val c03lv = fieldA0T?.get(child)
-    if (c03lv != null) {
-        try {
-            val fieldA00 = c03lv.javaClass.findFieldRecursively("A00")
-            val fieldA01 = c03lv.javaClass.findFieldRecursively("A01")
-            val activeD = fieldA00?.get(c03lv) as? Drawable
-            val inactiveD = fieldA01?.get(c03lv) as? Drawable
-            if (activeD != null) activeDrawable = activeD
-            if (inactiveD != null) inactiveDrawable = inactiveD
-        } catch (_: Throwable) {}
-    }
+    // Strategy 1: Reflective C02LI.A00(a0s, variant, child)
+    try {
+        val a0sField = child.javaClass.findFieldRecursively("A0s")
+            ?: child.javaClass.findFieldRecursively("A0S")
+            ?: child.javaClass.findFieldRecursively("A0T")
+        val a0sObj = a0sField?.get(child)
+        val allMethods = child.javaClass.declaredMethods + child.javaClass.methods
+        val a00Method = allMethods.firstOrNull { m ->
+            m.name == "A00" && m.parameterTypes.size in 2..3 && m.parameterTypes.any { pt ->
+                pt.isEnum && pt.enumConstants?.any { it.toString().contains("FILLED") } == true
+            }
+        }
+        if (a00Method != null) {
+            a00Method.isAccessible = true
+            val enumParamIdx = a00Method.parameterTypes.indexOfFirst { pt ->
+                pt.isEnum && pt.enumConstants?.any { it.toString().contains("FILLED") } == true
+            }
+            val enumConstants = a00Method.parameterTypes[enumParamIdx].enumConstants
+            if (enumConstants != null) {
+                var filledConstant: Any? = null
+                var outlineConstant: Any? = null
+                for (ec in enumConstants) {
+                    val name = ec.toString().uppercase()
+                    if (name.contains("FILLED")) filledConstant = ec
+                    if (name.contains("OUTLINE")) outlineConstant = ec
+                }
+                fun callMethod(variant: Any?): Drawable? {
+                    if (variant == null) return null
+                    val args = arrayOfNulls<Any>(a00Method.parameterTypes.size)
+                    for (i in a00Method.parameterTypes.indices) {
+                        if (i == enumParamIdx) {
+                            args[i] = variant
+                        } else if (a00Method.parameterTypes[i].isAssignableFrom(child.javaClass) || a00Method.parameterTypes[i] == View::class.java) {
+                            args[i] = child
+                        } else if (a0sObj != null && a00Method.parameterTypes[i].isAssignableFrom(a0sObj.javaClass)) {
+                            args[i] = a0sObj
+                        } else {
+                            args[i] = a0sObj
+                        }
+                    }
+                    return (try { a00Method.invoke(null, *args) } catch (_: Throwable) { a00Method.invoke(child, *args) }) as? Drawable
+                }
+                if (filledConstant != null) {
+                    filledDrawable = callMethod(filledConstant)
+                }
+                if (outlineConstant != null) {
+                    outlineDrawable = callMethod(outlineConstant)
+                }
+            }
+        }
+    } catch (_: Throwable) {}
 
-    // Strategy 2: Call DxG() method if activeDrawable is missing
-    if (activeDrawable == null) {
-        try {
-            val dxGMethod = child.javaClass.getMethod("DxG")
-            val d = dxGMethod.invoke(child) as? Drawable
-            if (d != null) activeDrawable = d
-        } catch (_: Throwable) {}
-    }
-
-    // Strategy 3: Reflect field A02 if activeDrawable is missing
-    if (activeDrawable == null) {
-        try {
-            val fieldA02 = child.javaClass.findFieldRecursively("A02")
-            val d = fieldA02?.get(child) as? Drawable
-            if (d != null) activeDrawable = d
-        } catch (_: Throwable) {}
-    }
-
-    // Strategy 4: Fallback to ImageView child
-    if ((activeDrawable == null || inactiveDrawable == null) && child is ViewGroup) {
-        val iv = findImageView(child)
-        val d = iv?.drawable
-        if (d != null) {
-            if (activeDrawable == null) activeDrawable = d
-            if (inactiveDrawable == null) inactiveDrawable = d
+    // Strategy 2: Reflect field A0T (C03LV) which holds A00 (active) and A01 (inactive)
+    if (filledDrawable == null || outlineDrawable == null) {
+        val fieldA0T = child.javaClass.findFieldRecursively("A0T")
+        val c03lv = fieldA0T?.get(child)
+        if (c03lv != null) {
+            try {
+                val fieldA00 = c03lv.javaClass.findFieldRecursively("A00")
+                val fieldA01 = c03lv.javaClass.findFieldRecursively("A01")
+                val activeD = fieldA00?.get(c03lv) as? Drawable
+                val inactiveD = fieldA01?.get(c03lv) as? Drawable
+                if (activeD != null && filledDrawable == null) filledDrawable = activeD
+                if (inactiveD != null && outlineDrawable == null) outlineDrawable = inactiveD
+            } catch (_: Throwable) {}
         }
     }
 
-    return Pair(inactiveDrawable ?: activeDrawable, activeDrawable ?: inactiveDrawable)
+    // Strategy 3: Call DxG() method if filledDrawable is missing
+    if (filledDrawable == null) {
+        try {
+            val dxGMethod = child.javaClass.getMethod("DxG")
+            val d = dxGMethod.invoke(child) as? Drawable
+            if (d != null) filledDrawable = d
+        } catch (_: Throwable) {}
+    }
+
+    // Strategy 4: Reflect field A02
+    try {
+        val fieldA02 = child.javaClass.findFieldRecursively("A02")
+        val d = fieldA02?.get(child) as? Drawable
+        if (d != null) {
+            if (child.isSelected) {
+                if (filledDrawable == null) filledDrawable = d
+            } else {
+                if (outlineDrawable == null) outlineDrawable = d
+            }
+        }
+    } catch (_: Throwable) {}
+
+    // Strategy 5: Fallback to ImageView child
+    if ((filledDrawable == null || outlineDrawable == null) && child is ViewGroup) {
+        val iv = findImageView(child)
+        val d = iv?.drawable
+        if (d != null) {
+            if (child.isSelected) {
+                if (filledDrawable == null) filledDrawable = d
+            } else {
+                if (outlineDrawable == null) outlineDrawable = d
+            }
+        }
+    }
+
+    return Pair(outlineDrawable, filledDrawable)
 }
 
 private fun drawableToBitmap(
@@ -269,7 +330,9 @@ private fun findFacebookTabViews(container: ViewGroup): List<View> {
 private fun extractFacebookTabs(
     tabBarContainer: ViewGroup,
     isDark: Boolean,
-    accentColor: Color
+    accentColor: Color,
+    outlineCache: MutableMap<Int, Bitmap>,
+    filledCache: MutableMap<Int, Bitmap>
 ): List<FacebookTabData> {
     val out = mutableListOf<FacebookTabData>()
     val tabViews = findFacebookTabViews(tabBarContainer)
@@ -279,22 +342,30 @@ private fun extractFacebookTabs(
     val activeTint = accentColor.toArgb()
 
     for ((index, child) in tabViews.withIndex()) {
-        val (inactiveDrawable, activeDrawable) = extractTabDrawables(child)
+        val (outlineDrawable, filledDrawable) = extractTabDrawables(child)
 
-        var inactiveBmp = inactiveDrawable?.let { drawableToBitmap(it, tint = inactiveTint) }
-        var activeBmp = activeDrawable?.let {
-            if (activeDrawable !== inactiveDrawable) {
-                drawableToBitmap(it, tint = null) ?: drawableToBitmap(it, tint = activeTint)
-            } else {
-                drawableToBitmap(it, tint = activeTint)
-            }
+        if (outlineDrawable != null && !outlineCache.containsKey(index)) {
+            drawableToBitmap(outlineDrawable, tint = inactiveTint)?.let { outlineCache[index] = it }
         }
+        if (filledDrawable != null && !filledCache.containsKey(index)) {
+            drawableToBitmap(filledDrawable, tint = activeTint)?.let { filledCache[index] = it }
+        }
+
+        var inactiveBmp = outlineCache[index]
+        var activeBmp = filledCache[index]
 
         if (inactiveBmp == null && child is ViewGroup) {
             val iv = findImageView(child)
             if (iv?.drawable != null) {
-                inactiveBmp = drawableToBitmap(iv.drawable, tint = inactiveTint)
-                activeBmp = drawableToBitmap(iv.drawable, tint = activeTint)
+                val bmpInactive = drawableToBitmap(iv.drawable, tint = inactiveTint)
+                val bmpActive = drawableToBitmap(iv.drawable, tint = activeTint)
+                if (child.isSelected) {
+                    if (bmpActive != null && !filledCache.containsKey(index)) filledCache[index] = bmpActive
+                } else {
+                    if (bmpInactive != null && !outlineCache.containsKey(index)) outlineCache[index] = bmpInactive
+                }
+                inactiveBmp = outlineCache[index]
+                activeBmp = filledCache[index]
             } else if (child.width > 0 && child.height > 0) {
                 try {
                     val bmp = Bitmap.createBitmap(
@@ -303,8 +374,13 @@ private fun extractFacebookTabs(
                         Bitmap.Config.ARGB_8888
                     )
                     child.draw(Canvas(bmp))
-                    inactiveBmp = bmp
-                    activeBmp = bmp
+                    if (child.isSelected) {
+                        if (!filledCache.containsKey(index)) filledCache[index] = bmp
+                    } else {
+                        if (!outlineCache.containsKey(index)) outlineCache[index] = bmp
+                    }
+                    inactiveBmp = outlineCache[index]
+                    activeBmp = filledCache[index]
                 } catch (_: Throwable) {}
             }
         }
@@ -356,6 +432,7 @@ fun FacebookNavBarHost(
 
     var tabs by remember { mutableStateOf(emptyList<FacebookTabData>()) }
     var selectedIndex by remember { mutableIntStateOf(0) }
+    val outlineBitmapsCache = remember { mutableMapOf<Int, Bitmap>() }
     val filledBitmapsCache = remember { mutableMapOf<Int, Bitmap>() }
     val activity = (backdropSource.context as? Activity) ?: (tabBarContainer.context as? Activity)
     val scrollShrinkState = rememberScrollShrinkState(
@@ -371,25 +448,16 @@ fun FacebookNavBarHost(
 
     LaunchedEffect(tabBarContainer, isDark, accentColor) {
         val activeTint = accentColor.toArgb()
-        val initialTabs = extractFacebookTabs(tabBarContainer, isDark, accentColor)
-        initialTabs.forEachIndexed { idx, tab ->
-            if (tab.activeBitmap != null) {
-                filledBitmapsCache[idx] = tab.activeBitmap
-            }
-        }
+        val inactiveTint = if (isDark) android.graphics.Color.WHITE else android.graphics.Color.parseColor("#65676B")
+        val initialTabs = extractFacebookTabs(tabBarContainer, isDark, accentColor, outlineBitmapsCache, filledBitmapsCache)
         tabs = initialTabs
         selectedIndex = extractSelectedIndex(tabBarContainer, tabs)
 
         while (true) {
             delay(150L)
             if (tabs.isEmpty() || tabs.any { it.inactiveBitmap == null }) {
-                val extracted = extractFacebookTabs(tabBarContainer, isDark, accentColor)
+                val extracted = extractFacebookTabs(tabBarContainer, isDark, accentColor, outlineBitmapsCache, filledBitmapsCache)
                 if (extracted.isNotEmpty()) {
-                    extracted.forEachIndexed { idx, tab ->
-                        if (tab.activeBitmap != null) {
-                            filledBitmapsCache[idx] = tab.activeBitmap
-                        }
-                    }
                     tabs = extracted
                 }
             } else {
@@ -403,24 +471,42 @@ fun FacebookNavBarHost(
                 val updatedTabs = tabs.mapIndexed { idx, tab ->
                     val (count, dot) = extractBadge(tab.tabView)
                     var activeBmp = tab.activeBitmap
-                    if (idx == curSelected && (activeBmp == null || activeBmp == tab.inactiveBitmap || !filledBitmapsCache.containsKey(idx))) {
-                        val (_, activeD) = extractTabDrawables(tab.tabView)
-                        if (activeD != null) {
-                            val bmp = drawableToBitmap(activeD, tint = null) ?: drawableToBitmap(activeD, tint = activeTint)
-                            if (bmp != null) {
-                                filledBitmapsCache[idx] = bmp
-                                activeBmp = bmp
-                                tabsMutated = true
+                    var inactiveBmp = tab.inactiveBitmap
+
+                    if (idx == curSelected) {
+                        if (!filledBitmapsCache.containsKey(idx)) {
+                            val (_, activeD) = extractTabDrawables(tab.tabView)
+                            if (activeD != null) {
+                                val bmp = drawableToBitmap(activeD, tint = activeTint)
+                                if (bmp != null) {
+                                    filledBitmapsCache[idx] = bmp
+                                }
                             }
                         }
-                    } else if (filledBitmapsCache.containsKey(idx) && activeBmp != filledBitmapsCache[idx]) {
-                        activeBmp = filledBitmapsCache[idx]
-                        tabsMutated = true
+                        if (filledBitmapsCache.containsKey(idx) && activeBmp != filledBitmapsCache[idx]) {
+                            activeBmp = filledBitmapsCache[idx]
+                            tabsMutated = true
+                        }
+                    } else {
+                        // Unselected tab: ensure outline icon is used for inactiveBitmap
+                        if (!outlineBitmapsCache.containsKey(idx)) {
+                            val (outlineD, _) = extractTabDrawables(tab.tabView)
+                            if (outlineD != null) {
+                                val bmp = drawableToBitmap(outlineD, tint = inactiveTint)
+                                if (bmp != null) {
+                                    outlineBitmapsCache[idx] = bmp
+                                }
+                            }
+                        }
+                        if (outlineBitmapsCache.containsKey(idx) && inactiveBmp != outlineBitmapsCache[idx]) {
+                            inactiveBmp = outlineBitmapsCache[idx]
+                            tabsMutated = true
+                        }
                     }
 
-                    if (count != tab.badgeCount || dot != tab.hasBadgeDot || activeBmp != tab.activeBitmap) {
+                    if (count != tab.badgeCount || dot != tab.hasBadgeDot || activeBmp != tab.activeBitmap || inactiveBmp != tab.inactiveBitmap) {
                         tabsMutated = true
-                        tab.copy(badgeCount = count, hasBadgeDot = dot, activeBitmap = activeBmp)
+                        tab.copy(badgeCount = count, hasBadgeDot = dot, activeBitmap = activeBmp, inactiveBitmap = inactiveBmp)
                     } else {
                         tab
                     }
@@ -433,11 +519,6 @@ fun FacebookNavBarHost(
     }
 
     if (tabs.isEmpty()) return
-
-    val profileIndex = tabs.indexOfLast {
-        val desc = it.label?.lowercase() ?: ""
-        desc.contains("menu") || desc.contains("profile") || desc.contains("account")
-    }.takeIf { it >= 0 } ?: if (tabs.size >= 5) tabs.size - 1 else -1
 
     LiquidNavigationBar(
         bottomPadding = live.bottomMargin.dp,
@@ -453,8 +534,7 @@ fun FacebookNavBarHost(
             }
         },
         sourceView = backdropSource,
-        circularIndices = if (profileIndex >= 0) setOf(profileIndex) else emptySet(),
-        sparkleIndices = if (profileIndex >= 0) setOf(profileIndex) else emptySet(),
+        circularIndices = emptySet(),
         forceLightTheme = (live.themeMode == "Light"),
         forceDarkTheme = (live.themeMode == "Dark"),
         containerAlpha = live.containerOpacity,
