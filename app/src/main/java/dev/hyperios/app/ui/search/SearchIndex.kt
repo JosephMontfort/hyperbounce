@@ -657,6 +657,15 @@ object SearchIndex {
             keywords = listOf("youtube", "navbar", "floating", "bottom bar")
         ),
         SearchItem(
+            id = "nav_facebook",
+            title = "Facebook Navigation Bar",
+            category = "Floating Navigation Bar > Facebook",
+            destination = Destination.AppDetail(NavApp.Facebook),
+            highlightKey = "Facebook Navigation Bar",
+            scrollIndex = 0,
+            keywords = listOf("facebook", "navbar", "floating", "bottom bar", "fb")
+        ),
+        SearchItem(
             id = "nav_bar_blur",
             title = "Bar Blur Intensity",
             category = "Floating Navigation Bar > Appearance",

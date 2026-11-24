@@ -1,6 +1,7 @@
 package dev.hyperios.app
 
 import android.util.Log
+import dev.hyperios.app.nav.FacebookHook
 import dev.hyperios.app.nav.InstagramHook
 import dev.hyperios.app.nav.WhatsAppHook
 import dev.hyperios.app.nav.YouTubeHook
@@ -55,6 +56,9 @@ class PhysicsHook : XposedModule() {
 
                 param.packageName == "com.google.android.youtube" ->
                     YouTubeHook(this, param).onPackageReady()
+
+                param.packageName == "com.facebook.katana" ->
+                    FacebookHook(this, param).onPackageReady()
 
                 param.packageName == "com.android.systemui" -> {
                     if (prefs != null) {

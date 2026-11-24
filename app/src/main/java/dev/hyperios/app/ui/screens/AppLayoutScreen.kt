@@ -30,21 +30,25 @@ fun AppLayoutScreen(
         NavApp.WhatsApp -> ModuleDefaults.NavApps.WhatsApp.CORNER_RADIUS
         NavApp.YouTube -> ModuleDefaults.NavApps.YouTube.CORNER_RADIUS
         NavApp.Instagram -> ModuleDefaults.NavApps.Instagram.CORNER_RADIUS
+        NavApp.Facebook -> ModuleDefaults.NavApps.Facebook.CORNER_RADIUS
     }
     val defaultBarHeight = when (app) {
         NavApp.WhatsApp -> ModuleDefaults.NavApps.WhatsApp.BAR_HEIGHT
         NavApp.YouTube -> ModuleDefaults.NavApps.YouTube.BAR_HEIGHT
         NavApp.Instagram -> ModuleDefaults.NavApps.Instagram.BAR_HEIGHT
+        NavApp.Facebook -> ModuleDefaults.NavApps.Facebook.BAR_HEIGHT
     }
     val defaultTabWidth = when (app) {
         NavApp.WhatsApp -> ModuleDefaults.NavApps.WhatsApp.TAB_WIDTH
         NavApp.YouTube -> ModuleDefaults.NavApps.YouTube.TAB_WIDTH
         NavApp.Instagram -> ModuleDefaults.NavApps.Instagram.TAB_WIDTH
+        NavApp.Facebook -> ModuleDefaults.NavApps.Facebook.TAB_WIDTH
     }
     val defaultBottomMargin = when (app) {
         NavApp.WhatsApp -> ModuleDefaults.NavApps.WhatsApp.BOTTOM_MARGIN
         NavApp.YouTube -> ModuleDefaults.NavApps.YouTube.BOTTOM_MARGIN
         NavApp.Instagram -> ModuleDefaults.NavApps.Instagram.BOTTOM_MARGIN
+        NavApp.Facebook -> ModuleDefaults.NavApps.Facebook.BOTTOM_MARGIN
     }
 
     ScreenScaffold(

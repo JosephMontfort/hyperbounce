@@ -71,21 +71,34 @@ class HyperBouncePrefs(module: XposedInterface) {
         prefs.getFloat("app_${appKey}_container_opacity", if (!appLiquidGlass(appKey)) 0.90f else 0.4f)
 
     fun appCornerRadius(appKey: String): Float =
-        prefs.getFloat("app_${appKey}_corner_radius", if (appKey == "whatsapp") 36f else ModuleDefaults.NavApps.Instagram.CORNER_RADIUS)
+        prefs.getFloat("app_${appKey}_corner_radius", when (appKey) {
+            "whatsapp" -> ModuleDefaults.NavApps.WhatsApp.CORNER_RADIUS
+            "facebook" -> ModuleDefaults.NavApps.Facebook.CORNER_RADIUS
+            else -> ModuleDefaults.NavApps.Instagram.CORNER_RADIUS
+        })
 
     fun appBarHeight(appKey: String): Float =
-        prefs.getFloat("app_${appKey}_bar_height", if (appKey == "whatsapp") 70f else 50f)
+        prefs.getFloat("app_${appKey}_bar_height", when (appKey) {
+            "whatsapp" -> ModuleDefaults.NavApps.WhatsApp.BAR_HEIGHT
+            "facebook" -> ModuleDefaults.NavApps.Facebook.BAR_HEIGHT
+            else -> 50f
+        })
 
     fun appTabWidth(appKey: String): Float =
         prefs.getFloat("app_${appKey}_tab_width", when (appKey) {
-            "whatsapp" -> 92f
+            "whatsapp" -> ModuleDefaults.NavApps.WhatsApp.TAB_WIDTH
             "instagram" -> ModuleDefaults.NavApps.Instagram.TAB_WIDTH
             "youtube" -> ModuleDefaults.NavApps.YouTube.TAB_WIDTH
+            "facebook" -> ModuleDefaults.NavApps.Facebook.TAB_WIDTH
             else -> 75f
         })
 
     fun appBottomMargin(appKey: String): Float =
-        prefs.getFloat("app_${appKey}_bottom_margin", if (appKey == "whatsapp") 40f else ModuleDefaults.NavApps.Instagram.BOTTOM_MARGIN)
+        prefs.getFloat("app_${appKey}_bottom_margin", when (appKey) {
+            "whatsapp" -> ModuleDefaults.NavApps.WhatsApp.BOTTOM_MARGIN
+            "facebook" -> ModuleDefaults.NavApps.Facebook.BOTTOM_MARGIN
+            else -> ModuleDefaults.NavApps.Instagram.BOTTOM_MARGIN
+        })
 
     /** One of "System" | "Light" | "Dark" — matches ui.state.ThemeMode's enum names. */
     fun appThemeMode(appKey: String): String =
@@ -94,10 +107,17 @@ class HyperBouncePrefs(module: XposedInterface) {
     /** One of "Auto" | "Blue" | "Pink" | "Purple" | "Orange" | "Green" | "Custom" — matches
      *  ui.state.AccentPreset's enum names. */
     fun appAccent(appKey: String): String =
-        prefs.getString("app_${appKey}_accent", if (appKey == "whatsapp") ModuleDefaults.NavApps.WhatsApp.ACCENT else "Auto") ?: "Auto"
+        prefs.getString("app_${appKey}_accent", when (appKey) {
+            "whatsapp" -> ModuleDefaults.NavApps.WhatsApp.ACCENT
+            "facebook" -> ModuleDefaults.NavApps.Facebook.ACCENT
+            else -> "Auto"
+        }) ?: "Auto"
 
     fun appCustomAccentColor(appKey: String): Long =
-        prefs.getLong("app_${appKey}_custom_accent_color", 0xFF0088FFL)
+        prefs.getLong("app_${appKey}_custom_accent_color", when (appKey) {
+            "facebook" -> ModuleDefaults.NavApps.Facebook.CUSTOM_ACCENT_COLOR
+            else -> 0xFF0088FFL
+        })
 
     fun appPillGlassIntensity(appKey: String): Float =
         prefs.getFloat("app_${appKey}_pill_glass_intensity", 1.0f)
@@ -112,10 +132,20 @@ class HyperBouncePrefs(module: XposedInterface) {
         prefs.getBoolean("app_${appKey}_pill_shadow", false)
 
     fun appAutoShrink(appKey: String): Boolean =
-        prefs.getBoolean("app_${appKey}_auto_shrink", if (appKey == "whatsapp") false else true)
+        prefs.getBoolean("app_${appKey}_auto_shrink", when (appKey) {
+            "whatsapp", "facebook" -> false
+            else -> true
+        })
 
     fun appAutoShrinkScale(appKey: String): Float =
-        prefs.getFloat("app_${appKey}_auto_shrink_scale", if (appKey == "whatsapp") 0.70f else ModuleDefaults.NavApps.YouTube.AUTO_SHRINK_SCALE)
+        prefs.getFloat("app_${appKey}_auto_shrink_scale", when (appKey) {
+            "whatsapp" -> ModuleDefaults.NavApps.WhatsApp.AUTO_SHRINK_SCALE
+            "facebook" -> ModuleDefaults.NavApps.Facebook.AUTO_SHRINK_SCALE
+            else -> ModuleDefaults.NavApps.YouTube.AUTO_SHRINK_SCALE
+        })
+
+    val facebookReelsAutohide: Boolean
+        get() = prefs.getBoolean("app_facebook_reels_autohide", ModuleDefaults.NavApps.Facebook.REELS_AUTOHIDE)
 
     val reelsFullscreenZoom: Boolean
         get() = prefs.getBoolean("app_instagram_reels_fullscreen_zoom", prefs.getBoolean("reels_fullscreen_zoom", ModuleDefaults.NavApps.Instagram.REELS_FULLSCREEN_ZOOM))

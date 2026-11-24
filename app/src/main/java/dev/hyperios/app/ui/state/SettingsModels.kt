@@ -58,7 +58,8 @@ enum class RenderEngine(val label: String) {
 enum class NavApp(val displayName: String, val packageName: String) {
     Instagram("Instagram", "com.instagram.android"),
     WhatsApp("WhatsApp", "com.whatsapp"),
-    YouTube("YouTube", "com.google.android.youtube")
+    YouTube("YouTube", "com.google.android.youtube"),
+    Facebook("Facebook", "com.facebook.katana")
 }
 
 /** One app's floating nav bar settings. Stored independently per [NavApp] — changing

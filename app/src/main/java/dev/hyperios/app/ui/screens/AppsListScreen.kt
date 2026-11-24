@@ -78,6 +78,22 @@ fun AppsListScreen(
                         )
                     }
                 )
+
+                RowDivider(colors.separator, insetStart = 72.dp)
+
+                FeatureCategoryRow(
+                    title = "Facebook",
+                    description = "Liquid Glass Floating Bottom Bar in Facebook",
+                    colors = colors,
+                    onClick = { onNavigate(Destination.AppDetail(NavApp.Facebook)) },
+                    icon = {
+                        Image(
+                            painter = painterResource(R.drawable.ic_sub_facebook),
+                            contentDescription = "Facebook",
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
+                )
             }
         }
     }

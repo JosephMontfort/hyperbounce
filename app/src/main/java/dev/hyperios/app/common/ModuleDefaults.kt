@@ -23,6 +23,7 @@ object ModuleDefaults {
         const val APP_INSTAGRAM_ENABLED = false
         const val APP_WHATSAPP_ENABLED = false
         const val APP_YOUTUBE_ENABLED = false
+        const val APP_FACEBOOK_ENABLED = false
         const val MIUIX_APPS_HOOKING_ENABLED = false
     }
 
@@ -592,6 +593,37 @@ object ModuleDefaults {
             val AUTO_SHRINK_SCALE_RANGE = 0.50f..1.00f
 
             const val SAFE_MODE_ENABLE: Boolean = false
+        }
+
+        object Facebook {
+            const val BAR_HEIGHT: Float = 50.0f
+
+            const val TAB_WIDTH: Float = 58.0f
+            val TAB_WIDTH_RANGE = 40.0f..100.0f
+
+            const val CORNER_RADIUS: Float = 32.0f
+            val CORNER_RADIUS_RANGE = 0.0f..50.0f
+
+            const val BOTTOM_MARGIN: Float = 20.0f
+            val BOTTOM_MARGIN_RANGE = 0.0f..80.0f
+
+            const val CONTAINER_OPACITY: Float = 0.40f
+            val CONTAINER_OPACITY_RANGE = 0.0f..1.0f
+
+            const val PILL_CONTAINER_OPACITY: Float = 1.0f
+            val PILL_CONTAINER_OPACITY_RANGE = 0.0f..1.0f
+
+            const val PILL_BLUR_INTENSITY: Float = 0.0f
+            val PILL_BLUR_INTENSITY_RANGE = 0.0f..30.0f
+
+            const val AUTO_SHRINK: Boolean = false
+            const val AUTO_SHRINK_SCALE: Float = 0.85f
+            val AUTO_SHRINK_SCALE_RANGE = 0.50f..1.00f
+
+            const val REELS_AUTOHIDE: Boolean = true
+            const val REELS_FULLSCREEN_ZOOM: Boolean = true
+            const val ACCENT: String = "Blue"
+            const val CUSTOM_ACCENT_COLOR: Long = 0xFF1877F2L
         }
     }
 

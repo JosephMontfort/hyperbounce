@@ -377,11 +377,13 @@ class SettingsRepository(context: Context) {
     val instagram = AppSettingsHolder(NavApp.Instagram)
     val whatsapp = AppSettingsHolder(NavApp.WhatsApp)
     val youtube = AppSettingsHolder(NavApp.YouTube)
+    val facebook = AppSettingsHolder(NavApp.Facebook)
 
     fun appSettings(app: NavApp): AppSettingsHolder = when (app) {
         NavApp.Instagram -> instagram
         NavApp.WhatsApp -> whatsapp
         NavApp.YouTube -> youtube
+        NavApp.Facebook -> facebook
     }
 
     var togglesSlidersHookEnabled by prefsBooleanState("toggles_sliders_hook_enabled", false)
@@ -474,6 +476,7 @@ class SettingsRepository(context: Context) {
         instagram.reloadFromDefaults()
         whatsapp.reloadFromDefaults()
         youtube.reloadFromDefaults()
+        facebook.reloadFromDefaults()
         toggleGlass.reloadFromDefaults()
         sliderGlass.reloadFromDefaults()
         globalGlass.reloadFromDefaults()
@@ -551,6 +554,20 @@ class SettingsRepository(context: Context) {
                 customAccentColor = ModuleDefaults.NavApps.Instagram.CUSTOM_ACCENT_COLOR,
                 pillShadow = false,
                 reelsFullscreenZoom = ModuleDefaults.NavApps.Instagram.REELS_FULLSCREEN_ZOOM
+            )
+            NavApp.Facebook -> NavBarAppSettings(
+                barHeight = ModuleDefaults.NavApps.Facebook.BAR_HEIGHT,
+                tabWidth = ModuleDefaults.NavApps.Facebook.TAB_WIDTH,
+                cornerRadius = ModuleDefaults.NavApps.Facebook.CORNER_RADIUS,
+                bottomMargin = ModuleDefaults.NavApps.Facebook.BOTTOM_MARGIN,
+                containerOpacity = ModuleDefaults.NavApps.Facebook.CONTAINER_OPACITY,
+                pillContainerOpacity = ModuleDefaults.NavApps.Facebook.PILL_CONTAINER_OPACITY,
+                autoShrink = ModuleDefaults.NavApps.Facebook.AUTO_SHRINK,
+                autoShrinkScale = ModuleDefaults.NavApps.Facebook.AUTO_SHRINK_SCALE,
+                accent = AccentPreset.Blue,
+                customAccentColor = ModuleDefaults.NavApps.Facebook.CUSTOM_ACCENT_COLOR,
+                pillShadow = false,
+                reelsFullscreenZoom = ModuleDefaults.NavApps.Facebook.REELS_FULLSCREEN_ZOOM
             )
         }
 

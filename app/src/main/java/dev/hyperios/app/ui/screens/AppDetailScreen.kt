@@ -181,6 +181,38 @@ fun AppDetailScreen(
             NavApp.WhatsApp -> {
                 // WhatsApp has no scroll shrink or extra features on main page
             }
+
+            NavApp.Facebook -> {
+                item {
+                    SectionHeader("Feed Behavior", colors)
+                    GlassCard(backdrop, Modifier.padding(horizontal = 16.dp)) {
+                        SettingsToggleRow(
+                            title = "Auto-Shrink on Scroll",
+                            subtitle = "Shrinks and docks down when scrolling feeds",
+                            colors = colors,
+                            backdrop = backdrop,
+                            checked = s.autoShrink,
+                            onCheckedChange = holder::setAutoShrink,
+                            enabled = s.enabled
+                        )
+                        if (s.autoShrink) {
+                            RowDivider(colors.separator, insetStart = 16.dp)
+                            SettingsSliderRow(
+                                title = "Shrunk Scale",
+                                subtitle = "Percentage size when auto-shrunken on scroll",
+                                colors = colors,
+                                backdrop = backdrop,
+                                value = s.autoShrinkScale,
+                                onValueChange = holder::setAutoShrinkScale,
+                                valueRange = ModuleDefaults.NavApps.AUTO_SHRINK_SCALE_RANGE,
+                                defaultValue = ModuleDefaults.NavApps.Facebook.AUTO_SHRINK_SCALE,
+                                valueLabel = { "${(it * 100).roundToInt()}%" },
+                                enabled = s.enabled && s.autoShrink
+                            )
+                        }
+                    }
+                }
+            }
         }
     }
 }
