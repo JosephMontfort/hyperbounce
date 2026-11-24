@@ -34,7 +34,7 @@ class PhysicsHook : XposedModule() {
     override fun onPackageReady(param: XposedModuleInterface.PackageReadyParam) {
         super.onPackageReady(param)
 
-        Log.i("HyperBounce", "PhysicsHook: onPackageReady for pkg=${param.packageName}, process=${param.processName}")
+        Log.i("HyperBounce", "PhysicsHook: onPackageReady for pkg=${param.packageName}")
 
         try {
             val prefs = try {
