@@ -29,15 +29,19 @@ class FacebookHook(
     private var isOverlayHidden = false
 
     fun onPackageReady() {
-        if (!hyperBouncePrefs.appEnabled("facebook")) {
+        val enabled = hyperBouncePrefs.appEnabled("facebook")
+        Log.i("HyperBounce", "FacebookHook: onPackageReady called, enabled=$enabled")
+        if (!enabled) {
             module.log(Log.INFO, "HyperiOS", "disabled for Facebook, skipping injection")
             return
         }
 
+        Log.i("HyperBounce", "FacebookHook: Initializing Facebook Floating Liquid Navigation Bar Hook")
         module.log(Log.INFO, "HyperiOS", "Initializing Facebook Floating Liquid Navigation Bar Hook")
 
         // 1. Hook dispatchApplyWindowInsets to eliminate duplicate bottom padding on main content
         try {
+            Log.i("HyperBounce", "FacebookHook: Registering dispatchApplyWindowInsets hook")
             module.hook(
                 View::class.java.getDeclaredMethod("dispatchApplyWindowInsets", WindowInsets::class.java)
             ).intercept { chain ->
@@ -60,11 +64,13 @@ class FacebookHook(
                 chain.proceed()
             }
         } catch (t: Throwable) {
+            Log.e("HyperBounce", "FacebookHook: Failed to hook dispatchApplyWindowInsets: ${t.message}", t)
             module.log(Log.WARN, "HyperiOS", "Failed to hook dispatchApplyWindowInsets: ${t.message}")
         }
 
         // 2. Hook View.onAttachedToWindow for TabBarContainerLayout, Reels footers, and FABs
         try {
+            Log.i("HyperBounce", "FacebookHook: Registering View.onAttachedToWindow hook")
             module.hook(
                 View::class.java.getDeclaredMethod("onAttachedToWindow")
             ).intercept { chain ->
@@ -75,6 +81,7 @@ class FacebookHook(
                     val className = view.javaClass.name
                     if (className == "com.facebook.navigation.tabbar.ui.TabBarContainerLayout" ||
                         className.endsWith("TabBarContainerLayout")) {
+                        Log.i("HyperBounce", "FacebookHook: TabBarContainerLayout intercepted in View.onAttachedToWindow: $className")
                         val tabBar = view as? ViewGroup
                         if (tabBar != null) {
                             suppressNativeTabBar(tabBar)
@@ -115,21 +122,24 @@ class FacebookHook(
                 result
             }
         } catch (t: Throwable) {
+            Log.e("HyperBounce", "FacebookHook: Failed to hook View.onAttachedToWindow: ${t.message}", t)
             module.log(Log.WARN, "HyperiOS", "Failed to hook View.onAttachedToWindow: ${t.message}")
         }
 
         // 3. Hook TabBarContainerLayout constructors directly to suppress immediately
         try {
+            Log.i("HyperBounce", "FacebookHook: Registering TabBarContainerLayout constructor hook")
             val tabBarClass = param.classLoader.loadClass("com.facebook.navigation.tabbar.ui.TabBarContainerLayout")
             for (ctor in tabBarClass.declaredConstructors) {
                 module.hook(ctor).intercept { chain ->
                     val result = chain.proceed()
                     val tabBar = chain.thisObject as? ViewGroup
+                    Log.i("HyperBounce", "FacebookHook: TabBarContainerLayout constructor intercepted: $tabBar")
                     tabBar?.let { bar ->
-                        bar.alpha = 0f
-                        bar.translationY = -9999f
+                        suppressNativeTabBar(bar)
                         bar.addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
                             override fun onViewAttachedToWindow(v: View) {
+                                Log.i("HyperBounce", "FacebookHook: TabBarContainerLayout onViewAttachedToWindow listener fired")
                                 suppressNativeTabBar(bar)
                                 bar.post { executeUIHeist(bar) }
                             }
@@ -140,11 +150,13 @@ class FacebookHook(
                 }
             }
         } catch (t: Throwable) {
+            Log.w("HyperBounce", "FacebookHook: TabBarContainerLayout class hook not ready or not found: ${t.message}")
             module.log(Log.WARN, "HyperiOS", "TabBarContainerLayout class hook not ready or not found: ${t.message}")
         }
 
         // 4. Hook FbMainTabActivity for fullscreen overlays, video player, and dialog autohide
         try {
+            Log.i("HyperBounce", "FacebookHook: Registering FbMainTabActivity lifecycle/overlay hooks")
             val fbMainActivityClass = param.classLoader.loadClass("com.facebook.katana.activity.FbMainTabActivity")
             for (m in fbMainActivityClass.declaredMethods) {
                 when {
@@ -202,6 +214,17 @@ class FacebookHook(
                 tabBar.requestLayout()
             }
         }
+        val parent = tabBar.parent as? ViewGroup
+        if (parent != null && parent.id != android.R.id.content) {
+            parent.alpha = 0f
+            parent.translationY = -9999f
+            parent.layoutParams?.let { lp ->
+                if (lp.height != 0) {
+                    lp.height = 0
+                    parent.requestLayout()
+                }
+            }
+        }
 
         val key = 0x7F0B9901
         try {
@@ -214,6 +237,17 @@ class FacebookHook(
                         if (lp.height != 0) {
                             lp.height = 0
                             tabBar.requestLayout()
+                        }
+                    }
+                    val p = tabBar.parent as? ViewGroup
+                    if (p != null && p.id != android.R.id.content) {
+                        p.alpha = 0f
+                        p.translationY = -9999f
+                        p.layoutParams?.let { lp ->
+                            if (lp.height != 0) {
+                                lp.height = 0
+                                p.requestLayout()
+                            }
                         }
                     }
                     true
@@ -242,11 +276,25 @@ class FacebookHook(
     }
 
     private fun executeUIHeist(tabBarContainer: ViewGroup) {
-        val activity = findActivity(tabBarContainer) ?: return
-        if (activity.isFinishing || activity.isDestroyed) return
+        val activity = findActivity(tabBarContainer) ?: run {
+            Log.w("HyperBounce", "FacebookHook: executeUIHeist failed - could not find activity for $tabBarContainer")
+            return
+        }
+        if (activity.isFinishing || activity.isDestroyed) {
+            Log.w("HyperBounce", "FacebookHook: executeUIHeist aborted - activity is finishing or destroyed")
+            return
+        }
 
-        val decorView = (activity.window?.decorView as? ViewGroup) ?: return
-        if (decorView.findViewWithTag<View>("HyperFloatingBar") != null) return
+        val decorView = (activity.window?.decorView as? ViewGroup) ?: run {
+            Log.w("HyperBounce", "FacebookHook: executeUIHeist aborted - decorView is null")
+            return
+        }
+        if (decorView.findViewWithTag<View>("HyperFloatingBar") != null) {
+            Log.d("HyperBounce", "FacebookHook: HyperFloatingBar already attached to decorView")
+            return
+        }
+
+        Log.i("HyperBounce", "FacebookHook: executeUIHeist running on activity ${activity.javaClass.name}")
 
         activity.runOnUiThread {
             try {
@@ -263,6 +311,8 @@ class FacebookHook(
                 if (decorView.findViewTreeSavedStateRegistryOwner() == null) decorView.setViewTreeSavedStateRegistryOwner(lifecycleOwner)
                 if (decorView.findViewTreeViewModelStoreOwner() == null) decorView.setViewTreeViewModelStoreOwner(lifecycleOwner)
 
+                val backdropSource = activity.findViewById<View>(android.R.id.content) ?: decorView
+
                 val composeView = ComposeView(activity).apply {
                     tag = "HyperFloatingBar"
                     clipChildren = false
@@ -277,13 +327,14 @@ class FacebookHook(
                     setContent {
                         FacebookNavBarHost(
                             tabBarContainer = tabBarContainer,
-                            backdropSource = decorView,
+                            backdropSource = backdropSource,
                             hyperBouncePrefs = hyperBouncePrefs
                         )
                     }
                 }
 
                 decorView.addView(composeView)
+                Log.i("HyperBounce", "FacebookHook: composeView attached to decorView successfully (backdropSource=${backdropSource.javaClass.simpleName})")
                 module.log(Log.INFO, "HyperiOS", "Attached Facebook Liquid Navigation Bar overlay to decorView")
 
                 decorView.viewTreeObserver.addOnPreDrawListener {
@@ -302,6 +353,7 @@ class FacebookHook(
                     true
                 }
             } catch (e: Exception) {
+                Log.e("HyperBounce", "FacebookHook: Exception in executeUIHeist: ${e.message}", e)
                 module.log(Log.ERROR, "HyperiOS", "Exception in executeUIHeist: ${e.message}")
             }
         }

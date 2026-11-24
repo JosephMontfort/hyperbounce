@@ -168,6 +168,9 @@ internal class LiquidGlassViewBackdrop(
             )
             lastCapturedFrame = frameNumber
             lastCaptureNanos = now
+        } catch (e: IllegalArgumentException) {
+            // Software rendering does not support RuntimeShader (e.g. if sourceView contains RuntimeShader / AGSL)
+            // Catch gracefully to prevent flooding logcat every 16ms
         } catch (t: Throwable) {
             Log.e(
                 "HyperBounce-Backdrop",

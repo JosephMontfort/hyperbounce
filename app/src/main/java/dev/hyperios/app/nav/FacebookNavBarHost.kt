@@ -4,6 +4,7 @@ import android.app.Activity
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.drawable.Drawable
+import android.util.Log
 import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageView
@@ -279,11 +280,12 @@ private fun extractFacebookTabs(
 ): List<FacebookTabData> {
     val out = mutableListOf<FacebookTabData>()
     val tabViews = findFacebookTabViews(tabBarContainer)
+    Log.i("HyperBounce", "FacebookNavBarHost: found ${tabViews.size} tab views in container")
 
     val inactiveTint = if (isDark) android.graphics.Color.WHITE else android.graphics.Color.parseColor("#65676B")
     val activeTint = accentColor.toArgb()
 
-    for (child in tabViews) {
+    for ((index, child) in tabViews.withIndex()) {
         val (inactiveDrawable, activeDrawable) = extractTabDrawables(child)
 
         var inactiveBmp = inactiveDrawable?.let { drawableToBitmap(it, tint = inactiveTint) }
@@ -317,16 +319,19 @@ private fun extractFacebookTabs(
         val label = child.contentDescription?.toString()
         val (badgeCount, hasBadgeDot) = extractBadge(child)
 
-        out.add(
-            FacebookTabData(
-                tabView = child,
-                inactiveBitmap = inactiveBmp,
-                activeBitmap = activeBmp ?: inactiveBmp,
-                label = label,
-                badgeCount = badgeCount,
-                hasBadgeDot = hasBadgeDot
-            )
+        val tabData = FacebookTabData(
+            tabView = child,
+            inactiveBitmap = inactiveBmp,
+            activeBitmap = activeBmp ?: inactiveBmp,
+            label = label,
+            badgeCount = badgeCount,
+            hasBadgeDot = hasBadgeDot
         )
+        Log.i(
+            "HyperBounce",
+            "FacebookNavBarHost: tab[$index]: label='$label', badgeCount=$badgeCount, hasBadgeDot=$hasBadgeDot, inactiveBmp=${inactiveBmp != null}, activeBmp=${activeBmp != null}"
+        )
+        out.add(tabData)
     }
 
     return out
@@ -412,6 +417,7 @@ fun FacebookNavBarHost(
         selectedIndex = selectedIndex.coerceIn(0, (tabs.size - 1).coerceAtLeast(0)),
         onTabSelected = { index ->
             selectedIndex = index
+            Log.i("HyperBounce", "FacebookNavBarHost: tab selected: index=$index, performing click on child tab view")
             if (index in tabs.indices) {
                 val tabView = tabs[index].tabView
                 clickFacebookTab(tabView)

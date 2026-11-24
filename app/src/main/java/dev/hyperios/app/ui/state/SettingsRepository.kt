@@ -40,7 +40,7 @@ import kotlin.reflect.KProperty
 private const val PREFS_NAME = "hyperbounce_settings"
 private const val KEY_STORAGE_INITIALIZED = "hyperbounce_storage_initialized"
 private const val KEY_SCHEMA_VERSION = "hyperbounce_schema_version"
-private const val CURRENT_SCHEMA_VERSION = 2
+private const val CURRENT_SCHEMA_VERSION = 3
 
 private val DEPRECATED_KEYS = setOf(
     "module_enabled",
@@ -1753,7 +1753,10 @@ class SettingsRepository(context: Context) {
     init {
         // Runs deterministically AFTER all holders and delegate properties are constructed.
         // If the Xposed service binds now or in the future, preferences are reconciled safely.
-        XposedServiceBridge.onBind { reconcilePreferences() }
+        XposedServiceBridge.onBind {
+            reconcilePreferences()
+            pushAllLocalToRemote()
+        }
     }
 }
 

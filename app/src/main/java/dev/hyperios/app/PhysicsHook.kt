@@ -5,6 +5,7 @@ import dev.hyperios.app.nav.FacebookHook
 import dev.hyperios.app.nav.InstagramHook
 import dev.hyperios.app.nav.WhatsAppHook
 import dev.hyperios.app.nav.YouTubeHook
+import dev.hyperios.app.prefs.HyperBouncePrefs
 import dev.hyperios.app.safemode.SafeModeHandler
 import io.github.libxposed.api.XposedModule
 import io.github.libxposed.api.XposedModuleInterface
@@ -33,6 +34,8 @@ class PhysicsHook : XposedModule() {
     override fun onPackageReady(param: XposedModuleInterface.PackageReadyParam) {
         super.onPackageReady(param)
 
+        Log.i("HyperBounce", "PhysicsHook: onPackageReady for pkg=${param.packageName}, process=${param.processName}")
+
         try {
             val prefs = try {
                 getRemotePreferences(dev.hyperios.app.prefs.PREFS_GROUP)
@@ -57,8 +60,11 @@ class PhysicsHook : XposedModule() {
                 param.packageName == "com.google.android.youtube" ->
                     YouTubeHook(this, param).onPackageReady()
 
-                param.packageName == "com.facebook.katana" ->
+                param.packageName == "com.facebook.katana" -> {
+                    val enabled = HyperBouncePrefs(this).appEnabled("facebook")
+                    Log.i("HyperBounce", "PhysicsHook: Facebook hook dispatching. app_facebook_enabled=$enabled")
                     FacebookHook(this, param).onPackageReady()
+                }
 
                 param.packageName == "com.android.systemui" -> {
                     if (prefs != null) {
