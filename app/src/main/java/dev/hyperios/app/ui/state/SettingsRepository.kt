@@ -27,6 +27,7 @@ package dev.hyperios.app.ui.state
 import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
+import android.util.Log
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
@@ -99,8 +100,39 @@ class SettingsRepository(context: Context) {
             if (remote != null) {
                 val editor = remote.edit()
                 action(editor)
-                editor.commit()
+                val success = editor.commit()
+                if (!success) {
+                    hasPendingPush = true
+                }
             } else {
+                hasPendingPush = true
+            }
+        }
+
+        fun flushPendingPush(context: Context? = null) {
+            val ctx = context ?: appContext ?: return
+            val remote = XposedServiceBridge.remotePreferencesOrNull(PREFS_NAME) ?: run {
+                hasPendingPush = true
+                return
+            }
+            try {
+                val localPrefs = ctx.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                val editor = remote.edit()
+                for ((key, value) in localPrefs.all) {
+                    if (key in DEPRECATED_KEYS) continue
+                    when (value) {
+                        is Boolean -> editor.putBoolean(key, value)
+                        is Float -> editor.putFloat(key, value)
+                        is String -> editor.putString(key, value)
+                        is Int -> editor.putInt(key, value)
+                        is Long -> editor.putLong(key, value)
+                    }
+                }
+                val success = editor.commit()
+                hasPendingPush = !success
+                Log.i("HyperiOS", "flushPendingPush executed: success=$success")
+            } catch (t: Throwable) {
+                Log.e("HyperiOS", "flushPendingPush failed: ${t.message}", t)
                 hasPendingPush = true
             }
         }
@@ -125,8 +157,9 @@ class SettingsRepository(context: Context) {
         }
     }
 
+    private val prefsContext: Context = context.applicationContext
     private val prefs: SharedPreferences =
-        context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        prefsContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
     private val reloadablePrefs = mutableListOf<ReloadablePref>()
 
@@ -1770,6 +1803,7 @@ class SettingsRepository(context: Context) {
         XposedServiceBridge.onBind {
             reconcilePreferences()
             pushAllLocalToRemote()
+            flushPendingPush(prefsContext)
         }
     }
 }
@@ -1863,8 +1897,11 @@ private class PrefBooleanDelegate(
     operator fun getValue(thisRef: Any?, property: KProperty<*>): Boolean = state
     operator fun setValue(thisRef: Any?, property: KProperty<*>, value: Boolean) {
         state = value
-        prefs.edit().putBoolean(key, value).apply()
+        prefs.edit().putBoolean(key, value).commit()
         SettingsRepository.syncRemote { it.putBoolean(key, value) }
+        if (SettingsRepository.hasPendingPush) {
+            SettingsRepository.flushPendingPush()
+        }
         SettingsRepository.sendSettingsChangedBroadcast(key, value)
     }
     override fun reload() {
@@ -1896,8 +1933,11 @@ private class PrefLongDelegate(
     operator fun getValue(thisRef: Any?, property: KProperty<*>): Long = state
     operator fun setValue(thisRef: Any?, property: KProperty<*>, value: Long) {
         state = value
-        prefs.edit().putLong(key, value).apply()
+        prefs.edit().putLong(key, value).commit()
         SettingsRepository.syncRemote { it.putLong(key, value) }
+        if (SettingsRepository.hasPendingPush) {
+            SettingsRepository.flushPendingPush()
+        }
         SettingsRepository.sendSettingsChangedBroadcast(key, value)
     }
     override fun reload() {
@@ -1928,8 +1968,11 @@ private class PrefIntDelegate(
     operator fun getValue(thisRef: Any?, property: KProperty<*>): Int = state
     operator fun setValue(thisRef: Any?, property: KProperty<*>, value: Int) {
         state = value
-        prefs.edit().putInt(key, value).apply()
+        prefs.edit().putInt(key, value).commit()
         SettingsRepository.syncRemote { it.putInt(key, value) }
+        if (SettingsRepository.hasPendingPush) {
+            SettingsRepository.flushPendingPush()
+        }
         SettingsRepository.sendSettingsChangedBroadcast(key, value)
     }
     override fun reload() {
@@ -1960,8 +2003,11 @@ private class PrefFloatDelegate(
     operator fun getValue(thisRef: Any?, property: KProperty<*>): Float = state
     operator fun setValue(thisRef: Any?, property: KProperty<*>, value: Float) {
         state = value
-        prefs.edit().putFloat(key, value).apply()
+        prefs.edit().putFloat(key, value).commit()
         SettingsRepository.syncRemote { it.putFloat(key, value) }
+        if (SettingsRepository.hasPendingPush) {
+            SettingsRepository.flushPendingPush()
+        }
         SettingsRepository.sendSettingsChangedBroadcast(key, value)
     }
     override fun reload() {
@@ -1992,8 +2038,11 @@ private class PrefStringDelegate(
     operator fun getValue(thisRef: Any?, property: KProperty<*>): String = state
     operator fun setValue(thisRef: Any?, property: KProperty<*>, value: String) {
         state = value
-        prefs.edit().putString(key, value).apply()
+        prefs.edit().putString(key, value).commit()
         SettingsRepository.syncRemote { it.putString(key, value) }
+        if (SettingsRepository.hasPendingPush) {
+            SettingsRepository.flushPendingPush()
+        }
         SettingsRepository.sendSettingsChangedBroadcast(key, value)
     }
     override fun reload() {
@@ -2023,8 +2072,11 @@ private class PrefEnumDelegate<E : Enum<E>>(
     operator fun getValue(thisRef: Any?, property: KProperty<*>): E = state
     operator fun setValue(thisRef: Any?, property: KProperty<*>, value: E) {
         state = value
-        prefs.edit().putString(key, value.name).apply()
+        prefs.edit().putString(key, value.name).commit()
         SettingsRepository.syncRemote { it.putString(key, value.name) }
+        if (SettingsRepository.hasPendingPush) {
+            SettingsRepository.flushPendingPush()
+        }
         SettingsRepository.sendSettingsChangedBroadcast(key, value.name)
     }
     override fun reload() {

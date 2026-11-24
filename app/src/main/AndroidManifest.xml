@@ -8,6 +8,7 @@
 
     <!-- LibXposed reads name and description natively from standard resource bounds -->
     <application
+        android:name=".HyperBounceApp"
         android:label="@string/app_name"
         android:description="@string/app_description"
         android:icon="@mipmap/ic_launcher"

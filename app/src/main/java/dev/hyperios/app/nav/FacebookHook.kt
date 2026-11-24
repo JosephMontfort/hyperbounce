@@ -26,23 +26,26 @@ class FacebookHook(
     private val param: XposedModuleInterface.PackageReadyParam
 ) {
     companion object {
+        private const val TAG = "HyperiOS"
         val sReelsOverlayParents = java.util.WeakHashMap<ViewGroup, Boolean>()
         @Volatile var isReelsActive: Boolean = false
     }
 
     private val hyperBouncePrefs = HyperBouncePrefs(module)
     private var isOverlayHidden = false
+    private var activeFloatingBar: ComposeView? = null
+    private val shiftedReelContainers = java.util.Collections.newSetFromMap(java.util.WeakHashMap<ViewGroup, Boolean>())
 
     fun onPackageReady() {
         val enabled = hyperBouncePrefs.appEnabled("facebook")
         Log.i("HyperBounce", "FacebookHook: onPackageReady called, enabled=$enabled")
         if (!enabled) {
-            module.log(Log.INFO, "HyperiOS", "disabled for Facebook, skipping injection")
+            module.log(Log.INFO, TAG, "disabled for Facebook, skipping injection")
             return
         }
 
         Log.i("HyperBounce", "FacebookHook: Initializing Facebook Floating Liquid Navigation Bar Hook")
-        module.log(Log.INFO, "HyperiOS", "Initializing Facebook Floating Liquid Navigation Bar Hook")
+        module.log(Log.INFO, TAG, "Initializing Facebook Floating Liquid Navigation Bar Hook")
 
         // 1. Hook dispatchApplyWindowInsets to eliminate duplicate bottom padding on main content
         try {
@@ -70,124 +73,49 @@ class FacebookHook(
             }
         } catch (t: Throwable) {
             Log.e("HyperBounce", "FacebookHook: Failed to hook dispatchApplyWindowInsets: ${t.message}", t)
-            module.log(Log.WARN, "HyperiOS", "Failed to hook dispatchApplyWindowInsets: ${t.message}")
+            module.log(Log.WARN, TAG, "Failed to hook dispatchApplyWindowInsets: ${t.message}")
         }
 
-        // 2. Hook View.onAttachedToWindow for TabBarContainerLayout, Reels footers, and FABs
+        // 2. Hook TabBarContainerLayout constructors and onMeasure directly
         try {
-            Log.i("HyperBounce", "FacebookHook: Registering View.onAttachedToWindow hook")
-            module.hook(
-                View::class.java.getDeclaredMethod("onAttachedToWindow")
-            ).intercept { chain ->
-                val result = chain.proceed()
-                val view = chain.thisObject as? View ?: return@intercept result
-
-                try {
-                    val className = view.javaClass.name
-                    if (className == "com.facebook.navigation.tabbar.ui.TabBarContainerLayout" ||
-                        className.endsWith("TabBarContainerLayout")) {
-                        Log.i("HyperBounce", "FacebookHook: TabBarContainerLayout intercepted in View.onAttachedToWindow: $className")
-                        val tabBar = view as? ViewGroup
-                        if (tabBar != null) {
-                            suppressNativeTabBar(tabBar)
-                            tabBar.post { executeUIHeist(tabBar) }
-                        }
-                    }
-
-                    if (isReelsActive) {
-                        val desc = view.contentDescription?.toString() ?: ""
-                        if (desc.contains("Like button", ignoreCase = true) ||
-                            desc.contains("Reel", ignoreCase = true) ||
-                            desc.contains("Share", ignoreCase = true)
-                        ) {
-                            val registerParent = {
-                                var p: View? = view.parent as? View
-                                val screenHeight = view.resources?.displayMetrics?.heightPixels ?: 2400
-                                val minBottom = (screenHeight * 0.75f).toInt()
-                                val minTop = (screenHeight * 0.50f).toInt()
-                                val minHeight = (screenHeight * 0.20f).toInt()
-
-                                while (p != null && p.id != android.R.id.content) {
-                                    if (p is ViewGroup && (p.bottom >= minBottom || p.top >= minTop || p.height >= minHeight)) {
-                                        synchronized(sReelsOverlayParents) {
-                                            sReelsOverlayParents[p] = true
-                                        }
-                                        break
-                                    }
-                                    p = p.parent as? View
-                                }
-                            }
-                            registerParent()
-                            view.post { registerParent() }
-                        }
-                    }
-
-                    if (view.id != View.NO_ID && view.resources != null) {
-                        val resName = try {
-                            view.resources.getResourceEntryName(view.id)
-                        } catch (_: Throwable) { "" }
-
-                        if (resName.isNotEmpty()) {
-                            if (resName == "fb_shorts_viewer_footer" ||
-                                resName == "reels_navigation_footer" ||
-                                resName == "reels_comments_floating_cta" ||
-                                resName.contains("fb_shorts_viewer_footer") ||
-                                resName.contains("reels_navigation_footer")
-                            ) {
-                                view.translationY = -190.0f
-                            }
-
-                            if (resName == "fab" || resName == "extended_mini_fab" || resName.contains("floating_action_button")) {
-                                val lp = view.layoutParams
-                                if (lp is ViewGroup.MarginLayoutParams) {
-                                    if (lp.bottomMargin < 200) {
-                                        lp.bottomMargin += 200
-                                        view.layoutParams = lp
-                                    }
-                                } else {
-                                    view.translationY = -190.0f
-                                }
-                            }
-                        }
-                    }
-                } catch (_: Throwable) {}
-
-                result
-            }
-        } catch (t: Throwable) {
-            Log.e("HyperBounce", "FacebookHook: Failed to hook View.onAttachedToWindow: ${t.message}", t)
-            module.log(Log.WARN, "HyperiOS", "Failed to hook View.onAttachedToWindow: ${t.message}")
-        }
-
-        // 3. Hook TabBarContainerLayout constructors directly to suppress immediately
-        try {
-            Log.i("HyperBounce", "FacebookHook: Registering TabBarContainerLayout constructor hook")
+            Log.i("HyperBounce", "FacebookHook: Registering TabBarContainerLayout hooks")
             val tabBarClass = param.classLoader.loadClass("com.facebook.navigation.tabbar.ui.TabBarContainerLayout")
             for (ctor in tabBarClass.declaredConstructors) {
                 module.hook(ctor).intercept { chain ->
                     val result = chain.proceed()
-                    val tabBar = chain.thisObject as? ViewGroup
+                    val tabBar = chain.thisObject as? ViewGroup ?: return@intercept result
                     Log.i("HyperBounce", "FacebookHook: TabBarContainerLayout constructor intercepted: $tabBar")
-                    tabBar?.let { bar ->
-                        suppressNativeTabBar(bar)
-                        bar.addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
-                            override fun onViewAttachedToWindow(v: View) {
-                                Log.i("HyperBounce", "FacebookHook: TabBarContainerLayout onViewAttachedToWindow listener fired")
-                                suppressNativeTabBar(bar)
-                                bar.post { executeUIHeist(bar) }
-                            }
-                            override fun onViewDetachedFromWindow(v: View) {}
-                        })
-                    }
+                    suppressNativeTabBar(tabBar)
+                    tabBar.addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
+                        override fun onViewAttachedToWindow(v: View) {
+                            Log.i("HyperBounce", "FacebookHook: TabBarContainerLayout onViewAttachedToWindow listener fired")
+                            suppressNativeTabBar(tabBar)
+                            tabBar.post { executeUIHeist(tabBar) }
+                        }
+                        override fun onViewDetachedFromWindow(v: View) {}
+                    })
                     result
                 }
             }
+
+            try {
+                val onMeasureMethod = tabBarClass.getDeclaredMethod("onMeasure", Int::class.javaPrimitiveType, Int::class.javaPrimitiveType)
+                module.hook(onMeasureMethod).intercept { chain ->
+                    chain.proceed()
+                    val view = chain.thisObject as? View
+                    val setMeasuredDimension = View::class.java.getDeclaredMethod("setMeasuredDimension", Int::class.javaPrimitiveType, Int::class.javaPrimitiveType)
+                    setMeasuredDimension.isAccessible = true
+                    setMeasuredDimension.invoke(view, 0, 0)
+                }
+            } catch (t: Throwable) {
+                module.log(Log.WARN, TAG, "Failed to hook TabBarContainerLayout.onMeasure: ${t.message}")
+            }
         } catch (t: Throwable) {
             Log.w("HyperBounce", "FacebookHook: TabBarContainerLayout class hook not ready or not found: ${t.message}")
-            module.log(Log.WARN, "HyperiOS", "TabBarContainerLayout class hook not ready or not found: ${t.message}")
+            module.log(Log.WARN, TAG, "TabBarContainerLayout class hook not ready or not found: ${t.message}")
         }
 
-        // 4. Hook FbMainTabActivity for fullscreen overlays, video player, and dialog autohide
+        // 3. Hook FbMainTabActivity for fullscreen overlays, video player, and dialog autohide
         try {
             Log.i("HyperBounce", "FacebookHook: Registering FbMainTabActivity lifecycle/overlay hooks")
             val fbMainActivityClass = param.classLoader.loadClass("com.facebook.katana.activity.FbMainTabActivity")
@@ -234,7 +162,7 @@ class FacebookHook(
                 }
             }
         } catch (t: Throwable) {
-            module.log(Log.WARN, "HyperiOS", "FbMainTabActivity hooks: ${t.message}")
+            module.log(Log.WARN, TAG, "FbMainTabActivity hooks: ${t.message}")
         }
     }
 
@@ -280,57 +208,6 @@ class FacebookHook(
                 }
             }
         }
-
-        val key = 0x7F0B9901
-        try {
-            if (tabBar.getTag(key) == null) {
-                tabBar.setTag(key, true)
-                tabBar.viewTreeObserver.addOnPreDrawListener {
-                    tabBar.visibility = View.GONE
-                    tabBar.alpha = 0f
-                    tabBar.translationY = -9999f
-                    tabBar.layoutParams?.let { lp ->
-                        if (lp.height != 0) {
-                            lp.height = 0
-                            tabBar.requestLayout()
-                        }
-                    }
-                    val p = tabBar.parent as? ViewGroup
-                    if (p != null && p.id != android.R.id.content) {
-                        p.visibility = View.GONE
-                        p.alpha = 0f
-                        p.translationY = -9999f
-                        p.layoutParams?.let { lp ->
-                            if (lp.height != 0) {
-                                lp.height = 0
-                                p.requestLayout()
-                            }
-                        }
-                        val gp = p.parent as? ViewGroup
-                        if (gp != null) {
-                            val idx = gp.indexOfChild(p)
-                            if (idx != -1 && idx + 1 < gp.childCount) {
-                                val nextSibling = gp.getChildAt(idx + 1)
-                                if (nextSibling != null) {
-                                    val h = nextSibling.height
-                                    val lph = nextSibling.layoutParams?.height ?: 0
-                                    if (h in 1..4 || lph in 1..4) {
-                                        nextSibling.visibility = View.GONE
-                                        nextSibling.layoutParams?.let { lp ->
-                                            if (lp.height != 0) {
-                                                lp.height = 0
-                                                nextSibling.requestLayout()
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    true
-                }
-            }
-        } catch (_: Throwable) {}
     }
 
     private fun setBarVisibility(activity: Activity?, visibility: Int, isOverlay: Boolean = false) {
@@ -338,7 +215,7 @@ class FacebookHook(
             isOverlayHidden = (visibility == View.GONE)
         }
         activity?.runOnUiThread {
-            val bar = activity.window?.decorView?.findViewWithTag<View>("HyperFloatingBar")
+            val bar = activeFloatingBar ?: activity.window?.decorView?.findViewWithTag<View>("HyperFloatingBar")
             bar?.visibility = visibility
         }
     }
@@ -410,44 +287,97 @@ class FacebookHook(
                     }
                 }
 
+                activeFloatingBar = composeView
                 decorView.addView(composeView)
                 Log.i("HyperBounce", "FacebookHook: composeView attached to decorView successfully (backdropSource=${backdropSource.javaClass.simpleName})")
-                module.log(Log.INFO, "HyperiOS", "Attached Facebook Liquid Navigation Bar overlay to decorView")
+                module.log(Log.INFO, TAG, "Attached Facebook Liquid Navigation Bar overlay to decorView")
 
-                decorView.viewTreeObserver.addOnPreDrawListener {
-                    val customBar = decorView.findViewWithTag<View>("HyperFloatingBar")
-                    if (customBar != null) {
-                        val imeBottom = try {
-                            decorView.rootWindowInsets?.getInsets(WindowInsets.Type.ime())?.bottom ?: 0
-                        } catch (_: Throwable) { 0 }
+                // Handle keyboard / IME via listener instead of per-frame OnPreDrawListener
+                composeView.setOnApplyWindowInsetsListener { v, insets ->
+                    val imeBottom = try {
+                        insets.getInsets(WindowInsets.Type.ime()).bottom
+                    } catch (_: Throwable) { 0 }
 
-                        if (imeBottom > 200 || isOverlayHidden) {
-                            if (customBar.visibility != View.GONE) customBar.visibility = View.GONE
-                        } else {
-                            if (customBar.visibility != View.VISIBLE) customBar.visibility = View.VISIBLE
-                        }
+                    val targetVisibility = if (imeBottom > 200 || isOverlayHidden) View.GONE else View.VISIBLE
+                    if (v.visibility != targetVisibility) {
+                        v.visibility = targetVisibility
                     }
-
-                    val targetShift = if (isReelsActive) -190.0f else 0.0f
-                    synchronized(sReelsOverlayParents) {
-                        if (sReelsOverlayParents.isNotEmpty()) {
-                            val it = sReelsOverlayParents.keys.iterator()
-                            while (it.hasNext()) {
-                                val overlay = it.next()
-                                if (overlay != null && overlay.isAttachedToWindow) {
-                                    if (overlay.translationY != targetShift) {
-                                        overlay.translationY = targetShift
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    true
+                    insets
                 }
+
+                setupReelsWatcher(activity)
             } catch (e: Exception) {
                 Log.e("HyperBounce", "FacebookHook: Exception in executeUIHeist: ${e.message}", e)
-                module.log(Log.ERROR, "HyperiOS", "Exception in executeUIHeist: ${e.message}")
+                module.log(Log.ERROR, TAG, "Exception in executeUIHeist: ${e.message}")
+            }
+        }
+    }
+
+    private fun setupReelsWatcher(activity: Activity) {
+        val contentView = activity.findViewById<ViewGroup>(android.R.id.content) ?: return
+        val key = 0x7F0B9902
+        if (contentView.getTag(key) != null) return
+        contentView.setTag(key, true)
+
+        val updateReelsTranslation = {
+            applyReelsTranslation(contentView)
+        }
+
+        contentView.viewTreeObserver.addOnScrollChangedListener(updateReelsTranslation)
+        contentView.viewTreeObserver.addOnGlobalLayoutListener(updateReelsTranslation)
+    }
+
+    private fun findReelContainers(root: ViewGroup, outList: MutableList<ViewGroup>) {
+        if (root.visibility != View.VISIBLE) return
+        if (root.tag == "HyperFloatingBar") return
+
+        val desc = root.contentDescription?.toString()
+        if (desc != null && (desc.equals("Reel", ignoreCase = true) || desc.startsWith("Reel", ignoreCase = true))) {
+            outList.add(root)
+        }
+        for (i in 0 until root.childCount) {
+            val child = root.getChildAt(i)
+            if (child is ViewGroup) {
+                findReelContainers(child, outList)
+            }
+        }
+    }
+
+    private fun applyReelsTranslation(root: ViewGroup) {
+        if (isReelsActive) {
+            val containers = mutableListOf<ViewGroup>()
+            findReelContainers(root, containers)
+            for (reelButton in containers) {
+                reelButton.clipChildren = false
+                reelButton.clipToPadding = false
+                (reelButton.parent as? ViewGroup)?.clipChildren = false
+
+                if (reelButton.childCount >= 3) {
+                    val child0 = reelButton.getChildAt(0)
+                    val child1 = reelButton.getChildAt(1)
+                    val child2 = reelButton.getChildAt(2)
+
+                    if (child0.translationY != 0f) child0.translationY = 0f
+                    if (child1.translationY != 0f) child1.translationY = 0f
+                    if (child2.translationY != -190f) {
+                        child2.translationY = -190f
+                    }
+                    shiftedReelContainers.add(reelButton)
+                }
+            }
+        } else {
+            if (shiftedReelContainers.isNotEmpty()) {
+                val it = shiftedReelContainers.iterator()
+                while (it.hasNext()) {
+                    val container = it.next()
+                    if (container != null && container.childCount >= 3) {
+                        val child2 = container.getChildAt(2)
+                        if (child2.translationY != 0f) {
+                            child2.translationY = 0f
+                        }
+                    }
+                }
+                shiftedReelContainers.clear()
             }
         }
     }

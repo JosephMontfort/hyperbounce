@@ -26,6 +26,7 @@ object XposedServiceBridge {
     @Volatile private var service: XposedService? = null
     val isBoundState = androidx.compose.runtime.mutableStateOf(false)
     private var initialized = false
+    private val callbacksLock = Any()
     private val onBindCallbacks = mutableListOf<() -> Unit>()
 
     /** Call once, as early as possible (SettingsRepository's init block does this). */
@@ -38,7 +39,11 @@ object XposedServiceBridge {
                     service = xposedService
                     isBoundState.value = true
                     Log.i(TAG, "Xposed remote preferences service bound")
-                    onBindCallbacks.forEach { it() }
+                    val pending: List<() -> Unit>
+                    synchronized(callbacksLock) {
+                        pending = onBindCallbacks.toList()
+                    }
+                    pending.forEach { it() }
                 }
 
                 override fun onServiceDied(xposedService: XposedService) {
@@ -58,8 +63,14 @@ object XposedServiceBridge {
 
     /** Runs [callback] once the service is bound — immediately if it already is. */
     fun onBind(callback: () -> Unit) {
-        onBindCallbacks.add(callback)
-        if (isBound) callback()
+        var shouldExecuteNow = false
+        synchronized(callbacksLock) {
+            onBindCallbacks.add(callback)
+            if (isBound) {
+                shouldExecuteNow = true
+            }
+        }
+        if (shouldExecuteNow) callback()
     }
 
     fun remotePreferencesOrNull(group: String): SharedPreferences? =
