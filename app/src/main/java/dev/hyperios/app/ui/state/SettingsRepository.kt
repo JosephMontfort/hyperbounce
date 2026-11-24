@@ -92,6 +92,18 @@ class SettingsRepository(context: Context) {
 
     companion object {
         private var appContext: Context? = null
+        @Volatile var hasPendingPush: Boolean = false
+
+        fun syncRemote(action: (SharedPreferences.Editor) -> Unit) {
+            val remote = XposedServiceBridge.remotePreferencesOrNull(PREFS_NAME)
+            if (remote != null) {
+                val editor = remote.edit()
+                action(editor)
+                editor.commit()
+            } else {
+                hasPendingPush = true
+            }
+        }
 
         fun sendSettingsChangedBroadcast(key: String, value: Any?) {
             val ctx = appContext ?: return
@@ -230,7 +242,8 @@ class SettingsRepository(context: Context) {
                 is Long -> editor.putLong(key, value)
             }
         }
-        editor.apply()
+        editor.commit()
+        hasPendingPush = false
     }
 
     var hotReloadEnabled by prefsBooleanState("hot_reload_enabled", false)
@@ -556,6 +569,7 @@ class SettingsRepository(context: Context) {
                 reelsFullscreenZoom = ModuleDefaults.NavApps.Instagram.REELS_FULLSCREEN_ZOOM
             )
             NavApp.Facebook -> NavBarAppSettings(
+                liquidGlass = ModuleDefaults.NavApps.Facebook.LIQUID_GLASS,
                 barHeight = ModuleDefaults.NavApps.Facebook.BAR_HEIGHT,
                 tabWidth = ModuleDefaults.NavApps.Facebook.TAB_WIDTH,
                 cornerRadius = ModuleDefaults.NavApps.Facebook.CORNER_RADIUS,
@@ -1850,7 +1864,7 @@ private class PrefBooleanDelegate(
     operator fun setValue(thisRef: Any?, property: KProperty<*>, value: Boolean) {
         state = value
         prefs.edit().putBoolean(key, value).apply()
-        XposedServiceBridge.remotePreferencesOrNull(PREFS_NAME)?.edit()?.putBoolean(key, value)?.apply()
+        SettingsRepository.syncRemote { it.putBoolean(key, value) }
         SettingsRepository.sendSettingsChangedBroadcast(key, value)
     }
     override fun reload() {
@@ -1883,7 +1897,7 @@ private class PrefLongDelegate(
     operator fun setValue(thisRef: Any?, property: KProperty<*>, value: Long) {
         state = value
         prefs.edit().putLong(key, value).apply()
-        XposedServiceBridge.remotePreferencesOrNull(PREFS_NAME)?.edit()?.putLong(key, value)?.apply()
+        SettingsRepository.syncRemote { it.putLong(key, value) }
         SettingsRepository.sendSettingsChangedBroadcast(key, value)
     }
     override fun reload() {
@@ -1915,7 +1929,7 @@ private class PrefIntDelegate(
     operator fun setValue(thisRef: Any?, property: KProperty<*>, value: Int) {
         state = value
         prefs.edit().putInt(key, value).apply()
-        XposedServiceBridge.remotePreferencesOrNull(PREFS_NAME)?.edit()?.putInt(key, value)?.apply()
+        SettingsRepository.syncRemote { it.putInt(key, value) }
         SettingsRepository.sendSettingsChangedBroadcast(key, value)
     }
     override fun reload() {
@@ -1947,7 +1961,7 @@ private class PrefFloatDelegate(
     operator fun setValue(thisRef: Any?, property: KProperty<*>, value: Float) {
         state = value
         prefs.edit().putFloat(key, value).apply()
-        XposedServiceBridge.remotePreferencesOrNull(PREFS_NAME)?.edit()?.putFloat(key, value)?.apply()
+        SettingsRepository.syncRemote { it.putFloat(key, value) }
         SettingsRepository.sendSettingsChangedBroadcast(key, value)
     }
     override fun reload() {
@@ -1979,7 +1993,7 @@ private class PrefStringDelegate(
     operator fun setValue(thisRef: Any?, property: KProperty<*>, value: String) {
         state = value
         prefs.edit().putString(key, value).apply()
-        XposedServiceBridge.remotePreferencesOrNull(PREFS_NAME)?.edit()?.putString(key, value)?.apply()
+        SettingsRepository.syncRemote { it.putString(key, value) }
         SettingsRepository.sendSettingsChangedBroadcast(key, value)
     }
     override fun reload() {
@@ -2010,7 +2024,7 @@ private class PrefEnumDelegate<E : Enum<E>>(
     operator fun setValue(thisRef: Any?, property: KProperty<*>, value: E) {
         state = value
         prefs.edit().putString(key, value.name).apply()
-        XposedServiceBridge.remotePreferencesOrNull(PREFS_NAME)?.edit()?.putString(key, value.name)?.apply()
+        SettingsRepository.syncRemote { it.putString(key, value.name) }
         SettingsRepository.sendSettingsChangedBroadcast(key, value.name)
     }
     override fun reload() {

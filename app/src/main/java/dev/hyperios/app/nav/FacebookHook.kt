@@ -25,6 +25,11 @@ class FacebookHook(
     private val module: XposedModule,
     private val param: XposedModuleInterface.PackageReadyParam
 ) {
+    companion object {
+        val sReelsOverlayParents = java.util.WeakHashMap<ViewGroup, Boolean>()
+        @Volatile var isReelsActive: Boolean = false
+    }
+
     private val hyperBouncePrefs = HyperBouncePrefs(module)
     private var isOverlayHidden = false
 
@@ -86,6 +91,34 @@ class FacebookHook(
                         if (tabBar != null) {
                             suppressNativeTabBar(tabBar)
                             tabBar.post { executeUIHeist(tabBar) }
+                        }
+                    }
+
+                    if (isReelsActive) {
+                        val desc = view.contentDescription?.toString() ?: ""
+                        if (desc.contains("Like button", ignoreCase = true) ||
+                            desc.contains("Reel", ignoreCase = true) ||
+                            desc.contains("Share", ignoreCase = true)
+                        ) {
+                            val registerParent = {
+                                var p: View? = view.parent as? View
+                                val screenHeight = view.resources?.displayMetrics?.heightPixels ?: 2400
+                                val minBottom = (screenHeight * 0.75f).toInt()
+                                val minTop = (screenHeight * 0.50f).toInt()
+                                val minHeight = (screenHeight * 0.20f).toInt()
+
+                                while (p != null && p.id != android.R.id.content) {
+                                    if (p is ViewGroup && (p.bottom >= minBottom || p.top >= minTop || p.height >= minHeight)) {
+                                        synchronized(sReelsOverlayParents) {
+                                            sReelsOverlayParents[p] = true
+                                        }
+                                        break
+                                    }
+                                    p = p.parent as? View
+                                }
+                            }
+                            registerParent()
+                            view.post { registerParent() }
                         }
                     }
 
@@ -206,6 +239,7 @@ class FacebookHook(
     }
 
     private fun suppressNativeTabBar(tabBar: ViewGroup) {
+        tabBar.visibility = View.GONE
         tabBar.alpha = 0f
         tabBar.translationY = -9999f
         tabBar.layoutParams?.let { lp ->
@@ -216,12 +250,33 @@ class FacebookHook(
         }
         val parent = tabBar.parent as? ViewGroup
         if (parent != null && parent.id != android.R.id.content) {
+            parent.visibility = View.GONE
             parent.alpha = 0f
             parent.translationY = -9999f
             parent.layoutParams?.let { lp ->
                 if (lp.height != 0) {
                     lp.height = 0
                     parent.requestLayout()
+                }
+            }
+            val grandParent = parent.parent as? ViewGroup
+            if (grandParent != null) {
+                val idx = grandParent.indexOfChild(parent)
+                if (idx != -1 && idx + 1 < grandParent.childCount) {
+                    val nextSibling = grandParent.getChildAt(idx + 1)
+                    if (nextSibling != null) {
+                        val h = nextSibling.height
+                        val lph = nextSibling.layoutParams?.height ?: 0
+                        if (h in 1..4 || lph in 1..4) {
+                            nextSibling.visibility = View.GONE
+                            nextSibling.layoutParams?.let { lp ->
+                                if (lp.height != 0) {
+                                    lp.height = 0
+                                    nextSibling.requestLayout()
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -231,6 +286,7 @@ class FacebookHook(
             if (tabBar.getTag(key) == null) {
                 tabBar.setTag(key, true)
                 tabBar.viewTreeObserver.addOnPreDrawListener {
+                    tabBar.visibility = View.GONE
                     tabBar.alpha = 0f
                     tabBar.translationY = -9999f
                     tabBar.layoutParams?.let { lp ->
@@ -241,12 +297,33 @@ class FacebookHook(
                     }
                     val p = tabBar.parent as? ViewGroup
                     if (p != null && p.id != android.R.id.content) {
+                        p.visibility = View.GONE
                         p.alpha = 0f
                         p.translationY = -9999f
                         p.layoutParams?.let { lp ->
                             if (lp.height != 0) {
                                 lp.height = 0
                                 p.requestLayout()
+                            }
+                        }
+                        val gp = p.parent as? ViewGroup
+                        if (gp != null) {
+                            val idx = gp.indexOfChild(p)
+                            if (idx != -1 && idx + 1 < gp.childCount) {
+                                val nextSibling = gp.getChildAt(idx + 1)
+                                if (nextSibling != null) {
+                                    val h = nextSibling.height
+                                    val lph = nextSibling.layoutParams?.height ?: 0
+                                    if (h in 1..4 || lph in 1..4) {
+                                        nextSibling.visibility = View.GONE
+                                        nextSibling.layoutParams?.let { lp ->
+                                            if (lp.height != 0) {
+                                                lp.height = 0
+                                                nextSibling.requestLayout()
+                                            }
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
@@ -350,6 +427,22 @@ class FacebookHook(
                             if (customBar.visibility != View.VISIBLE) customBar.visibility = View.VISIBLE
                         }
                     }
+
+                    val targetShift = if (isReelsActive) -190.0f else 0.0f
+                    synchronized(sReelsOverlayParents) {
+                        if (sReelsOverlayParents.isNotEmpty()) {
+                            val it = sReelsOverlayParents.keys.iterator()
+                            while (it.hasNext()) {
+                                val overlay = it.next()
+                                if (overlay != null && overlay.isAttachedToWindow) {
+                                    if (overlay.translationY != targetShift) {
+                                        overlay.translationY = targetShift
+                                    }
+                                }
+                            }
+                        }
+                    }
+
                     true
                 }
             } catch (e: Exception) {

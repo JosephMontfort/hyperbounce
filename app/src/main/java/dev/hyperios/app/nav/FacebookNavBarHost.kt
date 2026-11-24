@@ -370,6 +370,11 @@ fun FacebookNavBarHost(
         sensitivity = live.autoShrinkSensitivity
     )
 
+    val currentTab = tabs.getOrNull(selectedIndex)
+    val label = currentTab?.label?.lowercase() ?: ""
+    val isReelsTab = (currentTab != null) && (label.contains("video") || label.contains("reel") || label.contains("watch"))
+    FacebookHook.isReelsActive = isReelsTab
+
     LaunchedEffect(tabBarContainer, isDark, accentColor) {
         tabs = extractFacebookTabs(tabBarContainer, isDark, accentColor)
         selectedIndex = extractSelectedIndex(tabBarContainer, tabs)

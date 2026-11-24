@@ -65,18 +65,15 @@ fun rememberLiveNavBarSettings(hyperBouncePrefs: HyperBouncePrefs, appKey: Strin
     var settings by remember(hyperBouncePrefs, appKey) {
         mutableStateOf(readNavBarSettings(hyperBouncePrefs, appKey))
     }
-    val isHotReload = remember(hyperBouncePrefs) { hyperBouncePrefs.hotReloadEnabled }
-    if (isHotReload) {
-        DisposableEffect(hyperBouncePrefs, appKey) {
-            val prefix = "app_${appKey}_"
-            val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, changedKey ->
-                if (changedKey != null && changedKey.startsWith(prefix)) {
-                    settings = readNavBarSettings(hyperBouncePrefs, appKey)
-                }
+    DisposableEffect(hyperBouncePrefs, appKey) {
+        val prefix = "app_${appKey}_"
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, changedKey ->
+            if (changedKey != null && changedKey.startsWith(prefix)) {
+                settings = readNavBarSettings(hyperBouncePrefs, appKey)
             }
-            hyperBouncePrefs.prefs.registerOnSharedPreferenceChangeListener(listener)
-            onDispose { hyperBouncePrefs.prefs.unregisterOnSharedPreferenceChangeListener(listener) }
         }
+        hyperBouncePrefs.prefs.registerOnSharedPreferenceChangeListener(listener)
+        onDispose { hyperBouncePrefs.prefs.unregisterOnSharedPreferenceChangeListener(listener) }
     }
     return settings
 }

@@ -620,6 +620,7 @@ object ModuleDefaults {
             const val AUTO_SHRINK_SCALE: Float = 0.85f
             val AUTO_SHRINK_SCALE_RANGE = 0.50f..1.00f
 
+            const val LIQUID_GLASS: Boolean = true
             const val REELS_AUTOHIDE: Boolean = true
             const val REELS_FULLSCREEN_ZOOM: Boolean = true
             const val ACCENT: String = "Blue"
