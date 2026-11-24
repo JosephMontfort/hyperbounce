@@ -64,55 +64,48 @@ private fun extractTabDrawables(child: View): Pair<Drawable?, Drawable?> {
     var inactiveDrawable: Drawable? = null
 
     // Strategy 1: Reflect field A0T (C03LV) which holds A00 (active) and A01 (inactive)
-    try {
-        val fieldA0T = child.javaClass.findFieldRecursively("A0T")
-        if (fieldA0T != null) {
-            val obj = fieldA0T.get(child)
-            if (obj != null) {
-                val fA00 = obj.javaClass.findFieldRecursively("A00")
-                activeDrawable = fA00?.get(obj) as? Drawable
-
-                val fA01 = obj.javaClass.findFieldRecursively("A01")
-                inactiveDrawable = fA01?.get(obj) as? Drawable
-            }
-        }
-    } catch (_: Throwable) {}
-
-    // Strategy 2: Call DxG() method
-    if (activeDrawable == null && inactiveDrawable == null) {
+    val fieldA0T = child.javaClass.findFieldRecursively("A0T")
+    val c03lv = fieldA0T?.get(child)
+    if (c03lv != null) {
         try {
-            val dxGMethod = child.javaClass.getMethod("DxG")
-            val d = dxGMethod.invoke(child) as? Drawable
-            if (d != null) {
-                activeDrawable = d
-                inactiveDrawable = d
-            }
+            val fieldA00 = c03lv.javaClass.findFieldRecursively("A00")
+            val fieldA01 = c03lv.javaClass.findFieldRecursively("A01")
+            val activeD = fieldA00?.get(c03lv) as? Drawable
+            val inactiveD = fieldA01?.get(c03lv) as? Drawable
+            if (activeD != null) activeDrawable = activeD
+            if (inactiveD != null) inactiveDrawable = inactiveD
         } catch (_: Throwable) {}
     }
 
-    // Strategy 3: Reflect field A02
-    if (activeDrawable == null && inactiveDrawable == null) {
+    // Strategy 2: Call DxG() method if activeDrawable is missing
+    if (activeDrawable == null) {
+        try {
+            val dxGMethod = child.javaClass.getMethod("DxG")
+            val d = dxGMethod.invoke(child) as? Drawable
+            if (d != null) activeDrawable = d
+        } catch (_: Throwable) {}
+    }
+
+    // Strategy 3: Reflect field A02 if activeDrawable is missing
+    if (activeDrawable == null) {
         try {
             val fieldA02 = child.javaClass.findFieldRecursively("A02")
             val d = fieldA02?.get(child) as? Drawable
-            if (d != null) {
-                activeDrawable = d
-                inactiveDrawable = d
-            }
+            if (d != null) activeDrawable = d
         } catch (_: Throwable) {}
     }
 
     // Strategy 4: Fallback to ImageView child
-    if (activeDrawable == null && inactiveDrawable == null && child is ViewGroup) {
+    if ((activeDrawable == null || inactiveDrawable == null) && child is ViewGroup) {
         val iv = findImageView(child)
         val d = iv?.drawable
         if (d != null) {
-            activeDrawable = d
-            inactiveDrawable = d
+            if (activeDrawable == null) activeDrawable = d
+            if (inactiveDrawable == null) inactiveDrawable = d
         }
     }
 
-    return Pair(inactiveDrawable, activeDrawable ?: inactiveDrawable)
+    return Pair(inactiveDrawable ?: activeDrawable, activeDrawable ?: inactiveDrawable)
 }
 
 private fun drawableToBitmap(
@@ -363,6 +356,7 @@ fun FacebookNavBarHost(
 
     var tabs by remember { mutableStateOf(emptyList<FacebookTabData>()) }
     var selectedIndex by remember { mutableIntStateOf(0) }
+    val filledBitmapsCache = remember { mutableMapOf<Int, Bitmap>() }
     val activity = (backdropSource.context as? Activity) ?: (tabBarContainer.context as? Activity)
     val scrollShrinkState = rememberScrollShrinkState(
         activity = activity,
@@ -376,7 +370,14 @@ fun FacebookNavBarHost(
     FacebookHook.isReelsActive = isReelsTab
 
     LaunchedEffect(tabBarContainer, isDark, accentColor) {
-        tabs = extractFacebookTabs(tabBarContainer, isDark, accentColor)
+        val activeTint = accentColor.toArgb()
+        val initialTabs = extractFacebookTabs(tabBarContainer, isDark, accentColor)
+        initialTabs.forEachIndexed { idx, tab ->
+            if (tab.activeBitmap != null) {
+                filledBitmapsCache[idx] = tab.activeBitmap
+            }
+        }
+        tabs = initialTabs
         selectedIndex = extractSelectedIndex(tabBarContainer, tabs)
 
         while (true) {
@@ -384,24 +385,47 @@ fun FacebookNavBarHost(
             if (tabs.isEmpty() || tabs.any { it.inactiveBitmap == null }) {
                 val extracted = extractFacebookTabs(tabBarContainer, isDark, accentColor)
                 if (extracted.isNotEmpty()) {
+                    extracted.forEachIndexed { idx, tab ->
+                        if (tab.activeBitmap != null) {
+                            filledBitmapsCache[idx] = tab.activeBitmap
+                        }
+                    }
                     tabs = extracted
                 }
             } else {
                 val curSelected = extractSelectedIndex(tabBarContainer, tabs)
-                if (curSelected != selectedIndex && curSelected in tabs.indices) {
+                val selectionChanged = (curSelected != selectedIndex && curSelected in tabs.indices)
+                if (selectionChanged) {
                     selectedIndex = curSelected
                 }
-                var badgesChanged = false
-                val updatedTabs = tabs.map { tab ->
+
+                var tabsMutated = false
+                val updatedTabs = tabs.mapIndexed { idx, tab ->
                     val (count, dot) = extractBadge(tab.tabView)
-                    if (count != tab.badgeCount || dot != tab.hasBadgeDot) {
-                        badgesChanged = true
-                        tab.copy(badgeCount = count, hasBadgeDot = dot)
+                    var activeBmp = tab.activeBitmap
+                    if (idx == curSelected && (activeBmp == null || activeBmp == tab.inactiveBitmap || !filledBitmapsCache.containsKey(idx))) {
+                        val (_, activeD) = extractTabDrawables(tab.tabView)
+                        if (activeD != null) {
+                            val bmp = drawableToBitmap(activeD, tint = null) ?: drawableToBitmap(activeD, tint = activeTint)
+                            if (bmp != null) {
+                                filledBitmapsCache[idx] = bmp
+                                activeBmp = bmp
+                                tabsMutated = true
+                            }
+                        }
+                    } else if (filledBitmapsCache.containsKey(idx) && activeBmp != filledBitmapsCache[idx]) {
+                        activeBmp = filledBitmapsCache[idx]
+                        tabsMutated = true
+                    }
+
+                    if (count != tab.badgeCount || dot != tab.hasBadgeDot || activeBmp != tab.activeBitmap) {
+                        tabsMutated = true
+                        tab.copy(badgeCount = count, hasBadgeDot = dot, activeBitmap = activeBmp)
                     } else {
                         tab
                     }
                 }
-                if (badgesChanged) {
+                if (tabsMutated) {
                     tabs = updatedTabs
                 }
             }
@@ -430,6 +454,7 @@ fun FacebookNavBarHost(
         },
         sourceView = backdropSource,
         circularIndices = if (profileIndex >= 0) setOf(profileIndex) else emptySet(),
+        sparkleIndices = if (profileIndex >= 0) setOf(profileIndex) else emptySet(),
         forceLightTheme = (live.themeMode == "Light"),
         forceDarkTheme = (live.themeMode == "Dark"),
         containerAlpha = live.containerOpacity,

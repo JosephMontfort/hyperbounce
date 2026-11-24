@@ -3,8 +3,15 @@ package dev.hyperios.app.nav
 import android.graphics.Bitmap
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.EaseOut
-import androidx.compose.ui.util.lerp
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -40,6 +47,7 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.util.fastCoerceIn
+import androidx.compose.ui.util.lerp
 import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.backdrops.rememberCombinedBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
@@ -79,6 +87,7 @@ fun LiquidNavigationBar(
     onTabSelected: (Int) -> Unit,
     sourceView: android.view.View,
     circularIndices: Set<Int> = emptySet(),
+    sparkleIndices: Set<Int> = emptySet(),
     forceLightTheme: Boolean = false,
     forceDarkTheme: Boolean = false,
     containerAlpha: Float = 0.4f,
@@ -362,6 +371,7 @@ fun LiquidNavigationBar(
                                 LiquidBottomTab(
                                     bitmap = bitmap,
                                     isCircular = index in circularIndices,
+                                    isSparkle = index in sparkleIndices,
                                     accentColor = null,
                                     label = labels.getOrNull(index),
                                     scaleFactor = currentScale,
@@ -419,6 +429,7 @@ fun LiquidNavigationBar(
                                 LiquidBottomTab(
                                     bitmap = bitmap,
                                     isCircular = index in circularIndices,
+                                    isSparkle = index in sparkleIndices,
                                     accentColor = accentColor,
                                     label = labels.getOrNull(index),
                                     scaleFactor = currentScale,
@@ -494,6 +505,7 @@ fun LiquidNavigationBar(
                             LiquidBottomTab(
                                 bitmap = bitmap,
                                 isCircular = index in circularIndices,
+                                isSparkle = index in sparkleIndices,
                                 accentColor = null,
                                 label = labels.getOrNull(index),
                                 scaleFactor = currentScale,
@@ -553,6 +565,7 @@ fun LiquidNavigationBar(
                                 LiquidBottomTab(
                                     bitmap = bitmap,
                                     isCircular = index in circularIndices,
+                                    isSparkle = index in sparkleIndices,
                                     accentColor = accentColor,
                                     label = labels.getOrNull(index),
                                     scaleFactor = currentScale,
@@ -700,6 +713,7 @@ private val LocalLiquidBottomTabScale =
 private fun RowScope.LiquidBottomTab(
     bitmap: Bitmap?,
     isCircular: Boolean,
+    isSparkle: Boolean = false,
     label: String?,
     accentColor: Color? = null,
     scaleFactor: Float = 1f,
@@ -740,9 +754,82 @@ private fun RowScope.LiquidBottomTab(
                     modifier = Modifier
                         .size(baseSize * scaleFactor)
                         .then(
-                            if (isCircular) Modifier.clip(CircleShape) else Modifier
+                            if (isCircular) {
+                                if (accentColor != null) {
+                                    Modifier
+                                        .border((2 * scaleFactor).dp, accentColor, CircleShape)
+                                        .padding((2 * scaleFactor).dp)
+                                        .clip(CircleShape)
+                                } else {
+                                    Modifier.clip(CircleShape)
+                                }
+                            } else Modifier
                         ),
                 )
+                if (isSparkle && accentColor != null) {
+                    val infiniteTransition = rememberInfiniteTransition(label = "profileSparkle")
+                    val sparkleScale by infiniteTransition.animateFloat(
+                        initialValue = 0.65f,
+                        targetValue = 1.15f,
+                        animationSpec = infiniteRepeatable(
+                            animation = tween(1200, easing = FastOutSlowInEasing),
+                            repeatMode = RepeatMode.Reverse
+                        ),
+                        label = "sparkleScale"
+                    )
+                    val sparkleAlpha by infiniteTransition.animateFloat(
+                        initialValue = 0.45f,
+                        targetValue = 1f,
+                        animationSpec = infiniteRepeatable(
+                            animation = tween(1200, easing = FastOutSlowInEasing),
+                            repeatMode = RepeatMode.Reverse
+                        ),
+                        label = "sparkleAlpha"
+                    )
+                    val sparkleRotation by infiniteTransition.animateFloat(
+                        initialValue = 0f,
+                        targetValue = 90f,
+                        animationSpec = infiniteRepeatable(
+                            animation = tween(2400, easing = LinearEasing),
+                            repeatMode = RepeatMode.Restart
+                        ),
+                        label = "sparkleRotation"
+                    )
+
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .offset(x = (3 * scaleFactor).dp, y = (-2 * scaleFactor).dp)
+                            .size((10 * scaleFactor).dp)
+                            .graphicsLayer {
+                                this.scaleX = sparkleScale
+                                this.scaleY = sparkleScale
+                                this.rotationZ = sparkleRotation
+                                this.alpha = sparkleAlpha
+                            }
+                    ) {
+                        Canvas(modifier = Modifier.fillMaxSize()) {
+                            val w = size.width
+                            val h = size.height
+                            val cx = w / 2f
+                            val cy = h / 2f
+                            val starPath = Path().apply {
+                                moveTo(cx, 0f)
+                                quadraticBezierTo(cx, cy, w, cy)
+                                quadraticBezierTo(cx, cy, cx, h)
+                                quadraticBezierTo(cx, cy, 0f, cy)
+                                quadraticBezierTo(cx, cy, cx, 0f)
+                                close()
+                            }
+                            drawCircle(
+                                color = accentColor.copy(alpha = 0.35f * sparkleAlpha),
+                                radius = cx * 1.4f,
+                                center = Offset(cx, cy)
+                            )
+                            drawPath(starPath, color = Color.White)
+                        }
+                    }
+                }
                 if (!badgeCount.isNullOrEmpty()) {
                     Box(
                         modifier = Modifier

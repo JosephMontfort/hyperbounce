@@ -34,7 +34,9 @@ class FacebookHook(
     private val hyperBouncePrefs = HyperBouncePrefs(module)
     private var isOverlayHidden = false
     private var activeFloatingBar: ComposeView? = null
-    private val shiftedReelContainers = java.util.Collections.newSetFromMap(java.util.WeakHashMap<ViewGroup, Boolean>())
+    private val sShiftedReelViews = java.util.Collections.synchronizedSet(
+        java.util.Collections.newSetFromMap(java.util.WeakHashMap<View, Boolean>())
+    )
 
     fun onPackageReady() {
         val enabled = hyperBouncePrefs.appEnabled("facebook")
@@ -163,6 +165,31 @@ class FacebookHook(
             }
         } catch (t: Throwable) {
             module.log(Log.WARN, TAG, "FbMainTabActivity hooks: ${t.message}")
+        }
+
+        // 4. Hook RecyclerView.onChildAttachedToWindow to shift reels overlays dynamically
+        try {
+            val rvClass = param.classLoader.loadClass("androidx.recyclerview.widget.RecyclerView")
+            val onChildAttachedMethod = rvClass.getDeclaredMethod("onChildAttachedToWindow", View::class.java)
+            module.hook(onChildAttachedMethod).intercept { chain ->
+                val result = chain.proceed()
+                val child = chain.args[0] as? View
+                if (child is ViewGroup && isReelsActive) {
+                    applyReelsTranslationToReelTree(child)
+                    val key = 0x7F0B9903
+                    if (child.getTag(key) == null) {
+                        child.setTag(key, true)
+                        child.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
+                            if (isReelsActive) {
+                                applyReelsTranslationToReelTree(child)
+                            }
+                        }
+                    }
+                }
+                result
+            }
+        } catch (t: Throwable) {
+            module.log(Log.WARN, TAG, "Failed to hook RecyclerView.onChildAttachedToWindow: ${t.message}")
         }
     }
 
@@ -343,42 +370,94 @@ class FacebookHook(
         }
     }
 
+    private fun hasSurfaceView(view: View): Boolean {
+        if (view is android.view.SurfaceView || view is android.view.TextureView) return true
+        if (view is ViewGroup) {
+            for (i in 0 until view.childCount) {
+                if (hasSurfaceView(view.getChildAt(i))) return true
+            }
+        }
+        return false
+    }
+
+    private fun applyReelsTranslationToReelTree(root: ViewGroup) {
+        val containers = mutableListOf<ViewGroup>()
+        findReelContainers(root, containers)
+        for (reelButton in containers) {
+            reelButton.clipChildren = false
+            reelButton.clipToPadding = false
+            (reelButton.parent as? ViewGroup)?.let {
+                it.clipChildren = false
+                it.clipToPadding = false
+            }
+
+            var child2: ViewGroup? = null
+            for (i in 0 until reelButton.childCount) {
+                val c = reelButton.getChildAt(i)
+                if (c is ViewGroup && !hasSurfaceView(c)) {
+                    if (c.top > reelButton.top + (reelButton.height * 0.3f) || (reelButton.childCount >= 3 && i == 2)) {
+                        child2 = c
+                        break
+                    }
+                }
+            }
+            if (child2 == null && reelButton.childCount >= 3) {
+                val c = reelButton.getChildAt(2)
+                if (c is ViewGroup && !hasSurfaceView(c)) {
+                    child2 = c
+                }
+            }
+
+            if (child2 != null) {
+                child2.clipChildren = false
+                child2.clipToPadding = false
+                if (child2.translationY != 0f) child2.translationY = 0f // MUST STAY AT 0f!
+
+                for (j in 0 until child2.childCount) {
+                    val sc = child2.getChildAt(j) ?: continue
+                    if (sc is ViewGroup && sc.childCount > 0) {
+                        sc.translationY = -190f // Subchild 0: Metadata + Side Buttons
+                        sShiftedReelViews.add(sc)
+                    } else if (sc.height in 1..120 || j == child2.childCount - 1) {
+                        sc.translationY = -190f // Subchild 2: Progress bar / Scrubber
+                        sShiftedReelViews.add(sc)
+                    } else {
+                        if (sc.translationY != 0f) sc.translationY = 0f // Subchild 1: 300px Dark Dimming Scrim stays at 0f!
+                    }
+                }
+            }
+        }
+
+        val seekbarIds = intArrayOf(0x7f0a1c63, 0x7f0a1c6b, 0x7f0a088e)
+        for (id in seekbarIds) {
+            val v = root.findViewById<View>(id)
+            if (v != null) {
+                v.translationY = -190f
+                sShiftedReelViews.add(v)
+            }
+        }
+    }
+
+    private fun resetShiftedReelsOverlays() {
+        synchronized(sShiftedReelViews) {
+            if (sShiftedReelViews.isNotEmpty()) {
+                val it = sShiftedReelViews.iterator()
+                while (it.hasNext()) {
+                    val v = it.next()
+                    if (v != null && v.translationY != 0f) {
+                        v.translationY = 0f
+                    }
+                }
+                sShiftedReelViews.clear()
+            }
+        }
+    }
+
     private fun applyReelsTranslation(root: ViewGroup) {
         if (isReelsActive) {
-            val containers = mutableListOf<ViewGroup>()
-            findReelContainers(root, containers)
-            for (reelButton in containers) {
-                reelButton.clipChildren = false
-                reelButton.clipToPadding = false
-                (reelButton.parent as? ViewGroup)?.clipChildren = false
-
-                if (reelButton.childCount >= 3) {
-                    val child0 = reelButton.getChildAt(0)
-                    val child1 = reelButton.getChildAt(1)
-                    val child2 = reelButton.getChildAt(2)
-
-                    if (child0.translationY != 0f) child0.translationY = 0f
-                    if (child1.translationY != 0f) child1.translationY = 0f
-                    if (child2.translationY != -190f) {
-                        child2.translationY = -190f
-                    }
-                    shiftedReelContainers.add(reelButton)
-                }
-            }
+            applyReelsTranslationToReelTree(root)
         } else {
-            if (shiftedReelContainers.isNotEmpty()) {
-                val it = shiftedReelContainers.iterator()
-                while (it.hasNext()) {
-                    val container = it.next()
-                    if (container != null && container.childCount >= 3) {
-                        val child2 = container.getChildAt(2)
-                        if (child2.translationY != 0f) {
-                            child2.translationY = 0f
-                        }
-                    }
-                }
-                shiftedReelContainers.clear()
-            }
+            resetShiftedReelsOverlays()
         }
     }
 }
