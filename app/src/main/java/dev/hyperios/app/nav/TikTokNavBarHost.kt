@@ -1,6 +1,7 @@
 package dev.hyperios.app.nav
 
 import android.app.Activity
+import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Paint
@@ -12,7 +13,15 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageView
 import android.widget.TextView
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.offset
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
@@ -22,6 +31,8 @@ import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.unit.dp
@@ -53,6 +64,24 @@ private val TIKTOK_ICON_NAME_PAIRS = listOf(
     Pair("icon_tab_bottom_inbox", "icon_tab_bottom_inbox_fill"),
     Pair("icon_tab_bottom_profile", "icon_tab_bottom_profile_fill"),
 )
+
+private val TIKTOK_RAW_ICONS = listOf(
+    Pair(0x7f0109e7, 0x7f0109e8), // Tab 0: Home (outline, filled)
+    Pair(0x7f0109e5, 0x7f0109e6), // Tab 1: Friends (outline, filled)
+    Pair(0x7f0109e3, 0x7f0109e4), // Tab 2: Create (outline, filled)
+    Pair(0x7f0109e9, 0x7f0109ea), // Tab 3: Inbox (outline, filled)
+    Pair(0x7f0109eb, 0x7f0109ec), // Tab 4: Profile (outline, filled)
+)
+
+private fun loadRawBitmap(context: Context, resId: Int): Bitmap? {
+    return try {
+        context.resources.openRawResource(resId).use { stream ->
+            android.graphics.BitmapFactory.decodeStream(stream)
+        }
+    } catch (t: Throwable) {
+        null
+    }
+}
 
 /**
  * Finds the primary icon ImageView within a tab View, skipping tiny badge dot views.
@@ -326,6 +355,23 @@ private fun extractTikTokTabs(
         val isCreateTab = (index == 2)
         val iconView = findTabIconImageView(child)
 
+        // Attempt loading static raw PNG resources first
+        if (context != null) {
+            val (rawOutlineId, rawFilledId) = TIKTOK_RAW_ICONS.getOrNull(index) ?: Pair(0, 0)
+            if (rawOutlineId != 0 && !outlineCache.containsKey(index)) {
+                val rawBmp = loadRawBitmap(context, rawOutlineId)
+                if (rawBmp != null) {
+                    outlineCache[index] = if (isCreateTab) rawBmp else tintBitmap(rawBmp, inactiveTint)
+                }
+            }
+            if (rawFilledId != 0 && !filledCache.containsKey(index)) {
+                val rawBmp = loadRawBitmap(context, rawFilledId)
+                if (rawBmp != null) {
+                    filledCache[index] = if (isCreateTab) rawBmp else tintBitmap(rawBmp, activeTint)
+                }
+            }
+        }
+
         // Attempt resolving direct vector drawables from resources if available
         val (outlineName, filledName) = TIKTOK_ICON_NAME_PAIRS.getOrNull(index) ?: Pair(null, null)
         if (outlineName != null && context != null && !outlineCache.containsKey(index)) {
@@ -476,90 +522,41 @@ fun TikTokNavBarHost(
         sensitivity = live.autoShrinkSensitivity
     )
 
-    // Synchronize with externalTabState if supplied
-    externalTabState?.value?.let { extIdx ->
-        if (extIdx in tabs.indices && extIdx != selectedIndex &&
-            android.os.SystemClock.uptimeMillis() - lastUserSelectionTime > 400L) {
-            selectedIndex = extIdx
-        }
+    // Synchronize with externalTabState if supplied, or TikTokHook.externalTabState directly
+    val extTabIdx = externalTabState?.value ?: TikTokHook.externalTabState.intValue
+    if (extTabIdx in tabs.indices && extTabIdx != selectedIndex &&
+        android.os.SystemClock.uptimeMillis() - lastUserSelectionTime > 400L) {
+        selectedIndex = extTabIdx
     }
 
     LaunchedEffect(tabBarContainer, isDark, accentColor) {
         outlineBitmapsCache.clear()
         filledBitmapsCache.clear()
-        val activeTint = accentColor.toArgb()
-        val inactiveTint = if (isDark) android.graphics.Color.WHITE else android.graphics.Color.BLACK
 
         val initialTabs = extractTikTokTabs(tabBarContainer, isDark, accentColor, outlineBitmapsCache, filledBitmapsCache)
         tabs = initialTabs
-        selectedIndex = extractSelectedIndex(tabBarContainer, tabs)
+        selectedIndex = (externalTabState?.value ?: TikTokHook.externalTabState.intValue).coerceIn(0, (tabs.size - 1).coerceAtLeast(0))
 
         while (true) {
-            delay(150L)
+            delay(2000L)
             if (tabs.isEmpty() || tabs.any { it.inactiveBitmap == null }) {
                 val extracted = extractTikTokTabs(tabBarContainer, isDark, accentColor, outlineBitmapsCache, filledBitmapsCache)
                 if (extracted.isNotEmpty()) {
                     tabs = extracted
                 }
             } else {
-                val now = android.os.SystemClock.uptimeMillis()
-                val curSelected = extractSelectedIndex(tabBarContainer, tabs)
-
-                if (now - lastUserSelectionTime > 500L) {
-                    if (curSelected != selectedIndex && curSelected in tabs.indices) {
-                        selectedIndex = curSelected
-                    }
-                }
-
-                var tabsMutated = false
-                val updatedTabs = tabs.mapIndexed { idx, tab ->
-                    val isCreateTab = (idx == 2)
+                var badgesMutated = false
+                val updatedTabs = tabs.map { tab ->
                     val iconView = findTabIconImageView(tab.tabView)
                     val (count, dot) = extractBadge(tab.tabView, iconView)
-                    var activeBmp = tab.activeBitmap
-                    var inactiveBmp = tab.inactiveBitmap
-
-                    if (idx == curSelected) {
-                        if (!filledBitmapsCache.containsKey(idx)) {
-                            val d = iconView?.drawable
-                            if (d != null) {
-                                val bmp = drawableToBitmap(d, tint = if (isCreateTab) null else activeTint)
-                                if (bmp != null) filledBitmapsCache[idx] = bmp
-                            }
-                        }
-                        if (filledBitmapsCache.containsKey(idx) && activeBmp != filledBitmapsCache[idx]) {
-                            activeBmp = filledBitmapsCache[idx]
-                            tabsMutated = true
-                        }
-                    } else {
-                        if (!outlineBitmapsCache.containsKey(idx)) {
-                            val d = iconView?.drawable
-                            if (d != null) {
-                                val bmp = drawableToBitmap(d, tint = if (isCreateTab) null else inactiveTint)
-                                if (bmp != null) outlineBitmapsCache[idx] = bmp
-                            }
-                        }
-                        if (outlineBitmapsCache.containsKey(idx) && inactiveBmp != outlineBitmapsCache[idx]) {
-                            inactiveBmp = outlineBitmapsCache[idx]
-                            tabsMutated = true
-                        }
-                    }
-
-                    if (count != tab.badgeCount || dot != tab.hasBadgeDot ||
-                        activeBmp != tab.activeBitmap || inactiveBmp != tab.inactiveBitmap) {
-                        tabsMutated = true
-                        tab.copy(
-                            badgeCount = count,
-                            hasBadgeDot = dot,
-                            activeBitmap = activeBmp,
-                            inactiveBitmap = inactiveBmp
-                        )
+                    if (count != tab.badgeCount || dot != tab.hasBadgeDot) {
+                        badgesMutated = true
+                        tab.copy(badgeCount = count, hasBadgeDot = dot)
                     } else {
                         tab
                     }
                 }
-
-                if (tabsMutated) {
+                if (badgesMutated) {
                     tabs = updatedTabs
                 }
             }
@@ -568,44 +565,67 @@ fun TikTokNavBarHost(
 
     if (tabs.isEmpty()) return
 
-    LiquidNavigationBar(
-        bottomPadding = live.bottomMargin.dp,
-        tabs = tabs.map { it.inactiveBitmap },
-        activeTabs = tabs.map { it.activeBitmap ?: it.inactiveBitmap },
-        selectedIndex = selectedIndex.coerceIn(0, (tabs.size - 1).coerceAtLeast(0)),
-        onTabSelected = { index ->
-            selectedIndex = index
-            lastUserSelectionTime = android.os.SystemClock.uptimeMillis()
-            if (index == 0) {
-                scrollShrinkState.isShrunk.value = false
-            }
-            Log.i("HyperBounce", "TikTokNavBarHost: tab selected: index=$index, delegating click to child tab view")
-            if (index in tabs.indices) {
-                clickTikTokTab(tabs[index].tabView)
-            }
-        },
-        sourceView = backdropSource,
-        circularIndices = emptySet(),
-        forceLightTheme = (live.themeMode == "Light"),
-        forceDarkTheme = (live.themeMode == "Dark"),
-        containerAlpha = live.containerOpacity,
-        effectMultiplier = live.glassIntensity,
-        barBlurIntensity = live.barBlurIntensity,
-        labels = emptyList(),
-        customAccentColor = accentColor,
-        barHeight = live.barHeight.dp,
-        tabWidth = live.tabWidth.dp,
-        cornerRadius = live.cornerRadius.dp,
-        pillGlassIntensity = live.pillGlassIntensity,
-        pillContainerOpacity = live.pillContainerOpacity,
-        pillChromaticAberration = live.pillChromaticAberration,
-        pillShadow = live.pillShadow,
-        liquidGlass = live.liquidGlass,
-        isShrunk = scrollShrinkState.isShrunk.value,
-        shrinkScale = live.autoShrinkScale,
-        scrollShrinkState = scrollShrinkState,
-        badgeCounts = tabs.map { it.badgeCount },
-        badgeDots = tabs.map { it.hasBadgeDot },
-        enablePixelCopy = false,
+    val isBarVisible = TikTokHook.isBarVisibleState.value
+    val barOffsetY by animateDpAsState(
+        targetValue = if (isBarVisible) 0.dp else 140.dp,
+        animationSpec = spring(
+            stiffness = Spring.StiffnessMediumLow,
+            dampingRatio = Spring.DampingRatioLowBouncy
+        ),
+        label = "barOffsetY"
     )
+    val barAlpha by animateFloatAsState(
+        targetValue = if (isBarVisible) 1f else 0f,
+        animationSpec = tween(durationMillis = 200),
+        label = "barAlpha"
+    )
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .offset(y = barOffsetY)
+            .alpha(barAlpha)
+    ) {
+        LiquidNavigationBar(
+            bottomPadding = live.bottomMargin.dp,
+            tabs = tabs.map { it.inactiveBitmap },
+            activeTabs = tabs.map { it.activeBitmap ?: it.inactiveBitmap },
+            selectedIndex = selectedIndex.coerceIn(0, (tabs.size - 1).coerceAtLeast(0)),
+            onTabSelected = { index ->
+                selectedIndex = index
+                lastUserSelectionTime = android.os.SystemClock.uptimeMillis()
+                if (index == 0) {
+                    scrollShrinkState.isShrunk.value = false
+                }
+                Log.i("HyperBounce", "TikTokNavBarHost: tab selected: index=$index, delegating click to child tab view")
+                if (index in tabs.indices) {
+                    clickTikTokTab(tabs[index].tabView)
+                }
+            },
+            sourceView = backdropSource,
+            circularIndices = emptySet(),
+            multiColorIndices = setOf(2), // Tab 2 Create button preserved!
+            forceLightTheme = (live.themeMode == "Light"),
+            forceDarkTheme = (live.themeMode == "Dark"),
+            containerAlpha = live.containerOpacity,
+            effectMultiplier = live.glassIntensity,
+            barBlurIntensity = live.barBlurIntensity,
+            labels = emptyList(),
+            customAccentColor = accentColor,
+            barHeight = live.barHeight.dp,
+            tabWidth = live.tabWidth.dp,
+            cornerRadius = live.cornerRadius.dp,
+            pillGlassIntensity = live.pillGlassIntensity,
+            pillContainerOpacity = live.pillContainerOpacity,
+            pillChromaticAberration = live.pillChromaticAberration,
+            pillShadow = live.pillShadow,
+            liquidGlass = live.liquidGlass,
+            isShrunk = scrollShrinkState.isShrunk.value,
+            shrinkScale = live.autoShrinkScale,
+            scrollShrinkState = scrollShrinkState,
+            badgeCounts = tabs.map { it.badgeCount },
+            badgeDots = tabs.map { it.hasBadgeDot },
+            enablePixelCopy = false,
+        )
+    }
 }

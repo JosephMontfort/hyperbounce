@@ -76,12 +76,7 @@ internal class LiquidGlassViewBackdrop(
     private var frameNumber = 0
     private var lastCapturedFrame = -1
     private var lastCaptureNanos = 0L
-    private val minCaptureIntervalNanos = 16_666_667L // ~60 Hz
-
-    private val preDrawListener = ViewTreeObserver.OnPreDrawListener {
-        captureOncePerFrame()
-        true
-    }
+    private val minCaptureIntervalNanos = 33_333_333L // ~30 Hz throttle
 
     private val frameCallback = object : Choreographer.FrameCallback {
         override fun doFrame(frameTimeNanos: Long) {
@@ -101,12 +96,10 @@ internal class LiquidGlassViewBackdrop(
     }
 
     fun start() {
-        sourceView.viewTreeObserver.addOnPreDrawListener(preDrawListener)
         Choreographer.getInstance().postFrameCallback(frameCallback)
     }
 
     fun stop() {
-        sourceView.viewTreeObserver.removeOnPreDrawListener(preDrawListener)
         Choreographer.getInstance().removeFrameCallback(frameCallback)
     }
 

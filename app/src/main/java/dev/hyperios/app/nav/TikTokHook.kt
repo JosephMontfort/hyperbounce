@@ -13,6 +13,7 @@ import android.view.ViewGroup
 import android.view.WindowInsets
 import android.widget.FrameLayout
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.platform.ComposeView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.findViewTreeLifecycleOwner
@@ -45,11 +46,15 @@ object TikTokHook {
     // View IDs from TikTok 43.5.4 cbw.xml and layout inspection
     private const val ID_STOCK_TAB_BAR = 0x7f0b4587 // @id/moi (X.0eaq)
     private const val ID_HAIRLINE_DIVIDER = 0x7f0b0caa // @id/c22
+    private const val ID_SPACER_BOTTOM = 0x7f0b0ca5 // @id/c1x (spacer in zy_)
     private const val ID_TAB_HOST = 0x7f0b45a2 // @id/mp9 (FragmentTabHost)
+    private const val ID_ACTION_RAIL_CONTAINER = 0x7f0b3708 // @id/jz8
     private const val ID_CAPTION_CONTAINER = 0x7f0b12bc // @id/b9i
+    private const val ID_CAPTION_CONTAINER_ALT = 0x7f0b0865 // @id/b9i alt
     private const val ID_AUDIO_DISK = 0x7f0b5032 // @id/nlf
-    private const val ID_SEEK_BAR_MASK = 0x7f0b458c // @id/mon (VideoSeekBarMaskView)
+    private const val ID_FLOATING_NOTES = 0x7f0b8af3 // @id/znw
     private const val ID_SEEK_BAR_SCRUBBER = 0x7f0b8c4d // @id/zll (0ODk)
+    private const val ID_SEEK_BAR_SCRUBBER_ALT = 0x7f0b8a9e // @id/zll alt
     private const val ID_FEED_VIEW_PAGER = 0x7f0b8c70 // @id/zy7 (VerticalViewPager)
 
     private const val TAG_TIKTOK_SHIFTED = 0x7F0B9910
@@ -62,6 +67,7 @@ object TikTokHook {
     private var classLoader: ClassLoader? = null
 
     val externalTabState = mutableIntStateOf(0)
+    val isBarVisibleState = mutableStateOf(true)
 
     private var activeFloatingBar: ComposeView? = null
     private var isOverlayHidden = false
@@ -141,14 +147,30 @@ object TikTokHook {
         // 4. Hook SplashActivity & MainActivity lifecycle for UI Heist fallback
         hookActivities(module, targetClassLoader)
 
-        // 5. Hook View.onAttachedToWindow to catch dynamic additions of stock bottom bar or hairline divider
-        hookViewAttach(module)
+        // 5. Hook comment fragments to slide floating bar down on comment sheet presentation
+        hookCommentFragments(module, targetClassLoader)
 
-        // 6. Hook Feed VerticalViewPager & Shifter hooks (setTranslationY, setClipChildren)
+        // 6. Hook Feed VerticalViewPager onLayout
         hookFeedShifter(module, targetClassLoader)
     }
 
     // --- Tab Bar Suppression ---
+
+    private fun neutralizeSpacers(parent: ViewGroup?) {
+        if (parent == null) return
+        for (i in 0 until parent.childCount) {
+            val c = parent.getChildAt(i)
+            if (c.id == ID_HAIRLINE_DIVIDER || c.id == ID_SPACER_BOTTOM) {
+                c.visibility = View.GONE
+                c.layoutParams?.let { lp ->
+                    if (lp.height != 0) {
+                        lp.height = 0
+                        c.requestLayout()
+                    }
+                }
+            }
+        }
+    }
 
     private fun suppressNativeTabBar(tabBar: ViewGroup) {
         tabBar.visibility = View.GONE
@@ -160,16 +182,8 @@ object TikTokHook {
                 tabBar.requestLayout()
             }
         }
-        // Also check previous or next sibling for hairline divider c22
         val parent = tabBar.parent as? ViewGroup
-        if (parent != null) {
-            for (i in 0 until parent.childCount) {
-                val c = parent.getChildAt(i)
-                if (c != tabBar && (c.id == ID_HAIRLINE_DIVIDER || (c.height in 1..4 && c !is FrameLayout))) {
-                    c.visibility = View.GONE
-                }
-            }
-        }
+        neutralizeSpacers(parent)
     }
 
     // --- UI Heist / ComposeView Injection ---
@@ -304,6 +318,7 @@ object TikTokHook {
         if (isOverlay) {
             isOverlayHidden = (visibility == View.GONE)
         }
+        isBarVisibleState.value = (visibility == View.VISIBLE)
         activity?.runOnUiThread {
             val bar = activeFloatingBar ?: activity.window?.decorView?.findViewWithTag<View>("HyperFloatingBar")
             bar?.visibility = visibility
@@ -348,27 +363,39 @@ object TikTokHook {
         if (view.translationY != shiftY) {
             view.translationY = shiftY
         }
-        view.setTag(TAG_TIKTOK_SHIFTED, shiftY)
+        if (view.getTag(TAG_TIKTOK_SHIFTED) == null) {
+            view.setTag(TAG_TIKTOK_SHIFTED, shiftY)
+            view.addOnLayoutChangeListener { v, _, _, _, _, _, _, _, _ ->
+                if (v.translationY != shiftY) {
+                    v.translationY = shiftY
+                }
+            }
+        }
         sShiftedViews.add(view)
         unclipAncestors(view, root)
     }
 
     private fun isTargetOverlayView(v: View): Boolean {
+        if (v.id == 0x7f0b458c) return false
         val id = v.id
-        if (id == ID_CAPTION_CONTAINER || id == ID_AUDIO_DISK ||
-            id == ID_SEEK_BAR_MASK || id == ID_SEEK_BAR_SCRUBBER) {
-            return true
-        }
         val resName = try {
             if (id != View.NO_ID && v.resources != null) {
                 v.resources.getResourceEntryName(id)
             } else null
         } catch (_: Throwable) { null }
-        if (resName == "b9i" || resName == "nlf" || resName == "mon" || resName == "zll") {
+        if (resName == "mon") return false
+
+        if (id == ID_CAPTION_CONTAINER || id == ID_CAPTION_CONTAINER_ALT ||
+            id == ID_AUDIO_DISK || id == ID_FLOATING_NOTES ||
+            id == ID_SEEK_BAR_SCRUBBER || id == ID_SEEK_BAR_SCRUBBER_ALT ||
+            id == ID_ACTION_RAIL_CONTAINER) {
+            return true
+        }
+        if (resName == "b9i" || resName == "nlf" || resName == "znw" || resName == "zll" || resName == "jz8") {
             return true
         }
         val clsName = v.javaClass.name
-        if (clsName.endsWith(".VideoSeekBarMaskView") || clsName.endsWith(".0ODk")) {
+        if (clsName.endsWith(".0ODk")) {
             return true
         }
         return false
@@ -397,8 +424,7 @@ object TikTokHook {
 
             if (isTargetOverlayView(v)) {
                 shiftTargetView(v, shiftY, root)
-                if (v.id == ID_SEEK_BAR_MASK || v.id == ID_SEEK_BAR_SCRUBBER ||
-                    v.javaClass.name.endsWith(".VideoSeekBarMaskView") ||
+                if (v.id == ID_SEEK_BAR_SCRUBBER || v.id == ID_SEEK_BAR_SCRUBBER_ALT ||
                     v.javaClass.name.endsWith(".0ODk")
                 ) {
                     setupSeekBarTouchDelegate(v)
@@ -424,7 +450,6 @@ object TikTokHook {
                 shiftFeedOverlaysInRoot(contentView)
             }
 
-            contentView.viewTreeObserver.addOnScrollChangedListener(updateShift)
             contentView.viewTreeObserver.addOnGlobalLayoutListener(updateShift)
         }
         contentView.post {
@@ -501,6 +526,29 @@ object TikTokHook {
                     setMeasuredDimension.invoke(view, 0, 0)
                 }
             } catch (_: Throwable) {}
+
+            try {
+                val setVisibilityMethod = tabBarClass.getMethod("setVisibility", Int::class.javaPrimitiveType)
+                module.hook(setVisibilityMethod).intercept { chain ->
+                    val visibility = chain.args[0] as? Int ?: View.VISIBLE
+                    val shouldShow = (visibility == View.VISIBLE)
+                    isBarVisibleState.value = shouldShow
+                    val result = chain.proceed()
+                    val tabBar = chain.thisObject as? View
+                    if (tabBar != null) {
+                        tabBar.alpha = 0f
+                        tabBar.layoutParams?.let { lp ->
+                            if (lp.height != 0) {
+                                lp.height = 0
+                                tabBar.requestLayout()
+                            }
+                        }
+                    }
+                    result
+                }
+            } catch (t: Throwable) {
+                Log.w(TAG, "Failed to hook X.0eaq.setVisibility: ${t.message}")
+            }
         } catch (t: Throwable) {
             Log.w(TAG, "X.0eaq class hook not found or failed: ${t.message}")
         }
@@ -611,33 +659,34 @@ object TikTokHook {
         }
     }
 
-    private fun hookViewAttach(module: XposedModule) {
-        try {
-            module.hook(
-                View::class.java.getDeclaredMethod("onAttachedToWindow")
-            ).intercept { chain ->
-                val result = chain.proceed()
-                val view = chain.thisObject as? View ?: return@intercept result
-                val id = view.id
-
-                if (id == ID_HAIRLINE_DIVIDER) {
-                    view.visibility = View.GONE
-                } else if (id == ID_STOCK_TAB_BAR) {
-                    val tabBar = view as? ViewGroup
-                    if (tabBar != null) {
-                        suppressNativeTabBar(tabBar)
-                        tabBar.post { executeUIHeist(tabBar) }
+    private fun hookCommentFragments(module: XposedModule, classLoader: ClassLoader) {
+        val fragments = listOf(
+            "com.ss.android.ugc.aweme.comment.ui.CommentListFragment",
+            "com.ss.android.ugc.aweme.comment.commentlist.CommentListFragmentV2"
+        )
+        for (fragName in fragments) {
+            try {
+                val fragClass = classLoader.loadClass(fragName)
+                try {
+                    val onResumeMethod = fragClass.getDeclaredMethod("onResume")
+                    module.hook(onResumeMethod).intercept { chain ->
+                        isBarVisibleState.value = false
+                        chain.proceed()
                     }
-                }
-                result
-            }
-        } catch (t: Throwable) {
-            Log.w(TAG, "Failed to hook View.onAttachedToWindow: ${t.message}")
+                } catch (_: Throwable) {}
+                try {
+                    val onDestroyViewMethod = fragClass.getDeclaredMethod("onDestroyView")
+                    module.hook(onDestroyViewMethod).intercept { chain ->
+                        isBarVisibleState.value = true
+                        chain.proceed()
+                    }
+                } catch (_: Throwable) {}
+            } catch (_: Throwable) {}
         }
     }
 
     private fun hookFeedShifter(module: XposedModule, classLoader: ClassLoader) {
-        // 1. Hook VerticalViewPager onLayout to trigger shift updates
+        // Hook VerticalViewPager onLayout to trigger shift updates
         try {
             val vvpClass = classLoader.loadClass("com.ss.android.ugc.aweme.common.widget.VerticalViewPager")
             val onLayoutMethod = vvpClass.getDeclaredMethod(
@@ -658,44 +707,6 @@ object TikTokHook {
             }
         } catch (t: Throwable) {
             Log.w(TAG, "VerticalViewPager onLayout hook failed: ${t.message}")
-        }
-
-        // 2. Hook View.setTranslationY to lock target shifted views in place
-        try {
-            module.hook(
-                View::class.java.getDeclaredMethod("setTranslationY", Float::class.javaPrimitiveType)
-            ).intercept { chain ->
-                val v = chain.thisObject as? View
-                if (v != null) {
-                    val targetShift = v.getTag(TAG_TIKTOK_SHIFTED) as? Float
-                    if (targetShift != null) {
-                        val newTy = chain.args[0] as? Float
-                        if (newTy != null && newTy != targetShift) {
-                            chain.args[0] = targetShift
-                        }
-                    }
-                }
-                chain.proceed()
-            }
-        } catch (t: Throwable) {
-            Log.w(TAG, "Failed to hook View.setTranslationY: ${t.message}")
-        }
-
-        // 3. Hook ViewGroup.setClipChildren to prevent TikTok from reclipping ancestors
-        try {
-            module.hook(
-                ViewGroup::class.java.getDeclaredMethod("setClipChildren", Boolean::class.javaPrimitiveType)
-            ).intercept { chain ->
-                if ((chain.args[0] as? Boolean) == true) {
-                    val vg = chain.thisObject as? ViewGroup
-                    if (vg != null && vg.getTag(TAG_TIKTOK_UNCLIPPED) != null) {
-                        chain.args[0] = false
-                    }
-                }
-                chain.proceed()
-            }
-        } catch (t: Throwable) {
-            Log.w(TAG, "Failed to hook ViewGroup.setClipChildren: ${t.message}")
         }
     }
 }

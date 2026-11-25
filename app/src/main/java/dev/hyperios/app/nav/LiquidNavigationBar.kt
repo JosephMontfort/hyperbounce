@@ -86,6 +86,7 @@ fun LiquidNavigationBar(
     onTabSelected: (Int) -> Unit,
     sourceView: android.view.View,
     circularIndices: Set<Int> = emptySet(),
+    multiColorIndices: Set<Int> = emptySet(),
     forceLightTheme: Boolean = false,
     forceDarkTheme: Boolean = false,
     containerAlpha: Float = 0.4f,
@@ -420,6 +421,7 @@ fun LiquidNavigationBar(
                                 LiquidBottomTab(
                                     bitmap = bitmap,
                                     isCircular = index in circularIndices,
+                                    isMultiColor = index in multiColorIndices,
                                     accentColor = null,
                                     label = labels.getOrNull(index),
                                     scaleFactor = currentScale,
@@ -481,7 +483,8 @@ fun LiquidNavigationBar(
                                 LiquidBottomTab(
                                     bitmap = bitmap,
                                     isCircular = index in circularIndices,
-                                    accentColor = accentColor,
+                                    isMultiColor = index in multiColorIndices,
+                                    accentColor = if (index in multiColorIndices) null else accentColor,
                                     label = labels.getOrNull(index),
                                     scaleFactor = currentScale,
                                     badgeCount = badgeCounts.getOrNull(index),
@@ -558,6 +561,7 @@ fun LiquidNavigationBar(
                             LiquidBottomTab(
                                 bitmap = bitmap,
                                 isCircular = index in circularIndices,
+                                isMultiColor = index in multiColorIndices,
                                 accentColor = null,
                                 label = labels.getOrNull(index),
                                 scaleFactor = currentScale,
@@ -620,7 +624,8 @@ fun LiquidNavigationBar(
                                 LiquidBottomTab(
                                     bitmap = bitmap,
                                     isCircular = index in circularIndices,
-                                    accentColor = accentColor,
+                                    isMultiColor = index in multiColorIndices,
+                                    accentColor = if (index in multiColorIndices) null else accentColor,
                                     label = labels.getOrNull(index),
                                     scaleFactor = currentScale,
                                     badgeCount = badgeCounts.getOrNull(index),
@@ -795,6 +800,7 @@ private fun RowScope.LiquidBottomTab(
     isCircular: Boolean,
     label: String?,
     accentColor: Color? = null,
+    isMultiColor: Boolean = false,
     scaleFactor: Float = 1f,
     badgeCount: String? = null,
     hasBadgeDot: Boolean = false,
@@ -826,20 +832,21 @@ private fun RowScope.LiquidBottomTab(
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         if (bitmap != null) {
-            val baseSize = if (label.isNullOrEmpty()) 28.dp else 24.dp
+            val tabScale = if (isMultiColor) scaleFactor * 1.08f else scaleFactor
+            val baseSize = if (isMultiColor) 34.dp else if (label.isNullOrEmpty()) 28.dp else 24.dp
             Box(contentAlignment = Alignment.BottomEnd) {
                 Image(
                     bitmap = bitmap.asImageBitmap(),
                     contentDescription = null,
-                    colorFilter = if (isCircular || accentColor == null) null else ColorFilter.tint(accentColor),
+                    colorFilter = if (isCircular || isMultiColor || accentColor == null) null else ColorFilter.tint(accentColor),
                     modifier = Modifier
-                        .size(baseSize * scaleFactor)
+                        .size(baseSize * tabScale)
                         .then(
                             if (isCircular) {
                                 if (accentColor != null) {
                                     Modifier
-                                        .border((2 * scaleFactor).dp, accentColor, CircleShape)
-                                        .padding((2 * scaleFactor).dp)
+                                        .border((2 * tabScale).dp, accentColor, CircleShape)
+                                        .padding((2 * tabScale).dp)
                                         .clip(CircleShape)
                                 } else {
                                     Modifier.clip(CircleShape)
