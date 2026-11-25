@@ -196,9 +196,11 @@ fun LiquidNavigationBar(
 
     val dynamicBarShape = remember(currentCornerRadius, progressProvider) {
         RoundedCornerShape(
-            CornerSize { _, shapeDensity ->
-                with(shapeDensity) {
-                    lerp(currentCornerRadius.value, 26f, progressProvider()).dp.toPx()
+            object : CornerSize {
+                override fun toPx(shapeSize: Size, density: Density): Float {
+                    return with(density) {
+                        lerp(currentCornerRadius.value, 26f, progressProvider()).dp.toPx()
+                    }
                 }
             }
         )
