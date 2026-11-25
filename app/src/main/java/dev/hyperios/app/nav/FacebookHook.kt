@@ -29,7 +29,9 @@ class FacebookHook(
     companion object {
         private const val TAG = "HyperiOS"
         val sReelsOverlayParents = java.util.WeakHashMap<ViewGroup, Boolean>()
-        @Volatile var isReelsActive: Boolean = false
+        @Volatile
+        var isReelsActive: Boolean = false
+            private set
         private var sContentViewRef: java.lang.ref.WeakReference<ViewGroup>? = null
         private val sShiftedReelViews = java.util.Collections.synchronizedSet(
             java.util.Collections.newSetFromMap(java.util.WeakHashMap<View, Boolean>())
