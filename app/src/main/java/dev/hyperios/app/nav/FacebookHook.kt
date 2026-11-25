@@ -13,6 +13,7 @@ import android.widget.HorizontalScrollView
 import android.widget.ProgressBar
 import android.widget.SeekBar
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.ui.platform.ComposeView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.findViewTreeLifecycleOwner
@@ -41,7 +42,11 @@ class FacebookHook(
         private val sShiftedReelViews = java.util.Collections.synchronizedSet(
             java.util.Collections.newSetFromMap(java.util.WeakHashMap<View, Boolean>())
         )
+        private const val TAG_REELS_SHIFTED = 0x7F0B9906
+        private const val TAG_REELS_UNCLIPPED = 0x7F0B9907
+        private val REELS_SEEKBAR_IDS = intArrayOf(0x7f0a1cab, 0x7f0a1ca3, 0x7f0a1c63, 0x7f0a1c6b, 0x7f0a088e)
         val drawerProgressState = mutableFloatStateOf(0f)
+        val drawerWidthPxState = mutableIntStateOf(0)
         private var sDrawerScrollViewRef: java.lang.ref.WeakReference<View>? = null
         private var sBookmarksPanelRef: java.lang.ref.WeakReference<View>? = null
         private var sMainPanelRef: java.lang.ref.WeakReference<View>? = null
@@ -105,6 +110,85 @@ class FacebookHook(
             return false
         }
 
+        private fun unclipAncestors(view: View, stopAt: View) {
+            var p = view.parent
+            while (p is ViewGroup) {
+                p.clipChildren = false
+                p.clipToPadding = false
+                p.setTag(TAG_REELS_UNCLIPPED, true)
+                if (p === stopAt) break
+                p = p.parent
+            }
+        }
+
+        private fun hasSemanticViewGroupChild(vg: ViewGroup): Boolean {
+            for (i in 0 until vg.childCount) {
+                val c = vg.getChildAt(i)
+                if (c is ViewGroup && hasReelsOverlaySemantics(c)) return true
+            }
+            return false
+        }
+
+        private fun shiftOverlayView(v: View, reelButton: ViewGroup): Boolean {
+            if (v.translationY != -190f) {
+                v.translationY = -190f
+            }
+            v.setTag(TAG_REELS_SHIFTED, true)
+            sShiftedReelViews.add(v)
+            attachReelsLayoutListener(v, reelButton)
+            return true
+        }
+
+        private fun shiftSemanticOverlayChildren(
+            container: ViewGroup,
+            overlayWidth: Int,
+            reelButton: ViewGroup
+        ): Boolean {
+            var didShift = false
+            for (i in 0 until container.childCount) {
+                val c = container.getChildAt(i) ?: continue
+                if (c is ViewGroup && hasReelsOverlaySemantics(c)) {
+                    if (overlayWidth > 0 && c.width >= (overlayWidth * 0.95f).toInt() && hasSemanticViewGroupChild(c)) {
+                        if (c.translationY != 0f) c.translationY = 0f
+                        c.setTag(TAG_REELS_SHIFTED, null)
+                        c.clipChildren = false
+                        c.clipToPadding = false
+                        c.setTag(TAG_REELS_UNCLIPPED, true)
+                        if (shiftSemanticOverlayChildren(c, overlayWidth, reelButton)) {
+                            didShift = true
+                        }
+                    } else {
+                        if (shiftOverlayView(c, reelButton)) {
+                            didShift = true
+                        }
+                    }
+                }
+            }
+            return didShift
+        }
+
+        private fun shiftAllSeekbarIds(view: View, root: ViewGroup): Boolean {
+            var shifted = false
+            if (view.id in REELS_SEEKBAR_IDS && view.isShown && !hasShiftedAncestor(view, root)) {
+                unclipAncestors(view, root)
+                if (view.translationY != -190f) {
+                    view.translationY = -190f
+                }
+                view.setTag(TAG_REELS_SHIFTED, true)
+                sShiftedReelViews.add(view)
+                shifted = true
+            }
+            if (view is ViewGroup) {
+                for (i in 0 until view.childCount) {
+                    val child = view.getChildAt(i) ?: continue
+                    if (shiftAllSeekbarIds(child, root)) {
+                        shifted = true
+                    }
+                }
+            }
+            return shifted
+        }
+
         private fun shiftUnshiftedProgressBars(
             view: View,
             reelButton: ViewGroup,
@@ -112,17 +196,20 @@ class FacebookHook(
         ): Boolean {
             var shifted = false
             val isTarget = view is SeekBar ||
-                (view is ProgressBar && !view.isIndeterminate)
+                (view is ProgressBar && !view.isIndeterminate) ||
+                view.id in REELS_SEEKBAR_IDS
             if (isTarget) {
                 val h = if (view.height > 0) view.height else (view.layoutParams?.height ?: 0)
                 val bottomInReel = offsetTopInReel + view.height
                 val rbHeight = reelButton.height
-                if (h in 1..150 && (rbHeight <= 0 || bottomInReel >= rbHeight - 250)) {
+                if (h in 1..300 && (rbHeight <= 0 || bottomInReel >= rbHeight - 250)) {
                     if (!sShiftedReelViews.contains(view) && !hasShiftedAncestor(view, reelButton)) {
+                        unclipAncestors(view, reelButton)
                         if (view.translationY != -190f) {
                             view.translationY = -190f
-                            sShiftedReelViews.add(view)
                         }
+                        view.setTag(TAG_REELS_SHIFTED, true)
+                        sShiftedReelViews.add(view)
                         shifted = true
                     }
                 }
@@ -180,7 +267,15 @@ class FacebookHook(
                     }
                 }
 
-                override fun onChildViewRemoved(parent: View?, child: View?) {}
+                override fun onChildViewRemoved(parent: View?, child: View?) {
+                    if (isReelsActive && reelButton.isAttachedToWindow) {
+                        reelButton.post {
+                            if (isReelsActive && reelButton.isAttachedToWindow) {
+                                applyReelsTranslationToReelTree(reelButton)
+                            }
+                        }
+                    }
+                }
             })
         }
 
@@ -251,9 +346,11 @@ class FacebookHook(
             for (reelButton in containers) {
                 reelButton.clipChildren = false
                 reelButton.clipToPadding = false
+                reelButton.setTag(TAG_REELS_UNCLIPPED, true)
                 (reelButton.parent as? ViewGroup)?.let {
                     it.clipChildren = false
                     it.clipToPadding = false
+                    it.setTag(TAG_REELS_UNCLIPPED, true)
                 }
 
                 var overlayContainer: ViewGroup? = null
@@ -283,31 +380,39 @@ class FacebookHook(
                 if (overlayContainer != null) {
                     overlayContainer.clipChildren = false
                     overlayContainer.clipToPadding = false
+                    overlayContainer.setTag(TAG_REELS_UNCLIPPED, true)
                     if (overlayContainer.translationY != 0f) overlayContainer.translationY = 0f
 
                     attachReelsLayoutListener(overlayContainer, reelButton)
                     attachReelsHierarchyListener(overlayContainer, overlayContainer, reelButton)
                     attachReelsHierarchyListener(reelButton, overlayContainer, reelButton)
 
+                    val overlayWidth = overlayContainer.width.takeIf { it > 0 } ?: reelButton.width
                     for (j in 0 until overlayContainer.childCount) {
                         val sc = overlayContainer.getChildAt(j) ?: continue
                         val h = if (sc.height > 0) sc.height else (sc.layoutParams?.height ?: 0)
                         if (sc is ViewGroup && hasReelsOverlaySemantics(sc)) {
-                            // Subchild 0: Metadata + Side Buttons -> Shift Up
-                            if (sc.translationY != -190f) {
-                                sc.translationY = -190f
-                                sShiftedReelViews.add(sc)
+                            if (overlayWidth > 0 && sc.width >= (overlayWidth * 0.95f).toInt() && hasSemanticViewGroupChild(sc)) {
+                                if (sc.translationY != 0f) sc.translationY = 0f
+                                sc.setTag(TAG_REELS_SHIFTED, null)
+                                sc.clipChildren = false
+                                sc.clipToPadding = false
+                                sc.setTag(TAG_REELS_UNCLIPPED, true)
+                                attachReelsLayoutListener(sc, reelButton)
+                                attachReelsHierarchyListener(sc, overlayContainer, reelButton)
+                                if (shiftSemanticOverlayChildren(sc, overlayWidth, reelButton)) {
+                                    didShiftAny = true
+                                }
+                            } else {
+                                if (shiftOverlayView(sc, reelButton)) {
+                                    didShiftAny = true
+                                }
                             }
-                            attachReelsLayoutListener(sc, reelButton)
-                            didShiftAny = true
                         } else if (h in 1..120) {
                             // Subchild 2: Progress bar / Scrubber container (height 1..120, regardless of childCount) -> Shift Up
-                            if (sc.translationY != -190f) {
-                                sc.translationY = -190f
-                                sShiftedReelViews.add(sc)
+                            if (shiftOverlayView(sc, reelButton)) {
+                                didShiftAny = true
                             }
-                            attachReelsLayoutListener(sc, reelButton)
-                            didShiftAny = true
                         } else {
                             // Subchild 1: 300px Dark Dimming Scrim -> MUST REMAIN AT 0f GROUNDED!
                             if (sc.translationY != 0f) {
@@ -321,16 +426,8 @@ class FacebookHook(
                 }
             }
 
-            val seekbarIds = intArrayOf(0x7f0a1ca3, 0x7f0a1cab, 0x7f0a1c63, 0x7f0a1c6b, 0x7f0a088e)
-            for (id in seekbarIds) {
-                val v = root.findViewById<View>(id)
-                if (v != null && !hasShiftedAncestor(v, root)) {
-                    if (v.translationY != -190f) {
-                        v.translationY = -190f
-                        sShiftedReelViews.add(v)
-                    }
-                    didShiftAny = true
-                }
+            if (shiftAllSeekbarIds(root, root)) {
+                didShiftAny = true
             }
             return didShiftAny
         }
@@ -341,8 +438,11 @@ class FacebookHook(
                     val it = sShiftedReelViews.iterator()
                     while (it.hasNext()) {
                         val v = it.next()
-                        if (v != null && v.translationY != 0f) {
-                            v.translationY = 0f
+                        if (v != null) {
+                            v.setTag(TAG_REELS_SHIFTED, null)
+                            if (v.translationY != 0f) {
+                                v.translationY = 0f
+                            }
                         }
                     }
                     sShiftedReelViews.clear()
@@ -565,6 +665,7 @@ class FacebookHook(
                         sBookmarksPanelRef = null
                         sMainPanelRef = null
                         drawerProgressState.floatValue = 0f
+                        drawerWidthPxState.intValue = 0
                     }
                     result
                 }
@@ -644,6 +745,9 @@ class FacebookHook(
                             val bookmarksView = sBookmarksPanelRef?.get()
                             val mainView = sMainPanelRef?.get()
                             if (bookmarksView != null && mainView != null) {
+                                if (bookmarksView.width > 0) {
+                                    drawerWidthPxState.intValue = bookmarksView.width
+                                }
                                 val span = kotlin.math.abs(mainView.left - bookmarksView.left).toFloat()
                                 if (span > 1f) {
                                     drawerProgressState.floatValue =
@@ -659,6 +763,42 @@ class FacebookHook(
             }
         } catch (t: Throwable) {
             module.log(Log.WARN, TAG, "SlidingPanelScrollView (X.01zQ) hooks: ${t.message}")
+        }
+
+        // 6. Hook View.setTranslationY & ViewGroup.setClipChildren for Reels pause/resume persistence
+        try {
+            module.hook(
+                View::class.java.getDeclaredMethod("setTranslationY", Float::class.javaPrimitiveType)
+            ).intercept { chain ->
+                if (!isReelsActive) return@intercept chain.proceed()
+                val v = chain.thisObject as? View
+                if (v != null && v.getTag(TAG_REELS_SHIFTED) != null) {
+                    val ty = chain.args[0] as? Float
+                    if (ty != null && ty != -190f) {
+                        chain.args[0] = -190f
+                    }
+                }
+                chain.proceed()
+            }
+        } catch (t: Throwable) {
+            module.log(Log.WARN, TAG, "Failed to hook View.setTranslationY: ${t.message}")
+        }
+
+        try {
+            module.hook(
+                ViewGroup::class.java.getDeclaredMethod("setClipChildren", Boolean::class.javaPrimitiveType)
+            ).intercept { chain ->
+                if (!isReelsActive) return@intercept chain.proceed()
+                if ((chain.args[0] as? Boolean) == true) {
+                    val vg = chain.thisObject as? ViewGroup
+                    if (vg != null && vg.getTag(TAG_REELS_UNCLIPPED) != null) {
+                        chain.args[0] = false
+                    }
+                }
+                chain.proceed()
+            }
+        } catch (t: Throwable) {
+            module.log(Log.WARN, TAG, "Failed to hook ViewGroup.setClipChildren: ${t.message}")
         }
     }
 

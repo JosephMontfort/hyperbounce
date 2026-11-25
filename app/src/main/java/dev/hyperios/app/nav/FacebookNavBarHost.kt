@@ -541,12 +541,15 @@ fun FacebookNavBarHost(
 
     if (tabs.isEmpty()) return
 
-    val drawerProgress = FacebookHook.drawerProgressState.floatValue
+    val inactiveBitmaps = remember(tabs) { tabs.map { it.inactiveBitmap } }
+    val activeBitmaps = remember(tabs) { tabs.map { it.activeBitmap ?: it.inactiveBitmap } }
+    val badgeCountList = remember(tabs) { tabs.map { it.badgeCount } }
+    val badgeDotList = remember(tabs) { tabs.map { it.hasBadgeDot } }
 
     LiquidNavigationBar(
         bottomPadding = live.bottomMargin.dp,
-        tabs = tabs.map { it.inactiveBitmap },
-        activeTabs = tabs.map { it.activeBitmap ?: it.inactiveBitmap },
+        tabs = inactiveBitmaps,
+        activeTabs = activeBitmaps,
         selectedIndex = selectedIndex.coerceIn(0, (tabs.size - 1).coerceAtLeast(0)),
         onTabSelected = { index ->
             selectedIndex = index
@@ -576,10 +579,11 @@ fun FacebookNavBarHost(
         isShrunk = scrollShrinkState.isShrunk.value,
         shrinkScale = live.autoShrinkScale,
         scrollShrinkState = scrollShrinkState,
-        badgeCounts = tabs.map { it.badgeCount },
-        badgeDots = tabs.map { it.hasBadgeDot },
+        badgeCounts = badgeCountList,
+        badgeDots = badgeDotList,
         enablePixelCopy = false,
-        drawerProgress = drawerProgress,
+        drawerProgressProvider = { FacebookHook.drawerProgressState.floatValue },
+        drawerWidthPx = FacebookHook.drawerWidthPxState.intValue,
         onDrawerCloseClick = { FacebookHook.closeDrawer() },
     )
 }
