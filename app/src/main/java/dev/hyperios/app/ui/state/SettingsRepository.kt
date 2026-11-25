@@ -118,6 +118,7 @@ class SettingsRepository(context: Context) {
                 syncExecutor.execute {
                     val remote = XposedServiceBridge.remotePreferencesOrNull(PREFS_NAME)
                     if (remote == null) {
+                        Log.w("HyperiOS", "mirrorKeyToRemote: remotePreferences is null, queuing '$key'")
                         dirtyKeyQueue.add(key)
                         return@execute
                     }
@@ -131,7 +132,13 @@ class SettingsRepository(context: Context) {
                             is Long -> editor.putLong(key, value)
                             null -> editor.remove(key)
                         }
-                        editor.apply()
+                        val ok = editor.commit()
+                        if (ok) {
+                            Log.d("HyperiOS", "mirrorKeyToRemote: committed '$key'")
+                        } else {
+                            Log.w("HyperiOS", "mirrorKeyToRemote: commit() returned false for '$key', re-queuing")
+                            dirtyKeyQueue.add(key)
+                        }
                     } catch (t: Throwable) {
                         Log.w("HyperiOS", "Failed to mirror key '$key': ${t.message}")
                         dirtyKeyQueue.add(key)
@@ -141,7 +148,11 @@ class SettingsRepository(context: Context) {
 
             fun drainDirtyQueue() {
                 syncExecutor.execute {
-                    val remote = XposedServiceBridge.remotePreferencesOrNull(PREFS_NAME) ?: return@execute
+                    val remote = XposedServiceBridge.remotePreferencesOrNull(PREFS_NAME)
+                    if (remote == null) {
+                        Log.w("HyperiOS", "drainDirtyQueue: remotePreferences is null, deferring")
+                        return@execute
+                    }
                     val keysToDrain = mutableSetOf<String>()
                     while (true) {
                         val k = dirtyKeyQueue.poll() ?: break
@@ -163,8 +174,18 @@ class SettingsRepository(context: Context) {
                             null -> editor.remove(key)
                         }
                     }
-                    editor.apply()
-                    Log.i("HyperiOS", "Drained ${keysToDrain.size} dirty keys to remote preferences")
+                    try {
+                        val ok = editor.commit()
+                        if (ok) {
+                            Log.i("HyperiOS", "Drained ${keysToDrain.size} dirty keys to remote preferences (commit=true)")
+                        } else {
+                            Log.w("HyperiOS", "drainDirtyQueue: commit() returned false for ${keysToDrain.size} keys, re-queuing")
+                            dirtyKeyQueue.addAll(keysToDrain)
+                        }
+                    } catch (t: Throwable) {
+                        Log.w("HyperiOS", "drainDirtyQueue: commit() threw for ${keysToDrain.size} keys: ${t.message}")
+                        dirtyKeyQueue.addAll(keysToDrain)
+                    }
                 }
             }
         }
@@ -211,7 +232,7 @@ class SettingsRepository(context: Context) {
 
         if (isFreshInstall) {
             // Pure Fresh Install: Explicitly purge leftover ghost keys from LSPosed SQLite DB
-            remote.edit().clear().apply()
+            remote.edit().clear().commit()
 
             val localEditor = prefs.edit()
             val remoteEditor = remote.edit()
@@ -246,7 +267,7 @@ class SettingsRepository(context: Context) {
             remoteEditor.putInt(KEY_SCHEMA_VERSION, CURRENT_SCHEMA_VERSION)
 
             localEditor.apply()
-            remoteEditor.apply()
+            remoteEditor.commit()
 
             for (delegate in reloadablePrefs) {
                 delegate.reload()
@@ -291,7 +312,7 @@ class SettingsRepository(context: Context) {
             remoteEditor.putBoolean(KEY_STORAGE_INITIALIZED, true)
 
             localEditor.apply()
-            remoteEditor.apply()
+            remoteEditor.commit()
 
             for (delegate in reloadablePrefs) {
                 delegate.reload()
@@ -553,7 +574,7 @@ class SettingsRepository(context: Context) {
     /** Clears every stored key, restoring every field to the defaults in SettingsModels.kt. */
     fun resetToDefaults() {
         prefs.edit().clear().apply()
-        XposedServiceBridge.remotePreferencesOrNull(PREFS_NAME)?.edit()?.clear()?.apply()
+        XposedServiceBridge.remotePreferencesOrNull(PREFS_NAME)?.edit()?.clear()?.commit()
 
         instagram.reloadFromDefaults()
         whatsapp.reloadFromDefaults()
@@ -587,7 +608,7 @@ class SettingsRepository(context: Context) {
         sliderCustomColor = 0xFF30D158L
 
         prefs.edit().putBoolean(KEY_STORAGE_INITIALIZED, true).putInt(KEY_SCHEMA_VERSION, CURRENT_SCHEMA_VERSION).apply()
-        XposedServiceBridge.remotePreferencesOrNull(PREFS_NAME)?.edit()?.putBoolean(KEY_STORAGE_INITIALIZED, true)?.putInt(KEY_SCHEMA_VERSION, CURRENT_SCHEMA_VERSION)?.apply()
+        XposedServiceBridge.remotePreferencesOrNull(PREFS_NAME)?.edit()?.putBoolean(KEY_STORAGE_INITIALIZED, true)?.putInt(KEY_SCHEMA_VERSION, CURRENT_SCHEMA_VERSION)?.commit()
         pushAllLocalToRemote()
     }
 
@@ -1308,7 +1329,6 @@ class SettingsRepository(context: Context) {
             rowZStates[row] = v
             val key = "unlock_r${row}_z"
             prefs.edit().putFloat(key, v).apply()
-            XposedServiceBridge.remotePreferencesOrNull(PREFS_NAME)?.edit()?.putFloat(key, v)?.apply()
             SettingsRepository.sendSettingsChangedBroadcast(key, v)
         }
 
@@ -1322,7 +1342,6 @@ class SettingsRepository(context: Context) {
             rowCenterBounceStates[row] = v
             val key = "unlock_r${row}_center_bounce"
             prefs.edit().putFloat(key, v).apply()
-            XposedServiceBridge.remotePreferencesOrNull(PREFS_NAME)?.edit()?.putFloat(key, v)?.apply()
             SettingsRepository.sendSettingsChangedBroadcast(key, v)
         }
 
@@ -1336,7 +1355,6 @@ class SettingsRepository(context: Context) {
             rowOuterBounceStates[row] = v
             val key = "unlock_r${row}_outer_bounce"
             prefs.edit().putFloat(key, v).apply()
-            XposedServiceBridge.remotePreferencesOrNull(PREFS_NAME)?.edit()?.putFloat(key, v)?.apply()
             SettingsRepository.sendSettingsChangedBroadcast(key, v)
         }
 
@@ -1350,7 +1368,6 @@ class SettingsRepository(context: Context) {
             rowCenterSettleStates[row] = v
             val key = "unlock_r${row}_center_settle"
             prefs.edit().putFloat(key, v).apply()
-            XposedServiceBridge.remotePreferencesOrNull(PREFS_NAME)?.edit()?.putFloat(key, v)?.apply()
             SettingsRepository.sendSettingsChangedBroadcast(key, v)
         }
 
@@ -1364,7 +1381,6 @@ class SettingsRepository(context: Context) {
             rowOuterSettleStates[row] = v
             val key = "unlock_r${row}_outer_settle"
             prefs.edit().putFloat(key, v).apply()
-            XposedServiceBridge.remotePreferencesOrNull(PREFS_NAME)?.edit()?.putFloat(key, v)?.apply()
             SettingsRepository.sendSettingsChangedBroadcast(key, v)
         }
 
@@ -1437,21 +1453,14 @@ class SettingsRepository(context: Context) {
             rowOuterSettleStates.clear()
 
             val editor = prefs.edit()
-            val remoteEditor = XposedServiceBridge.remotePreferencesOrNull(PREFS_NAME)?.edit()
             for (i in 0..32) {
                 editor.remove("unlock_r${i}_z")
                 editor.remove("unlock_r${i}_center_bounce")
                 editor.remove("unlock_r${i}_outer_bounce")
                 editor.remove("unlock_r${i}_center_settle")
                 editor.remove("unlock_r${i}_outer_settle")
-                remoteEditor?.remove("unlock_r${i}_z")
-                remoteEditor?.remove("unlock_r${i}_center_bounce")
-                remoteEditor?.remove("unlock_r${i}_outer_bounce")
-                remoteEditor?.remove("unlock_r${i}_center_settle")
-                remoteEditor?.remove("unlock_r${i}_outer_settle")
             }
             editor.apply()
-            remoteEditor?.apply()
             SettingsRepository.sendSettingsChangedBroadcast("unlock_reload", true)
         }
     }

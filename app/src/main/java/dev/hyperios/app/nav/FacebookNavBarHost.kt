@@ -3,6 +3,9 @@ package dev.hyperios.app.nav
 import android.app.Activity
 import android.graphics.Bitmap
 import android.graphics.Canvas
+import android.graphics.Paint
+import android.graphics.PorterDuff
+import android.graphics.PorterDuffColorFilter
 import android.graphics.drawable.Drawable
 import android.util.Log
 import android.view.View
@@ -169,6 +172,18 @@ private fun extractTabDrawables(child: View): Pair<Drawable?, Drawable?> {
     return Pair(outlineDrawable, filledDrawable)
 }
 
+private fun tintBitmap(src: Bitmap, tint: Int): Bitmap {
+    val w = src.width.coerceAtLeast(1)
+    val h = src.height.coerceAtLeast(1)
+    val out = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+    val canvas = Canvas(out)
+    val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        colorFilter = PorterDuffColorFilter(tint, PorterDuff.Mode.SRC_IN)
+    }
+    canvas.drawBitmap(src, 0f, 0f, paint)
+    return out
+}
+
 private fun drawableToBitmap(
     d: Drawable,
     tint: Int? = null,
@@ -186,7 +201,7 @@ private fun drawableToBitmap(
         val canvas = Canvas(bmp)
         mutated.setBounds(0, 0, w, h)
         mutated.draw(canvas)
-        bmp
+        if (tint != null) tintBitmap(bmp, tint) else bmp
     } catch (_: Throwable) {
         null
     }
@@ -338,7 +353,7 @@ private fun extractFacebookTabs(
     val tabViews = findFacebookTabViews(tabBarContainer)
     Log.i("HyperBounce", "FacebookNavBarHost: found ${tabViews.size} tab views in container")
 
-    val inactiveTint = if (isDark) android.graphics.Color.WHITE else android.graphics.Color.parseColor("#65676B")
+    val inactiveTint = if (isDark) android.graphics.Color.WHITE else android.graphics.Color.BLACK
     val activeTint = accentColor.toArgb()
 
     for ((index, child) in tabViews.withIndex()) {
@@ -374,10 +389,12 @@ private fun extractFacebookTabs(
                         Bitmap.Config.ARGB_8888
                     )
                     child.draw(Canvas(bmp))
+                    val targetTint = if (child.isSelected) activeTint else inactiveTint
+                    val tintedBmp = tintBitmap(bmp, targetTint)
                     if (child.isSelected) {
-                        if (!filledCache.containsKey(index)) filledCache[index] = bmp
+                        if (!filledCache.containsKey(index)) filledCache[index] = tintedBmp
                     } else {
-                        if (!outlineCache.containsKey(index)) outlineCache[index] = bmp
+                        if (!outlineCache.containsKey(index)) outlineCache[index] = tintedBmp
                     }
                     inactiveBmp = outlineCache[index]
                     activeBmp = filledCache[index]
@@ -444,11 +461,15 @@ fun FacebookNavBarHost(
     val currentTab = tabs.getOrNull(selectedIndex)
     val label = currentTab?.label?.lowercase() ?: ""
     val isReelsTab = (currentTab != null) && (label.contains("video") || label.contains("reel") || label.contains("watch"))
-    FacebookHook.isReelsActive = isReelsTab
+    LaunchedEffect(isReelsTab) {
+        FacebookHook.setReelsActive(isReelsTab)
+    }
 
     LaunchedEffect(tabBarContainer, isDark, accentColor) {
+        outlineBitmapsCache.clear()
+        filledBitmapsCache.clear()
         val activeTint = accentColor.toArgb()
-        val inactiveTint = if (isDark) android.graphics.Color.WHITE else android.graphics.Color.parseColor("#65676B")
+        val inactiveTint = if (isDark) android.graphics.Color.WHITE else android.graphics.Color.BLACK
         val initialTabs = extractFacebookTabs(tabBarContainer, isDark, accentColor, outlineBitmapsCache, filledBitmapsCache)
         tabs = initialTabs
         selectedIndex = extractSelectedIndex(tabBarContainer, tabs)
