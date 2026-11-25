@@ -14,6 +14,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.CornerSize
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -194,14 +195,13 @@ fun LiquidNavigationBar(
     val easeY = remember { CubicBezierEasing(0.50f, 0f, 0.75f, 1f) }
 
     val dynamicBarShape = remember(currentCornerRadius, progressProvider) {
-        object : Shape {
-            override fun createOutline(size: Size, layoutDirection: LayoutDirection, density: Density): Outline {
-                val rPx = with(density) {
+        RoundedCornerShape(
+            CornerSize { _, shapeDensity ->
+                with(shapeDensity) {
                     lerp(currentCornerRadius.value, 26f, progressProvider()).dp.toPx()
                 }
-                return Outline.Rounded(RoundRect(0f, 0f, size.width, size.height, rPx, rPx))
             }
-        }
+        )
     }
 
     BoxWithConstraints(
