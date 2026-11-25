@@ -666,6 +666,15 @@ object SearchIndex {
             keywords = listOf("facebook", "navbar", "floating", "bottom bar", "fb")
         ),
         SearchItem(
+            id = "nav_tiktok",
+            title = "TikTok Navigation Bar",
+            category = "Floating Navigation Bar > TikTok",
+            destination = Destination.AppDetail(NavApp.TikTok),
+            highlightKey = "TikTok Navigation Bar",
+            scrollIndex = 0,
+            keywords = listOf("tiktok", "navbar", "floating", "bottom bar", "musically")
+        ),
+        SearchItem(
             id = "nav_bar_blur",
             title = "Bar Blur Intensity",
             category = "Floating Navigation Bar > Appearance",

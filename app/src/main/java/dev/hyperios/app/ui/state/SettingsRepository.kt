@@ -481,12 +481,14 @@ class SettingsRepository(context: Context) {
     val whatsapp = AppSettingsHolder(NavApp.WhatsApp)
     val youtube = AppSettingsHolder(NavApp.YouTube)
     val facebook = AppSettingsHolder(NavApp.Facebook)
+    val tiktok = AppSettingsHolder(NavApp.TikTok)
 
     fun appSettings(app: NavApp): AppSettingsHolder = when (app) {
         NavApp.Instagram -> instagram
         NavApp.WhatsApp -> whatsapp
         NavApp.YouTube -> youtube
         NavApp.Facebook -> facebook
+        NavApp.TikTok -> tiktok
     }
 
     var togglesSlidersHookEnabled by prefsBooleanState("toggles_sliders_hook_enabled", false)
@@ -580,6 +582,7 @@ class SettingsRepository(context: Context) {
         whatsapp.reloadFromDefaults()
         youtube.reloadFromDefaults()
         facebook.reloadFromDefaults()
+        tiktok.reloadFromDefaults()
         toggleGlass.reloadFromDefaults()
         sliderGlass.reloadFromDefaults()
         globalGlass.reloadFromDefaults()
@@ -672,6 +675,20 @@ class SettingsRepository(context: Context) {
                 customAccentColor = ModuleDefaults.NavApps.Facebook.CUSTOM_ACCENT_COLOR,
                 pillShadow = false,
                 reelsFullscreenZoom = ModuleDefaults.NavApps.Facebook.REELS_FULLSCREEN_ZOOM
+            )
+            NavApp.TikTok -> NavBarAppSettings(
+                liquidGlass = ModuleDefaults.NavApps.TikTok.LIQUID_GLASS,
+                barHeight = ModuleDefaults.NavApps.TikTok.BAR_HEIGHT,
+                tabWidth = ModuleDefaults.NavApps.TikTok.TAB_WIDTH,
+                cornerRadius = ModuleDefaults.NavApps.TikTok.CORNER_RADIUS,
+                bottomMargin = ModuleDefaults.NavApps.TikTok.BOTTOM_MARGIN,
+                containerOpacity = ModuleDefaults.NavApps.TikTok.CONTAINER_OPACITY,
+                pillContainerOpacity = ModuleDefaults.NavApps.TikTok.PILL_CONTAINER_OPACITY,
+                autoShrink = ModuleDefaults.NavApps.TikTok.AUTO_SHRINK,
+                autoShrinkScale = ModuleDefaults.NavApps.TikTok.AUTO_SHRINK_SCALE,
+                accent = AccentPreset.Custom,
+                customAccentColor = ModuleDefaults.NavApps.TikTok.CUSTOM_ACCENT_COLOR.toLong() and 0xFFFFFFFFL,
+                pillShadow = false
             )
         }
 

@@ -94,6 +94,22 @@ fun AppsListScreen(
                         )
                     }
                 )
+
+                RowDivider(colors.separator, insetStart = 72.dp)
+
+                FeatureCategoryRow(
+                    title = "TikTok",
+                    description = "Liquid Glass Floating Bottom Bar in TikTok",
+                    colors = colors,
+                    onClick = { onNavigate(Destination.AppDetail(NavApp.TikTok)) },
+                    icon = {
+                        Image(
+                            painter = painterResource(R.drawable.ic_sub_tiktok),
+                            contentDescription = "TikTok",
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
+                )
             }
         }
     }

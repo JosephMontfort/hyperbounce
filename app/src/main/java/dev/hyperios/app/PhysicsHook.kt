@@ -3,6 +3,7 @@ package dev.hyperios.app
 import android.util.Log
 import dev.hyperios.app.nav.FacebookHook
 import dev.hyperios.app.nav.InstagramHook
+import dev.hyperios.app.nav.TikTokHook
 import dev.hyperios.app.nav.WhatsAppHook
 import dev.hyperios.app.nav.YouTubeHook
 import dev.hyperios.app.prefs.HyperBouncePrefs
@@ -11,6 +12,12 @@ import io.github.libxposed.api.XposedModule
 import io.github.libxposed.api.XposedModuleInterface
 
 class PhysicsHook : XposedModule() {
+
+    companion object {
+        @Volatile
+        var instance: PhysicsHook? = null
+            private set
+    }
 
     override fun onHotReloading(param: XposedModuleInterface.HotReloadingParam): Boolean {
         val prefs = try {
@@ -33,6 +40,7 @@ class PhysicsHook : XposedModule() {
 
     override fun onPackageReady(param: XposedModuleInterface.PackageReadyParam) {
         super.onPackageReady(param)
+        instance = this
 
         Log.i("HyperBounce", "PhysicsHook: onPackageReady for pkg=${param.packageName}")
 
@@ -64,6 +72,12 @@ class PhysicsHook : XposedModule() {
                     val enabled = HyperBouncePrefs(this).appEnabled("facebook")
                     Log.i("HyperBounce", "PhysicsHook: Facebook hook dispatching. app_facebook_enabled=$enabled")
                     FacebookHook(this, param).onPackageReady()
+                }
+
+                param.packageName == "com.ss.android.ugc.trill" || param.packageName == "com.zhiliaoapp.musically" -> {
+                    val enabled = HyperBouncePrefs(this).appEnabled("tiktok")
+                    Log.i("HyperBounce", "PhysicsHook: TikTok hook dispatching. app_tiktok_enabled=$enabled")
+                    TikTokHook.init(this, param, HyperBouncePrefs(this))
                 }
 
                 param.packageName == "com.android.systemui" -> {
