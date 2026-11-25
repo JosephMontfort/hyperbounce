@@ -27,7 +27,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.GraphicsLayerScope
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.DrawScope
-import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.positionInWindow
@@ -46,8 +45,6 @@ import java.util.concurrent.ConcurrentHashMap
 internal data class LiquidGlassCapturedFrame(
     val bitmap: Bitmap,
     val originInWindow: Offset,
-    val drawWidth: Int = bitmap.width,
-    val drawHeight: Int = bitmap.height,
 )
 
 internal class LiquidGlassViewBackdrop(
@@ -59,12 +56,6 @@ internal class LiquidGlassViewBackdrop(
     private var front: Bitmap? = null
     private var back: Bitmap? = null
     private val surfaceBuffers = ConcurrentHashMap<View, HardwareSurfaceBuffer>()
-    private val locationBuf = IntArray(2)
-    private val surfaceLocationBuf = IntArray(2)
-    private val bgPaint = Paint().apply {
-        xfermode = PorterDuffXfermode(PorterDuff.Mode.DST_OVER)
-        color = Color.parseColor("#40000000")
-    }
 
     @Volatile
     var enablePixelCopy: Boolean = false
@@ -128,10 +119,11 @@ internal class LiquidGlassViewBackdrop(
         val currentRegion = region ?: return
         if (currentRegion.width <= 0 || currentRegion.height <= 0) return
 
-        sourceView.getLocationInWindow(locationBuf)
+        val location = IntArray(2)
+        sourceView.getLocationInWindow(location)
 
-        val localLeft = currentRegion.left - locationBuf[0]
-        val localTop = currentRegion.top - locationBuf[1]
+        val localLeft = currentRegion.left - location[0]
+        val localTop = currentRegion.top - location[1]
         val width = currentRegion.width
         val height = currentRegion.height
 
@@ -153,13 +145,17 @@ internal class LiquidGlassViewBackdrop(
             canvas.restore()
 
             if (enablePixelCopy) {
-                requestHardwareSurfaceFrames(currentRegion, locationBuf, scale)
-                drawLatestHardwareSurfaceFrames(canvas, currentRegion, locationBuf, scale, scaledWidth, scaledHeight)
+                requestHardwareSurfaceFrames(currentRegion, location, scale)
+                drawLatestHardwareSurfaceFrames(canvas, currentRegion, location, scale, scaledWidth, scaledHeight)
             } else {
                 clearHardwareSurfaces()
             }
 
             // Translucent dark background under layer hole ensures backdrop maintains glassy look
+            val bgPaint = Paint().apply {
+                xfermode = PorterDuffXfermode(PorterDuff.Mode.DST_OVER)
+                color = Color.parseColor("#40000000")
+            }
             canvas.drawRect(0f, 0f, scaledWidth.toFloat(), scaledHeight.toFloat(), bgPaint)
 
             val previousFront = front
@@ -169,8 +165,6 @@ internal class LiquidGlassViewBackdrop(
             capturedFrame = LiquidGlassCapturedFrame(
                 bitmap = target,
                 originInWindow = Offset(currentRegion.left, currentRegion.top),
-                drawWidth = scaledWidth,
-                drawHeight = scaledHeight,
             )
             lastCapturedFrame = frameNumber
             lastCaptureNanos = now
@@ -213,9 +207,10 @@ internal class LiquidGlassViewBackdrop(
         for (surface in uniqueSurfaces) {
             if (!surface.isShown || surface.width <= 0 || surface.height <= 0) continue
 
-            surface.getLocationInWindow(surfaceLocationBuf)
-            val sX = surfaceLocationBuf[0]
-            val sY = surfaceLocationBuf[1]
+            val surfaceLocation = IntArray(2)
+            surface.getLocationInWindow(surfaceLocation)
+            val sX = surfaceLocation[0]
+            val sY = surfaceLocation[1]
             val sW = surface.width
             val sH = surface.height
 
@@ -351,9 +346,10 @@ internal class LiquidGlassViewBackdrop(
             val view = buffer.view
             if (!view.isShown || !view.isAttachedToWindow || view.width <= 0 || view.height <= 0) continue
 
-            view.getLocationInWindow(surfaceLocationBuf)
-            val sX = surfaceLocationBuf[0]
-            val sY = surfaceLocationBuf[1]
+            val surfaceLocation = IntArray(2)
+            view.getLocationInWindow(surfaceLocation)
+            val sX = surfaceLocation[0]
+            val sY = surfaceLocation[1]
             val sW = view.width
             val sH = view.height
 
@@ -430,11 +426,7 @@ internal class LiquidGlassViewBackdrop(
     }
 
     private fun ensureBuffers(width: Int, height: Int) {
-        val f = front
-        val b = back
-        if (f == null || f.isRecycled || f.width < width || f.height < height ||
-            b == null || b.isRecycled || b.width < width || b.height < height
-        ) {
+        if (front?.width != width || front?.height != height) {
             front = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
             back = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
         }
@@ -525,21 +517,13 @@ internal class LiquidGlassViewBackdrop(
 
         val targetPosition = coords.positionInWindow()
         val drawOffset = targetPosition - frame.originInWindow
-        val topLeft = -drawOffset * 0.5f
 
         try {
             scale(2f, 2f, Offset.Zero) {
-                clipRect(
-                    left = topLeft.x,
-                    top = topLeft.y,
-                    right = topLeft.x + frame.drawWidth,
-                    bottom = topLeft.y + frame.drawHeight,
-                ) {
-                    drawImage(
-                        image = bmp.asImageBitmap(),
-                        topLeft = topLeft,
-                    )
-                }
+                drawImage(
+                    image = bmp.asImageBitmap(),
+                    topLeft = -drawOffset * 0.5f,
+                )
             }
         } catch (_: Throwable) {}
     }
