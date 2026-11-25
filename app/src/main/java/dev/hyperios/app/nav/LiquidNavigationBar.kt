@@ -3,11 +3,15 @@ package dev.hyperios.app.nav
 import android.graphics.Bitmap
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.EaseOut
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -25,6 +29,7 @@ import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
@@ -57,8 +62,10 @@ import dev.hyperios.app.nav.glass.LiquidGlassViewBackdrop
 import dev.hyperios.app.nav.glass.liquidLens
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
+import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.sign
+import kotlin.math.sin
 
 /**
  * One-to-one visual port of the LiquidBottomTabs component from
@@ -100,6 +107,8 @@ fun LiquidNavigationBar(
     badgeCounts: List<String?> = emptyList(),
     badgeDots: List<Boolean> = emptyList(),
     enablePixelCopy: Boolean = false,
+    drawerProgress: Float = 0f,
+    onDrawerCloseClick: (() -> Unit)? = null,
 ) {
     if (tabs.isEmpty()) return
 
@@ -138,6 +147,17 @@ fun LiquidNavigationBar(
         }
     }
 
+    val morphProgress by animateFloatAsState(
+        targetValue = drawerProgress.coerceIn(0f, 1f),
+        animationSpec = spring(
+            dampingRatio = 0.68f,
+            stiffness = 420f,
+            visibilityThreshold = 0.001f,
+        ),
+        label = "drawerMorph",
+    )
+    val isMorphed = morphProgress > 0.5f
+
     val shrinkAnim = remember { Animatable(if (isShrunk) 1f else 0f) }
     LaunchedEffect(isShrunk) {
         shrinkAnim.animateTo(
@@ -150,39 +170,75 @@ fun LiquidNavigationBar(
         )
     }
     val shrinkProgress = shrinkAnim.value
-    val currentScale = lerp(1f, shrinkScale.coerceIn(0.3f, 0.95f), shrinkProgress)
+    val effectiveShrinkProgress = shrinkProgress * (1f - morphProgress)
+    val currentScale = lerp(1f, shrinkScale.coerceIn(0.3f, 0.95f), effectiveShrinkProgress)
     val maxShiftY = remember(density, bottomPadding) {
         with(density) {
             ((bottomPadding - 4.dp).coerceAtLeast(0.dp) * 0.55f).toPx()
         }
     }
-    val currentShiftY = lerp(0f, maxShiftY, shrinkProgress)
+    val currentShiftY = lerp(0f, maxShiftY, effectiveShrinkProgress)
 
     val currentBarHeight = barHeight * currentScale
     val currentTabWidth = tabWidth * currentScale
     val currentCornerRadius = cornerRadius * currentScale
 
-    Box(
+    val tabsWidthDp = (tabs.size * currentTabWidth.value).dp
+    val morphedWidth = lerp(tabsWidthDp.value, 52f, morphProgress).dp
+    val morphedHeight = lerp(currentBarHeight.value, 52f, morphProgress).dp
+    val morphedCornerRadius = lerp(currentCornerRadius.value, 26f, morphProgress).dp
+
+    val tabsAlpha = (1f - morphProgress * 2.2f).coerceIn(0f, 1f)
+    val hamburgerAlpha = ((morphProgress - 0.35f) / 0.65f).coerceIn(0f, 1f)
+
+    BoxWithConstraints(
         modifier = Modifier.fillMaxSize(),
         contentAlignment = Alignment.BottomCenter,
     ) {
+        val isRootLtr = LocalLayoutDirection.current == LayoutDirection.Ltr
+        val containerWidthPx = constraints.maxWidth.toFloat()
+        val morphedWidthPx = with(density) { morphedWidth.toPx() }
+        val edgeMarginPx = with(density) { 16.dp.toPx() }
+        val targetTx = if (isRootLtr) {
+            (containerWidthPx / 2f) - edgeMarginPx - (morphedWidthPx / 2f)
+        } else {
+            -((containerWidthPx / 2f) - edgeMarginPx - (morphedWidthPx / 2f))
+        }
+        val morphTx = lerp(0f, targetTx, FastOutSlowInEasing.transform(morphProgress))
+        val arcLiftPx = with(density) { (sin(morphProgress * PI).toFloat() * 28f).dp.toPx() }
+        val morphTy = lerp(currentShiftY, 0f, morphProgress) - arcLiftPx
+
         Box(
             modifier = Modifier
                 .padding(bottom = bottomPadding)
                 .graphicsLayer {
-                    translationY = currentShiftY
+                    translationX = morphTx
+                    translationY = morphTy
                 }
                 .onGloballyPositioned { coordinates ->
-                    val position = coordinates.positionInWindow()
-                    scrollShrinkState?.updateBounds(
-                        l = position.x,
-                        t = position.y,
-                        r = position.x + coordinates.size.width,
-                        b = position.y + coordinates.size.height,
-                    )
+                    if (!isMorphed) {
+                        val position = coordinates.positionInWindow()
+                        scrollShrinkState?.updateBounds(
+                            l = position.x,
+                            t = position.y,
+                            r = position.x + coordinates.size.width,
+                            b = position.y + coordinates.size.height,
+                        )
+                    }
                 }
-                .width((tabs.size * currentTabWidth.value).dp)
-                .height(currentBarHeight),
+                .width(morphedWidth)
+                .height(morphedHeight)
+                .then(
+                    if (isMorphed && onDrawerCloseClick != null) {
+                        Modifier
+                            .clip(RoundedCornerShape(morphedCornerRadius))
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null,
+                                onClick = onDrawerCloseClick,
+                            )
+                    } else Modifier
+                ),
         ) {
             BoxWithConstraints(
                 modifier = Modifier.fillMaxSize(),
@@ -284,7 +340,7 @@ fun LiquidNavigationBar(
                 }
 
                 if (!liquidGlass) {
-                    val barShape = RoundedCornerShape(currentCornerRadius)
+                    val barShape = RoundedCornerShape(morphedCornerRadius)
                     val pillShape = CircleShape
 
                     val classicBarBg = if (isLightTheme) {
@@ -349,13 +405,15 @@ fun LiquidNavigationBar(
                             .background(classicBarBg, barShape)
                             .border(0.75.dp * currentScale, classicBarBorder, barShape)
                             .then(interactiveHighlight.modifier)
-                            .height(currentBarHeight)
+                            .height(morphedHeight)
                             .fillMaxWidth()
                             .padding(4.dp * currentScale),
                     ) {
                         // Layer 1: Inactive unaccented tab items (handles direct tapping on any tab)
                         Row(
-                            Modifier.fillMaxSize(),
+                            Modifier
+                                .fillMaxSize()
+                                .graphicsLayer { alpha = tabsAlpha },
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             tabs.forEachIndexed { index, bitmap ->
@@ -367,10 +425,12 @@ fun LiquidNavigationBar(
                                     scaleFactor = currentScale,
                                     badgeCount = badgeCounts.getOrNull(index),
                                     hasBadgeDot = badgeDots.getOrNull(index) ?: false,
-                                    onClick = {
-                                        onTabSelected(index)
-                                        dampedDragAnimation.animateToValue(index.toFloat())
-                                    },
+                                    onClick = if (!isMorphed) {
+                                        {
+                                            onTabSelected(index)
+                                            dampedDragAnimation.animateToValue(index.toFloat())
+                                        }
+                                    } else null,
                                 )
                             }
                         }
@@ -381,6 +441,7 @@ fun LiquidNavigationBar(
                                 .align(Alignment.CenterStart)
                                 .graphicsLayer {
                                     translationX = pLeft
+                                    alpha = tabsAlpha
                                 }
                                 .width(with(density) { pillW.toDp() })
                                 .height(with(density) { pillH.toDp() })
@@ -392,6 +453,7 @@ fun LiquidNavigationBar(
                         Row(
                             Modifier
                                 .fillMaxSize()
+                                .graphicsLayer { alpha = tabsAlpha }
                                 .clip(object : Shape {
                                     override fun createOutline(size: Size, layoutDirection: LayoutDirection, density: Density): Outline {
                                         val pTop = (size.height - pillH) / 2f
@@ -430,17 +492,19 @@ fun LiquidNavigationBar(
                         }
 
                         // Layer 4: Topmost Interactive Gesture Box for the Pill (receives long-press & pull)
-                        Box(
-                            Modifier
-                                .align(Alignment.CenterStart)
-                                .graphicsLayer {
-                                    translationX = pLeft
-                                }
-                                .width(with(density) { pillW.toDp() })
-                                .height(with(density) { pillH.toDp() })
-                                .then(interactiveHighlight.gestureModifier)
-                                .then(dampedDragAnimation.modifier)
-                        )
+                        if (!isMorphed) {
+                            Box(
+                                Modifier
+                                    .align(Alignment.CenterStart)
+                                    .graphicsLayer {
+                                        translationX = pLeft
+                                    }
+                                    .width(with(density) { pillW.toDp() })
+                                    .height(with(density) { pillH.toDp() })
+                                    .then(interactiveHighlight.gestureModifier)
+                                    .then(dampedDragAnimation.modifier)
+                            )
+                        }
                     }
                 } else if (liveBackdrop != null) {
                     Row(
@@ -460,7 +524,7 @@ fun LiquidNavigationBar(
                             }
                             .drawBackdrop(
                                 backdrop = liveBackdrop,
-                                shape = { androidx.compose.foundation.shape.RoundedCornerShape(currentCornerRadius) },
+                                shape = { RoundedCornerShape(morphedCornerRadius) },
                                 effects = {
                                     vibrancy()
                                     if (barBlurIntensity > 0.001f) {
@@ -478,14 +542,14 @@ fun LiquidNavigationBar(
                                     scaleX = scale
                                     scaleY = scale
                                     clip = true
-                                    shape = androidx.compose.foundation.shape.RoundedCornerShape(currentCornerRadius)
+                                    shape = RoundedCornerShape(morphedCornerRadius)
                                 },
                                 onDrawSurface = {
                                     drawRect(containerColor)
                                 },
                             )
                             .then(interactiveHighlight.modifier)
-                            .height(currentBarHeight)
+                            .height(morphedHeight)
                             .fillMaxWidth()
                             .padding(4.dp * currentScale),
                         verticalAlignment = Alignment.CenterVertically,
@@ -499,10 +563,13 @@ fun LiquidNavigationBar(
                                 scaleFactor = currentScale,
                                 badgeCount = badgeCounts.getOrNull(index),
                                 hasBadgeDot = badgeDots.getOrNull(index) ?: false,
-                                onClick = {
-                                    onTabSelected(index)
-                                    dampedDragAnimation.animateToValue(index.toFloat())
-                                },
+                                contentAlpha = tabsAlpha,
+                                onClick = if (!isMorphed) {
+                                    {
+                                        onTabSelected(index)
+                                        dampedDragAnimation.animateToValue(index.toFloat())
+                                    }
+                                } else null,
                             )
                         }
                     }
@@ -526,7 +593,7 @@ fun LiquidNavigationBar(
                                 }
                                 .drawBackdrop(
                                     backdrop = liveBackdrop,
-                                    shape = { androidx.compose.foundation.shape.RoundedCornerShape(currentCornerRadius) },
+                                    shape = { RoundedCornerShape(morphedCornerRadius) },
                                     effects = {
                                         val progress = dampedDragAnimation.pressProgress
                                         vibrancy()
@@ -543,7 +610,7 @@ fun LiquidNavigationBar(
                                         Highlight.Default.copy(alpha = progress)
                                     },
                                 )
-                                .height(currentBarHeight - 8.dp * currentScale)
+                                .height(morphedHeight - 8.dp * currentScale)
                                 .fillMaxWidth()
                                 .padding(horizontal = 4.dp * currentScale),
                             verticalAlignment = Alignment.CenterVertically,
@@ -558,16 +625,18 @@ fun LiquidNavigationBar(
                                     scaleFactor = currentScale,
                                     badgeCount = badgeCounts.getOrNull(index),
                                     hasBadgeDot = badgeDots.getOrNull(index) ?: false,
-                                    onClick = {
-                                        onTabSelected(index)
-                                        dampedDragAnimation.animateToValue(index.toFloat())
-                                    },
+                                    onClick = if (!isMorphed) {
+                                        {
+                                            onTabSelected(index)
+                                            dampedDragAnimation.animateToValue(index.toFloat())
+                                        }
+                                    } else null,
                                 )
                             }
                         }
                     }
 
-                    val pillShape = androidx.compose.foundation.shape.RoundedCornerShape(currentCornerRadius)
+                    val pillShape = RoundedCornerShape(morphedCornerRadius)
 
                     if (pillGlassIntensity > 0.001f) {
                         Box(
@@ -583,8 +652,8 @@ fun LiquidNavigationBar(
                                                 panelOffset
                                         }
                                 }
-                                .then(interactiveHighlight.gestureModifier)
-                                .then(dampedDragAnimation.modifier)
+                                .then(if (!isMorphed) interactiveHighlight.gestureModifier else Modifier)
+                                .then(if (!isMorphed) dampedDragAnimation.modifier else Modifier)
                                 .drawBackdrop(
                                     backdrop = rememberCombinedBackdrop(
                                         liveBackdrop,
@@ -619,6 +688,7 @@ fun LiquidNavigationBar(
                                         } else null
                                     },
                                     layerBlock = {
+                                        alpha = tabsAlpha
                                         scaleX = dampedDragAnimation.scaleX
                                         scaleY = dampedDragAnimation.scaleY
 
@@ -645,7 +715,7 @@ fun LiquidNavigationBar(
                                         }
                                     },
                                 )
-                                .height(currentBarHeight - 8.dp * currentScale)
+                                .height(morphedHeight - 8.dp * currentScale)
                                 .fillMaxWidth(1f / tabCount),
                         )
                     } else {
@@ -653,6 +723,7 @@ fun LiquidNavigationBar(
                             Modifier
                                 .padding(horizontal = 4.dp * currentScale)
                                 .graphicsLayer {
+                                    alpha = tabsAlpha
                                     translationX =
                                         if (isLtr) {
                                             dampedDragAnimation.value * tabWidthPx + panelOffset
@@ -672,8 +743,8 @@ fun LiquidNavigationBar(
                                     clip = true
                                     shape = pillShape
                                 }
-                                .then(interactiveHighlight.gestureModifier)
-                                .then(dampedDragAnimation.modifier)
+                                .then(if (!isMorphed) interactiveHighlight.gestureModifier else Modifier)
+                                .then(if (!isMorphed) dampedDragAnimation.modifier else Modifier)
                                 .then(
                                     if (pillContainerOpacity > 0.001f) {
                                         Modifier.background(
@@ -683,9 +754,31 @@ fun LiquidNavigationBar(
                                         )
                                     } else Modifier
                                 )
-                                .height(currentBarHeight - 8.dp * currentScale)
+                                .height(morphedHeight - 8.dp * currentScale)
                                 .fillMaxWidth(1f / tabCount),
                         )
+                    }
+                }
+
+                if (hamburgerAlpha > 0.001f) {
+                    val iconColor = (if (isLightTheme) Color(0xFF1C1C1E) else Color.White).copy(alpha = hamburgerAlpha)
+                    Canvas(modifier = Modifier.fillMaxSize()) {
+                        val lineW = 18.dp.toPx()
+                        val strokeW = 2.2.dp.toPx()
+                        val gap = 5.5.dp.toPx()
+                        val cx = size.width / 2f
+                        val cy = size.height / 2f
+                        val startX = cx - lineW / 2f
+                        val endX = cx + lineW / 2f
+                        for (offset in floatArrayOf(-gap, 0f, gap)) {
+                            drawLine(
+                                color = iconColor,
+                                start = Offset(startX, cy + offset),
+                                end = Offset(endX, cy + offset),
+                                strokeWidth = strokeW,
+                                cap = StrokeCap.Round,
+                            )
+                        }
                     }
                 }
             }
@@ -705,6 +798,7 @@ private fun RowScope.LiquidBottomTab(
     scaleFactor: Float = 1f,
     badgeCount: String? = null,
     hasBadgeDot: Boolean = false,
+    contentAlpha: Float = 1f,
     onClick: (() -> Unit)? = null,
 ) {
     val scale = LocalLiquidBottomTabScale.current
@@ -726,6 +820,7 @@ private fun RowScope.LiquidBottomTab(
                 val value = scale()
                 scaleX = value
                 scaleY = value
+                alpha = contentAlpha
             },
         verticalArrangement = Arrangement.spacedBy((2 * scaleFactor).dp, Alignment.CenterVertically),
         horizontalAlignment = Alignment.CenterHorizontally,

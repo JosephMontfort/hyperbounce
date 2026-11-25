@@ -541,6 +541,8 @@ fun FacebookNavBarHost(
 
     if (tabs.isEmpty()) return
 
+    val drawerProgress = FacebookHook.drawerProgressState.floatValue
+
     LiquidNavigationBar(
         bottomPadding = live.bottomMargin.dp,
         tabs = tabs.map { it.inactiveBitmap },
@@ -576,6 +578,8 @@ fun FacebookNavBarHost(
         scrollShrinkState = scrollShrinkState,
         badgeCounts = tabs.map { it.badgeCount },
         badgeDots = tabs.map { it.hasBadgeDot },
-        enablePixelCopy = false
+        enablePixelCopy = false,
+        drawerProgress = drawerProgress,
+        onDrawerCloseClick = { FacebookHook.closeDrawer() },
     )
 }

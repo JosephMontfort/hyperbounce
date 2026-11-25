@@ -9,6 +9,10 @@ import android.view.ViewGroup
 import android.view.ViewTreeObserver
 import android.view.WindowInsets
 import android.widget.FrameLayout
+import android.widget.HorizontalScrollView
+import android.widget.ProgressBar
+import android.widget.SeekBar
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.ui.platform.ComposeView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.findViewTreeLifecycleOwner
@@ -37,6 +41,148 @@ class FacebookHook(
         private val sShiftedReelViews = java.util.Collections.synchronizedSet(
             java.util.Collections.newSetFromMap(java.util.WeakHashMap<View, Boolean>())
         )
+        val drawerProgressState = mutableFloatStateOf(0f)
+        private var sDrawerScrollViewRef: java.lang.ref.WeakReference<View>? = null
+        private var sBookmarksPanelRef: java.lang.ref.WeakReference<View>? = null
+        private var sMainPanelRef: java.lang.ref.WeakReference<View>? = null
+
+        @JvmStatic
+        fun closeDrawer() {
+            val sv = sDrawerScrollViewRef?.get() ?: return
+            sv.post {
+                try {
+                    val closeMethod = sv.javaClass.methods.firstOrNull { m ->
+                        m.name == "A0C" &&
+                            m.parameterTypes.size == 3 &&
+                            m.parameterTypes[0] == String::class.java &&
+                            m.parameterTypes[1] == String::class.java &&
+                            (m.parameterTypes[2] == Boolean::class.javaPrimitiveType || m.parameterTypes[2] == Boolean::class.javaObjectType)
+                    } ?: generateSequence<Class<*>>(sv.javaClass) { it.superclass }
+                        .flatMap { it.declaredMethods.asSequence() }
+                        .firstOrNull { m ->
+                            m.name == "A0C" &&
+                                m.parameterTypes.size == 3 &&
+                                m.parameterTypes[0] == String::class.java &&
+                                m.parameterTypes[1] == String::class.java &&
+                                (m.parameterTypes[2] == Boolean::class.javaPrimitiveType || m.parameterTypes[2] == Boolean::class.javaObjectType)
+                        }
+                    if (closeMethod != null) {
+                        closeMethod.isAccessible = true
+                        closeMethod.invoke(sv, "main_tab_panel", "sliding_panel_tap_button", true)
+                        return@post
+                    }
+                } catch (t: Throwable) {
+                    Log.w(TAG, "closeDrawer A0C invoke failed: ${t.message}")
+                }
+                val mainView = sMainPanelRef?.get()
+                if (mainView != null && sv is HorizontalScrollView) {
+                    sv.smoothScrollTo(mainView.left, 0)
+                }
+            }
+        }
+
+        private fun findFieldRecursively(clazz: Class<*>, name: String): java.lang.reflect.Field? {
+            var c: Class<*>? = clazz
+            while (c != null && c != Any::class.java) {
+                try {
+                    val f = c.getDeclaredField(name)
+                    f.isAccessible = true
+                    return f
+                } catch (_: Throwable) {
+                    c = c.superclass
+                }
+            }
+            return null
+        }
+
+        private fun hasShiftedAncestor(view: View, stopAt: View): Boolean {
+            var p = view.parent
+            while (p is View) {
+                if (sShiftedReelViews.contains(p)) return true
+                if (p === stopAt) break
+                p = p.parent
+            }
+            return false
+        }
+
+        private fun shiftUnshiftedProgressBars(
+            view: View,
+            reelButton: ViewGroup,
+            offsetTopInReel: Int
+        ): Boolean {
+            var shifted = false
+            val isTarget = view is SeekBar ||
+                (view is ProgressBar && !view.isIndeterminate)
+            if (isTarget) {
+                val h = if (view.height > 0) view.height else (view.layoutParams?.height ?: 0)
+                val bottomInReel = offsetTopInReel + view.height
+                val rbHeight = reelButton.height
+                if (h in 1..150 && (rbHeight <= 0 || bottomInReel >= rbHeight - 250)) {
+                    if (!sShiftedReelViews.contains(view) && !hasShiftedAncestor(view, reelButton)) {
+                        if (view.translationY != -190f) {
+                            view.translationY = -190f
+                            sShiftedReelViews.add(view)
+                        }
+                        shifted = true
+                    }
+                }
+                return shifted
+            }
+            if (view is ViewGroup) {
+                for (i in 0 until view.childCount) {
+                    val child = view.getChildAt(i) ?: continue
+                    if (shiftUnshiftedProgressBars(child, reelButton, offsetTopInReel + child.top)) {
+                        shifted = true
+                    }
+                }
+            }
+            return shifted
+        }
+
+        private fun attachReelsLayoutListener(target: View, reelButton: ViewGroup) {
+            val tagKey = 0x7F0B9904
+            if (target.getTag(tagKey) != null) return
+            target.setTag(tagKey, true)
+            target.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
+                if (isReelsActive && reelButton.isAttachedToWindow) {
+                    applyReelsTranslationToReelTree(reelButton)
+                }
+            }
+        }
+
+        private fun attachReelsHierarchyListener(
+            target: ViewGroup,
+            overlayContainer: ViewGroup,
+            reelButton: ViewGroup
+        ) {
+            val tagKey = 0x7F0B9905
+            if (target.getTag(tagKey) != null) return
+            target.setTag(tagKey, true)
+            target.setOnHierarchyChangeListener(object : ViewGroup.OnHierarchyChangeListener {
+                override fun onChildViewAdded(parent: View?, child: View?) {
+                    if (!isReelsActive || !reelButton.isAttachedToWindow) return
+                    applyReelsTranslationToReelTree(reelButton)
+                    val vto = overlayContainer.viewTreeObserver
+                    if (vto.isAlive) {
+                        var frames = 0
+                        vto.addOnPreDrawListener(object : ViewTreeObserver.OnPreDrawListener {
+                            override fun onPreDraw(): Boolean {
+                                if (!isReelsActive || !overlayContainer.isAttachedToWindow || frames++ >= 5) {
+                                    if (overlayContainer.viewTreeObserver.isAlive) {
+                                        overlayContainer.viewTreeObserver.removeOnPreDrawListener(this)
+                                    }
+                                    return true
+                                }
+                                applyReelsTranslationToReelTree(reelButton)
+                                return true
+                            }
+                        })
+                    }
+                }
+
+                override fun onChildViewRemoved(parent: View?, child: View?) {}
+            })
+        }
 
         @JvmStatic
         fun setReelsActive(active: Boolean) {
@@ -139,22 +285,28 @@ class FacebookHook(
                     overlayContainer.clipToPadding = false
                     if (overlayContainer.translationY != 0f) overlayContainer.translationY = 0f
 
+                    attachReelsLayoutListener(overlayContainer, reelButton)
+                    attachReelsHierarchyListener(overlayContainer, overlayContainer, reelButton)
+                    attachReelsHierarchyListener(reelButton, overlayContainer, reelButton)
+
                     for (j in 0 until overlayContainer.childCount) {
                         val sc = overlayContainer.getChildAt(j) ?: continue
                         val h = if (sc.height > 0) sc.height else (sc.layoutParams?.height ?: 0)
-                        if (sc is ViewGroup && sc.childCount > 0) {
+                        if (sc is ViewGroup && hasReelsOverlaySemantics(sc)) {
                             // Subchild 0: Metadata + Side Buttons -> Shift Up
                             if (sc.translationY != -190f) {
                                 sc.translationY = -190f
                                 sShiftedReelViews.add(sc)
                             }
+                            attachReelsLayoutListener(sc, reelButton)
                             didShiftAny = true
-                        } else if ((sc !is ViewGroup || sc.childCount == 0) && h in 1..120) {
-                            // Subchild 2: Progress bar / Scrubber -> Shift Up
+                        } else if (h in 1..120) {
+                            // Subchild 2: Progress bar / Scrubber container (height 1..120, regardless of childCount) -> Shift Up
                             if (sc.translationY != -190f) {
                                 sc.translationY = -190f
                                 sShiftedReelViews.add(sc)
                             }
+                            attachReelsLayoutListener(sc, reelButton)
                             didShiftAny = true
                         } else {
                             // Subchild 1: 300px Dark Dimming Scrim -> MUST REMAIN AT 0f GROUNDED!
@@ -164,12 +316,15 @@ class FacebookHook(
                         }
                     }
                 }
+                if (shiftUnshiftedProgressBars(reelButton, reelButton, 0)) {
+                    didShiftAny = true
+                }
             }
 
-            val seekbarIds = intArrayOf(0x7f0a1c63, 0x7f0a1c6b, 0x7f0a088e)
+            val seekbarIds = intArrayOf(0x7f0a1ca3, 0x7f0a1cab, 0x7f0a1c63, 0x7f0a1c6b, 0x7f0a088e)
             for (id in seekbarIds) {
                 val v = root.findViewById<View>(id)
-                if (v != null) {
+                if (v != null && !hasShiftedAncestor(v, root)) {
                     if (v.translationY != -190f) {
                         v.translationY = -190f
                         sShiftedReelViews.add(v)
@@ -396,6 +551,114 @@ class FacebookHook(
             }
         } catch (t: Throwable) {
             module.log(Log.WARN, TAG, "Failed to hook RecyclerView.onChildAttachedToWindow: ${t.message}")
+        }
+
+        // 5. Hook X.01zQ (SlidingPanelScrollView) to track left drawer progress
+        try {
+            val slidingPanelClass = param.classLoader.loadClass("X.01zQ")
+            for (ctor in slidingPanelClass.declaredConstructors) {
+                module.hook(ctor).intercept { chain ->
+                    val result = chain.proceed()
+                    val sv = chain.thisObject as? View
+                    if (sv != null) {
+                        sDrawerScrollViewRef = java.lang.ref.WeakReference(sv)
+                        sBookmarksPanelRef = null
+                        sMainPanelRef = null
+                        drawerProgressState.floatValue = 0f
+                    }
+                    result
+                }
+            }
+
+            val onScrollChangedMethod = try {
+                slidingPanelClass.getDeclaredMethod(
+                    "onScrollChanged",
+                    Int::class.javaPrimitiveType,
+                    Int::class.javaPrimitiveType,
+                    Int::class.javaPrimitiveType,
+                    Int::class.javaPrimitiveType,
+                )
+            } catch (_: NoSuchMethodException) {
+                generateSequence<Class<*>>(slidingPanelClass.superclass) { it.superclass }
+                    .mapNotNull { cls ->
+                        try {
+                            cls.getDeclaredMethod(
+                                "onScrollChanged",
+                                Int::class.javaPrimitiveType,
+                                Int::class.javaPrimitiveType,
+                                Int::class.javaPrimitiveType,
+                                Int::class.javaPrimitiveType,
+                            )
+                        } catch (_: NoSuchMethodException) {
+                            null
+                        }
+                    }
+                    .firstOrNull()
+            }
+
+            if (onScrollChangedMethod != null) {
+                module.hook(onScrollChangedMethod).intercept { chain ->
+                    val result = chain.proceed()
+                    val sv = chain.thisObject as? View
+                    if (sv != null && sv.javaClass.name == "X.01zQ") {
+                        try {
+                            if (sDrawerScrollViewRef?.get() !== sv) {
+                                sDrawerScrollViewRef = java.lang.ref.WeakReference(sv)
+                            }
+                            if (sBookmarksPanelRef?.get()?.isAttachedToWindow != true ||
+                                sMainPanelRef?.get()?.isAttachedToWindow != true
+                            ) {
+                                val a0cField = findFieldRecursively(sv.javaClass, "A0C")
+                                val panels = a0cField?.get(sv) as? List<*>
+                                if (panels != null) {
+                                    for (item in panels) {
+                                        if (item == null) continue
+                                        val a07 = findFieldRecursively(item.javaClass, "A07")?.get(item) as? String
+                                        val a06A00 = if (a07 == null) {
+                                            val a06 = findFieldRecursively(item.javaClass, "A06")?.get(item)
+                                            if (a06 != null) {
+                                                findFieldRecursively(a06.javaClass, "A00")?.get(a06) as? String
+                                            } else null
+                                        } else null
+
+                                        val panelView = (item as? View) ?: generateSequence<Class<*>>(item.javaClass) { it.superclass }
+                                            .takeWhile { it != Any::class.java }
+                                            .flatMap { it.declaredFields.asSequence() }
+                                            .firstOrNull { View::class.java.isAssignableFrom(it.type) }
+                                            ?.let { f ->
+                                                f.isAccessible = true
+                                                f.get(item) as? View
+                                            }
+
+                                        if (panelView != null) {
+                                            if (a07 == "bookmarks_panel") {
+                                                sBookmarksPanelRef = java.lang.ref.WeakReference(panelView)
+                                            } else if (a07 == "main_tab_panel" || a06A00 == "main_tab_panel") {
+                                                sMainPanelRef = java.lang.ref.WeakReference(panelView)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            val bookmarksView = sBookmarksPanelRef?.get()
+                            val mainView = sMainPanelRef?.get()
+                            if (bookmarksView != null && mainView != null) {
+                                val span = kotlin.math.abs(mainView.left - bookmarksView.left).toFloat()
+                                if (span > 1f) {
+                                    drawerProgressState.floatValue =
+                                        (kotlin.math.abs(sv.scrollX - mainView.left).toFloat() / span).coerceIn(0f, 1f)
+                                }
+                            }
+                        } catch (_: Throwable) {}
+                    }
+                    result
+                }
+            } else {
+                module.log(Log.WARN, TAG, "Could not locate SlidingPanelScrollView.onScrollChanged")
+            }
+        } catch (t: Throwable) {
+            module.log(Log.WARN, TAG, "SlidingPanelScrollView (X.01zQ) hooks: ${t.message}")
         }
     }
 
