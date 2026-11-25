@@ -21,6 +21,7 @@ import dev.hyperios.app.FakeLifecycleOwner
 import dev.hyperios.app.prefs.HyperBouncePrefs
 import io.github.libxposed.api.XposedModule
 import io.github.libxposed.api.XposedModuleInterface
+import java.lang.reflect.Modifier
 
 class FacebookHook(
     private val module: XposedModule,
@@ -339,44 +340,59 @@ class FacebookHook(
         // 4. Hook RecyclerView.onChildAttachedToWindow to shift reels overlays dynamically
         try {
             val rvClass = param.classLoader.loadClass("androidx.recyclerview.widget.RecyclerView")
-            val onChildAttachedMethod = rvClass.getDeclaredMethod("onChildAttachedToWindow", View::class.java)
-            module.hook(onChildAttachedMethod).intercept { chain ->
-                val result = chain.proceed()
-                val child = chain.args[0] as? View
-                if (child is ViewGroup && isReelsActive) {
-                    val layoutTagKey = 0x7F0B9903
-                    if (child.getTag(layoutTagKey) == null) {
-                        child.setTag(layoutTagKey, true)
-                        child.addOnLayoutChangeListener { v, _, _, _, _, _, _, _, _ ->
-                            if (isReelsActive && v is ViewGroup && v.isAttachedToWindow) {
-                                applyReelsTranslationToReelTree(v)
+            val onChildAttachedMethod = try {
+                rvClass.getDeclaredMethod("onChildAttachedToWindow", View::class.java)
+            } catch (_: NoSuchMethodException) {
+                rvClass.declaredMethods.firstOrNull { m ->
+                    Modifier.isPublic(m.modifiers) &&
+                        Modifier.isFinal(m.modifiers) &&
+                        m.returnType == Void.TYPE &&
+                        m.parameterTypes.size == 1 &&
+                        m.parameterTypes[0] == View::class.java
+                }
+            }
+            if (onChildAttachedMethod != null) {
+                module.log(Log.INFO, TAG, "FacebookHook: Hooking RecyclerView.${onChildAttachedMethod.name}(View)")
+                module.hook(onChildAttachedMethod).intercept { chain ->
+                    val result = chain.proceed()
+                    val child = chain.args[0] as? View
+                    if (child is ViewGroup && isReelsActive) {
+                        val layoutTagKey = 0x7F0B9903
+                        if (child.getTag(layoutTagKey) == null) {
+                            child.setTag(layoutTagKey, true)
+                            child.addOnLayoutChangeListener { v, _, _, _, _, _, _, _, _ ->
+                                if (isReelsActive && v is ViewGroup && v.isAttachedToWindow) {
+                                    applyReelsTranslationToReelTree(v)
+                                }
                             }
                         }
-                    }
-                    val vto = child.viewTreeObserver
-                    if (vto.isAlive) {
-                        var attempts = 0
-                        val preDrawListener = object : ViewTreeObserver.OnPreDrawListener {
-                            override fun onPreDraw(): Boolean {
-                                if (!isReelsActive || !child.isAttachedToWindow || attempts++ > 15) {
-                                    if (child.viewTreeObserver.isAlive) child.viewTreeObserver.removeOnPreDrawListener(this)
+                        val vto = child.viewTreeObserver
+                        if (vto.isAlive) {
+                            var attempts = 0
+                            val preDrawListener = object : ViewTreeObserver.OnPreDrawListener {
+                                override fun onPreDraw(): Boolean {
+                                    if (!isReelsActive || !child.isAttachedToWindow || attempts++ > 15) {
+                                        if (child.viewTreeObserver.isAlive) child.viewTreeObserver.removeOnPreDrawListener(this)
+                                        return true
+                                    }
+                                    val shifted = applyReelsTranslationToReelTree(child)
+                                    if (shifted) {
+                                        if (child.viewTreeObserver.isAlive) child.viewTreeObserver.removeOnPreDrawListener(this)
+                                    }
                                     return true
                                 }
-                                val shifted = applyReelsTranslationToReelTree(child)
-                                if (shifted) {
-                                    if (child.viewTreeObserver.isAlive) child.viewTreeObserver.removeOnPreDrawListener(this)
-                                }
-                                return true
                             }
+                            vto.addOnPreDrawListener(preDrawListener)
                         }
-                        vto.addOnPreDrawListener(preDrawListener)
+                        applyReelsTranslationToReelTree(child)
+                        child.post {
+                            if (isReelsActive && child.isAttachedToWindow) applyReelsTranslationToReelTree(child)
+                        }
                     }
-                    applyReelsTranslationToReelTree(child)
-                    child.post {
-                        if (isReelsActive && child.isAttachedToWindow) applyReelsTranslationToReelTree(child)
-                    }
+                    result
                 }
-                result
+            } else {
+                module.log(Log.WARN, TAG, "Could not locate RecyclerView child-attach method")
             }
         } catch (t: Throwable) {
             module.log(Log.WARN, TAG, "Failed to hook RecyclerView.onChildAttachedToWindow: ${t.message}")
