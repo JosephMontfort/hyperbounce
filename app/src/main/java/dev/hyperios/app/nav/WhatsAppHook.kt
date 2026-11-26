@@ -21,11 +21,31 @@ import dev.hyperios.app.prefs.HyperBouncePrefs
 import io.github.libxposed.api.XposedModule
 import io.github.libxposed.api.XposedModuleInterface
 import java.lang.reflect.Constructor
+import kotlin.math.roundToInt
 
 class WhatsAppHook(
     private val module: XposedModule,
     private val param: XposedModuleInterface.PackageReadyParam
 ) {
+    companion object {
+        private const val TAG_ORIG_BOTTOM_MARGIN = 0x7e000001
+        private const val TAG_FAB_LISTENER_ATTACHED = 0x7e000002
+
+        private val TARGET_FAB_IDS = setOf(
+            0x7f0b1646, // fab
+            0x7f0b163c, // extended_mini_fab
+            0x7f0b1649, // fab_second
+            0x7f0b1648, // fab_request_payment
+        )
+
+        private val TARGET_FAB_NAMES = setOf(
+            "fab",
+            "extended_mini_fab",
+            "fab_second",
+            "fab_request_payment",
+        )
+    }
+
     private var lastUiMode = -1
     private var externalTabState: MutableState<Int>? = null
     private val hyperBouncePrefs = HyperBouncePrefs(module)
@@ -42,22 +62,7 @@ class WhatsAppHook(
             ).intercept { chain ->
                 val result = chain.proceed()
                 val view = chain.thisObject as View
-                
-                if (view.id == View.NO_ID || view.resources == null) return@intercept result
-                
-                try {
-                    val resName = view.resources.getResourceEntryName(view.id)
-                    if (resName == "fab" || resName == "extended_mini_fab") {
-                        val lp = view.layoutParams
-                        if (lp is ViewGroup.MarginLayoutParams) {
-                            if (lp.bottomMargin < 200) {
-                                lp.bottomMargin += 200
-                                view.layoutParams = lp
-                            }
-                        }
-                    }
-                } catch (e: Exception) {}
-                
+                checkAndAdjustFab(view)
                 result
             }
         } catch (t: Throwable) {}
@@ -129,6 +134,100 @@ class WhatsAppHook(
         } catch (t: Throwable) {}
     }
 
+    private fun isTargetFab(view: View): Boolean {
+        if (view.id in TARGET_FAB_IDS) return true
+        try {
+            if (view.id != View.NO_ID && view.resources != null) {
+                val resName = view.resources.getResourceEntryName(view.id)
+                if (resName in TARGET_FAB_NAMES) return true
+            }
+        } catch (_: Throwable) {}
+
+        val clsName = view.javaClass.name
+        if (clsName == "com.whatsapp.ui.wds.components.fab.WDSFab" ||
+            clsName == "com.whatsapp.home.ExtendedMiniFab" ||
+            clsName.endsWith(".WDSFab") ||
+            clsName.endsWith(".ExtendedMiniFab")
+        ) {
+            return true
+        }
+
+        return false
+    }
+
+    private fun adjustFabMargin(view: View) {
+        if (!isTargetFab(view)) return
+        val lp = view.layoutParams as? ViewGroup.MarginLayoutParams ?: return
+
+        val origMargin = (view.getTag(TAG_ORIG_BOTTOM_MARGIN) as? Int)
+            ?: lp.bottomMargin.also { view.setTag(TAG_ORIG_BOTTOM_MARGIN, it) }
+
+        val density = view.resources?.displayMetrics?.density ?: 1f
+        val barHeightDp = hyperBouncePrefs.appBarHeight("whatsapp")
+        val bottomMarginDp = hyperBouncePrefs.appBottomMargin("whatsapp")
+        val shiftDp = ((barHeightDp + bottomMarginDp + 14f) - 16f).coerceAtLeast(0f)
+        val shiftPx = (shiftDp * density).roundToInt()
+
+        val targetMargin = origMargin + shiftPx
+        if (lp.bottomMargin != targetMargin) {
+            lp.bottomMargin = targetMargin
+            view.layoutParams = lp
+        }
+    }
+
+    private fun attachFabLayoutListener(view: View) {
+        if (view.getTag(TAG_FAB_LISTENER_ATTACHED) == true) return
+        view.setTag(TAG_FAB_LISTENER_ATTACHED, true)
+        view.addOnLayoutChangeListener { v, _, _, _, _, _, _, _, _ ->
+            adjustFabMargin(v)
+        }
+    }
+
+    private fun checkAndAdjustFab(view: View) {
+        if (!isTargetFab(view)) return
+        attachFabLayoutListener(view)
+        if (view.layoutParams is ViewGroup.MarginLayoutParams) {
+            adjustFabMargin(view)
+        } else {
+            view.post { adjustFabMargin(view) }
+        }
+    }
+
+    private fun scanAndAdjustFabs(view: View) {
+        if (isTargetFab(view)) {
+            attachFabLayoutListener(view)
+            adjustFabMargin(view)
+        }
+        if (view is ViewGroup) {
+            for (i in 0 until view.childCount) {
+                scanAndAdjustFabs(view.getChildAt(i))
+            }
+        }
+    }
+
+    private fun setupFabContainerListeners(container: View) {
+        scanAndAdjustFabs(container)
+
+        container.viewTreeObserver?.addOnGlobalLayoutListener {
+            scanAndAdjustFabs(container)
+        }
+
+        if (container is ViewGroup) {
+            val hierarchyListener = object : ViewGroup.OnHierarchyChangeListener {
+                override fun onChildViewAdded(parent: View?, child: View?) {
+                    if (child != null) {
+                        scanAndAdjustFabs(child)
+                        if (child is ViewGroup) {
+                            child.setOnHierarchyChangeListener(this)
+                        }
+                    }
+                }
+                override fun onChildViewRemoved(parent: View?, child: View?) {}
+            }
+            container.setOnHierarchyChangeListener(hierarchyListener)
+        }
+    }
+
     private fun detectWhatsAppTab(stockBar: ViewGroup): Int? {
         val menu = stockBar.getChildAt(0) as? ViewGroup ?: return null
         for (i in 0 until menu.childCount) {
@@ -163,6 +262,9 @@ class WhatsAppHook(
             externalTabState = tabState
 
             val backdropSource = rootGroup.findViewById<View>(android.R.id.content) ?: rootGroup
+
+            // Attach hierarchy and layout listeners to automatically catch and shift FABs
+            setupFabContainerListeners(backdropSource)
 
             val composeView = ComposeView(context).apply {
                 tag = "HyperFloatingBar"

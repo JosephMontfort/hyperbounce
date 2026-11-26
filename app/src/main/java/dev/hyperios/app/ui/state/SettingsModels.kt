@@ -84,7 +84,8 @@ data class NavBarAppSettings(
     val pillShadow: Boolean = false,
     val autoShrink: Boolean = ModuleDefaults.NavApps.YouTube.AUTO_SHRINK,
     val autoShrinkScale: Float = ModuleDefaults.NavApps.YouTube.AUTO_SHRINK_SCALE,
-    val reelsFullscreenZoom: Boolean = ModuleDefaults.NavApps.Instagram.REELS_FULLSCREEN_ZOOM
+    val reelsFullscreenZoom: Boolean = ModuleDefaults.NavApps.Instagram.REELS_FULLSCREEN_ZOOM,
+    val showLabels: Boolean = true,
 )
 
 /** The blur/lens/highlight/shadow/spring "feel" of one glass control (toggle or slider). */

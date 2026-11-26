@@ -179,7 +179,20 @@ fun AppDetailScreen(
             }
 
             NavApp.WhatsApp -> {
-                // WhatsApp has no scroll shrink or extra features on main page
+                item {
+                    SectionHeader("WhatsApp Settings", colors)
+                    GlassCard(backdrop, Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
+                        SettingsToggleRow(
+                            title = "Show Tab Labels",
+                            subtitle = "Display text labels under icons in floating bar",
+                            colors = colors,
+                            backdrop = backdrop,
+                            checked = s.showLabels,
+                            onCheckedChange = holder::setShowLabels,
+                            enabled = s.enabled
+                        )
+                    }
+                }
             }
 
             NavApp.Facebook -> {

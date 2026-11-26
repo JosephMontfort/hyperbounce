@@ -111,7 +111,7 @@ private fun loadIosTabBitmap(
     // White stencil so Compose ColorFilter.tint(accentColor) cleanly tints with
     // WhatsApp brand green (#21C063) or user custom accent.
     val tintColor = if (!isActive) {
-        if (isDark) android.graphics.Color.WHITE else android.graphics.Color.parseColor("#8E8E93")
+        if (isDark) android.graphics.Color.WHITE else android.graphics.Color.BLACK
     } else {
         android.graphics.Color.WHITE
     }
@@ -203,7 +203,7 @@ private fun extractStockDrawables(tab: ViewGroup, isDark: Boolean): Pair<Bitmap?
         val w = sourceDrawable.intrinsicWidth.coerceAtLeast(1)
         val h = sourceDrawable.intrinsicHeight.coerceAtLeast(1)
 
-        val inactiveTint = if (isDark) android.graphics.Color.WHITE else android.graphics.Color.parseColor("#8E8E93")
+        val inactiveTint = if (isDark) android.graphics.Color.WHITE else android.graphics.Color.BLACK
         sourceDrawable.setTint(inactiveTint)
         sourceDrawable.setTintMode(PorterDuff.Mode.SRC_IN)
         sourceDrawable.state = intArrayOf(
@@ -330,7 +330,7 @@ fun WhatsAppNavBarHost(
         bottomPadding = live.bottomMargin.dp,
         tabs = tabs.map { it.inactiveBitmap },
         activeTabs = tabs.map { it.activeBitmap },
-        labels = tabs.map { it.label },
+        labels = if (live.showLabels) tabs.map { it.label } else emptyList(),
         customAccentColor = accentColorFor(live.accent, live.customAccentColor),
         forceLightTheme = live.themeMode == "Light",
         forceDarkTheme = live.themeMode == "Dark",

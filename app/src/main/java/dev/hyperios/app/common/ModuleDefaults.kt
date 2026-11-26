@@ -572,6 +572,7 @@ object ModuleDefaults {
             const val LIQUID_GLASS: Boolean = true
             const val ACCENT: String = "Green"
             const val THEME_MODE: String = "System"
+            const val SHOW_LABELS: Boolean = true
         }
 
         object YouTube {

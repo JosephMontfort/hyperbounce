@@ -150,6 +150,9 @@ class HyperBouncePrefs(module: XposedInterface) {
             else -> ModuleDefaults.NavApps.YouTube.AUTO_SHRINK_SCALE
         })
 
+    fun appShowLabels(appKey: String): Boolean =
+        prefs.getBoolean("app_${appKey}_show_labels", true)
+
     val facebookReelsAutohide: Boolean
         get() = prefs.getBoolean("app_facebook_reels_autohide", ModuleDefaults.NavApps.Facebook.REELS_AUTOHIDE)
 

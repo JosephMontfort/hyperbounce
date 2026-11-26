@@ -635,7 +635,8 @@ class SettingsRepository(context: Context) {
                 liquidGlass = ModuleDefaults.NavApps.WhatsApp.LIQUID_GLASS,
                 accent = AccentPreset.Green,
                 themeMode = ThemeMode.System,
-                pillGlassIntensity = ModuleDefaults.NavApps.WhatsApp.PILL_GLASS_INTENSITY
+                pillGlassIntensity = ModuleDefaults.NavApps.WhatsApp.PILL_GLASS_INTENSITY,
+                showLabels = ModuleDefaults.NavApps.WhatsApp.SHOW_LABELS
             )
             NavApp.YouTube -> NavBarAppSettings(
                 barHeight = ModuleDefaults.NavApps.YouTube.BAR_HEIGHT,
@@ -730,11 +731,13 @@ class SettingsRepository(context: Context) {
             private set
         var reelsFullscreenZoom by prefsBooleanState("${prefix}_reels_fullscreen_zoom", defaults.reelsFullscreenZoom)
             private set
+        var showLabels by prefsBooleanState("${prefix}_show_labels", defaults.showLabels)
+            private set
 
         fun snapshot(): NavBarAppSettings = NavBarAppSettings(
             enabled, liquidGlass, glassIntensity, barBlurIntensity, containerOpacity, cornerRadius, barHeight, tabWidth, bottomMargin,
             themeMode, accent, customAccentColor, pillGlassIntensity, pillContainerOpacity, pillChromaticAberration, pillShadow,
-            autoShrink, autoShrinkScale, reelsFullscreenZoom
+            autoShrink, autoShrinkScale, reelsFullscreenZoom, showLabels
         )
 
         @JvmName("setEnabledPref")
@@ -786,6 +789,8 @@ class SettingsRepository(context: Context) {
             SettingsRepository.sendSettingsChangedBroadcast("${prefix}_reels_fullscreen_zoom", v)
             SettingsRepository.sendSettingsChangedBroadcast("reels_fullscreen_zoom", v)
         }
+        @JvmName("setShowLabelsPref")
+        fun setShowLabels(v: Boolean) { showLabels = v }
 
         fun reloadFromDefaults() {
             enabled = defaults.enabled
@@ -807,6 +812,7 @@ class SettingsRepository(context: Context) {
             autoShrink = defaults.autoShrink
             autoShrinkScale = defaults.autoShrinkScale
             reelsFullscreenZoom = defaults.reelsFullscreenZoom
+            showLabels = defaults.showLabels
         }
     }
 
