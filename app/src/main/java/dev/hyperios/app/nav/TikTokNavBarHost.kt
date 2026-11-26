@@ -84,6 +84,121 @@ private fun loadRawBitmap(context: Context, resId: Int): Bitmap? {
 }
 
 /**
+ * Loads a vector/raster drawable from TikTok's Tux resource loaders or ResourcesCompat.
+ * Strategies:
+ * 1. com.ss.android.ugc.aweme.homepage.ui.inflate.PreDrawableInflate.LIZ(resId, context)
+ * 2. X.0Zod.LIZIZ(context, resId)
+ * 3. X.0DYh builder with field LIZ = resId and method LIZ(context)
+ * 4. ResourcesCompat.getDrawable(context.resources, resId, context.theme)
+ */
+private fun loadTikTokDrawable(context: Context, resId: Int): Drawable? {
+    if (resId == 0) return null
+    val cl = context.classLoader ?: return null
+
+    // Strategy 1: PreDrawableInflate method LIZ(resId, context)
+    try {
+        val clazz = cl.loadClass("com.ss.android.ugc.aweme.homepage.ui.inflate.PreDrawableInflate")
+        for (m in clazz.declaredMethods) {
+            if (m.name == "LIZ") {
+                m.isAccessible = true
+                val types = m.parameterTypes
+                if (types.size == 2) {
+                    val d = try {
+                        if (types[0] == Int::class.javaPrimitiveType && Context::class.java.isAssignableFrom(types[1])) {
+                            m.invoke(null, resId, context)
+                        } else if (Context::class.java.isAssignableFrom(types[0]) && types[1] == Int::class.javaPrimitiveType) {
+                            m.invoke(null, context, resId)
+                        } else null
+                    } catch (e: NullPointerException) {
+                        try {
+                            val inst = clazz.getField("INSTANCE").get(null)
+                            if (types[0] == Int::class.javaPrimitiveType && Context::class.java.isAssignableFrom(types[1])) {
+                                m.invoke(inst, resId, context)
+                            } else if (Context::class.java.isAssignableFrom(types[0]) && types[1] == Int::class.javaPrimitiveType) {
+                                m.invoke(inst, context, resId)
+                            } else null
+                        } catch (_: Throwable) { null }
+                    } catch (_: Throwable) { null }
+                    if (d is Drawable) return d
+                }
+            }
+        }
+    } catch (_: Throwable) {}
+
+    // Strategy 2: X.0Zod method LIZIZ(context, resId)
+    try {
+        val clazz = cl.loadClass("X.0Zod")
+        for (m in clazz.declaredMethods) {
+            if (m.name == "LIZIZ") {
+                m.isAccessible = true
+                val types = m.parameterTypes
+                if (types.size == 2) {
+                    val d = try {
+                        if (Context::class.java.isAssignableFrom(types[0]) && types[1] == Int::class.javaPrimitiveType) {
+                            m.invoke(null, context, resId)
+                        } else if (types[0] == Int::class.javaPrimitiveType && Context::class.java.isAssignableFrom(types[1])) {
+                            m.invoke(null, resId, context)
+                        } else null
+                    } catch (e: NullPointerException) {
+                        try {
+                            val inst = clazz.getField("INSTANCE").get(null)
+                            if (Context::class.java.isAssignableFrom(types[0]) && types[1] == Int::class.javaPrimitiveType) {
+                                m.invoke(inst, context, resId)
+                            } else if (types[0] == Int::class.javaPrimitiveType && Context::class.java.isAssignableFrom(types[1])) {
+                                m.invoke(inst, resId, context)
+                            } else null
+                        } catch (_: Throwable) { null }
+                    } catch (_: Throwable) { null }
+                    if (d is Drawable) return d
+                }
+            }
+        }
+    } catch (_: Throwable) {}
+
+    // Strategy 3: X.0DYh builder with field LIZ = resId and method LIZ(context)
+    try {
+        val clazz = cl.loadClass("X.0DYh")
+        var instance: Any? = null
+        try {
+            val ctor = clazz.getDeclaredConstructor()
+            ctor.isAccessible = true
+            instance = ctor.newInstance()
+        } catch (_: Throwable) {
+            for (ctor in clazz.declaredConstructors) {
+                if (ctor.parameterTypes.size == 1 && ctor.parameterTypes[0] == Int::class.javaPrimitiveType) {
+                    ctor.isAccessible = true
+                    instance = ctor.newInstance(resId)
+                    break
+                }
+            }
+        }
+        if (instance != null) {
+            try {
+                val field = clazz.getDeclaredField("LIZ")
+                field.isAccessible = true
+                field.set(instance, resId)
+            } catch (_: Throwable) {}
+
+            for (m in clazz.declaredMethods) {
+                if (m.name == "LIZ" && m.parameterTypes.size == 1 && Context::class.java.isAssignableFrom(m.parameterTypes[0])) {
+                    m.isAccessible = true
+                    val d = m.invoke(instance, context)
+                    if (d is Drawable) return d
+                }
+            }
+        }
+    } catch (_: Throwable) {}
+
+    // Strategy 4: ResourcesCompat.getDrawable(context.resources, resId, context.theme)
+    try {
+        val d = androidx.core.content.res.ResourcesCompat.getDrawable(context.resources, resId, context.theme)
+        if (d != null) return d
+    } catch (_: Throwable) {}
+
+    return null
+}
+
+/**
  * Finds the primary icon ImageView within a tab View, skipping tiny badge dot views.
  */
 private fun findTabIconImageView(view: View): ImageView? {
@@ -355,19 +470,31 @@ private fun extractTikTokTabs(
         val isCreateTab = (index == 2)
         val iconView = findTabIconImageView(child)
 
-        // Attempt loading static raw PNG resources first
+        // Upfront attempt: Tux vector loaders via loadTikTokDrawable & raw bitmap fallback
         if (context != null) {
             val (rawOutlineId, rawFilledId) = TIKTOK_RAW_ICONS.getOrNull(index) ?: Pair(0, 0)
             if (rawOutlineId != 0 && !outlineCache.containsKey(index)) {
-                val rawBmp = loadRawBitmap(context, rawOutlineId)
-                if (rawBmp != null) {
-                    outlineCache[index] = if (isCreateTab) rawBmp else tintBitmap(rawBmp, inactiveTint)
+                val d = loadTikTokDrawable(context, rawOutlineId)
+                if (d != null) {
+                    val bmp = drawableToBitmap(d, tint = if (isCreateTab) null else inactiveTint)
+                    if (bmp != null) outlineCache[index] = bmp
+                } else {
+                    val rawBmp = loadRawBitmap(context, rawOutlineId)
+                    if (rawBmp != null) {
+                        outlineCache[index] = if (isCreateTab) rawBmp else tintBitmap(rawBmp, inactiveTint)
+                    }
                 }
             }
             if (rawFilledId != 0 && !filledCache.containsKey(index)) {
-                val rawBmp = loadRawBitmap(context, rawFilledId)
-                if (rawBmp != null) {
-                    filledCache[index] = if (isCreateTab) rawBmp else tintBitmap(rawBmp, activeTint)
+                val d = loadTikTokDrawable(context, rawFilledId)
+                if (d != null) {
+                    val bmp = drawableToBitmap(d, tint = if (isCreateTab) null else activeTint)
+                    if (bmp != null) filledCache[index] = bmp
+                } else {
+                    val rawBmp = loadRawBitmap(context, rawFilledId)
+                    if (rawBmp != null) {
+                        filledCache[index] = if (isCreateTab) rawBmp else tintBitmap(rawBmp, activeTint)
+                    }
                 }
             }
         }
@@ -377,7 +504,7 @@ private fun extractTikTokTabs(
         if (outlineName != null && context != null && !outlineCache.containsKey(index)) {
             val resId = try { context.resources.getIdentifier(outlineName, "drawable", context.packageName) } catch (_: Throwable) { 0 }
             if (resId != 0) {
-                val d = try { androidx.core.content.res.ResourcesCompat.getDrawable(context.resources, resId, context.theme) } catch (_: Throwable) { null }
+                val d = loadTikTokDrawable(context, resId) ?: try { androidx.core.content.res.ResourcesCompat.getDrawable(context.resources, resId, context.theme) } catch (_: Throwable) { null }
                 if (d != null) {
                     val bmp = drawableToBitmap(d, tint = if (isCreateTab) null else inactiveTint)
                     if (bmp != null) outlineCache[index] = bmp
@@ -387,7 +514,7 @@ private fun extractTikTokTabs(
         if (filledName != null && context != null && !filledCache.containsKey(index)) {
             val resId = try { context.resources.getIdentifier(filledName, "drawable", context.packageName) } catch (_: Throwable) { 0 }
             if (resId != 0) {
-                val d = try { androidx.core.content.res.ResourcesCompat.getDrawable(context.resources, resId, context.theme) } catch (_: Throwable) { null }
+                val d = loadTikTokDrawable(context, resId) ?: try { androidx.core.content.res.ResourcesCompat.getDrawable(context.resources, resId, context.theme) } catch (_: Throwable) { null }
                 if (d != null) {
                     val bmp = drawableToBitmap(d, tint = if (isCreateTab) null else activeTint)
                     if (bmp != null) filledCache[index] = bmp
@@ -451,8 +578,27 @@ private fun extractTikTokTabs(
 
         var inactiveBmp = outlineCache[index]
         var activeBmp = filledCache[index]
-        if (inactiveBmp == null && activeBmp != null) inactiveBmp = activeBmp
-        if (activeBmp == null && inactiveBmp != null) activeBmp = inactiveBmp
+        if (index == 0 && inactiveBmp == null && context != null) {
+            val rawOutlineId = TIKTOK_RAW_ICONS.getOrNull(0)?.first ?: 0
+            if (rawOutlineId != 0) {
+                val d = loadTikTokDrawable(context, rawOutlineId)
+                val bmp = if (d != null) {
+                    drawableToBitmap(d, tint = inactiveTint)
+                } else {
+                    loadRawBitmap(context, rawOutlineId)?.let { tintBitmap(it, inactiveTint) }
+                }
+                if (bmp != null) {
+                    outlineCache[0] = bmp
+                    inactiveBmp = bmp
+                }
+            }
+        }
+        if (inactiveBmp == null && activeBmp != null) {
+            inactiveBmp = activeBmp
+        }
+        if (activeBmp == null && inactiveBmp != null) {
+            activeBmp = inactiveBmp
+        }
 
         val label = child.contentDescription?.toString() ?: TIKTOK_DEFAULT_LABELS.getOrNull(index)
         val (badgeCount, hasBadgeDot) = extractBadge(child, iconView)
@@ -537,26 +683,70 @@ fun TikTokNavBarHost(
         tabs = initialTabs
         selectedIndex = (externalTabState?.value ?: TikTokHook.externalTabState.intValue).coerceIn(0, (tabs.size - 1).coerceAtLeast(0))
 
+        val inactiveTint = if (isDark) android.graphics.Color.WHITE else android.graphics.Color.BLACK
+        val activeTint = accentColor.toArgb()
+
         while (true) {
-            delay(2000L)
-            if (tabs.isEmpty() || tabs.any { it.inactiveBitmap == null }) {
+            delay(150L)
+
+            val detectedIdx = extractSelectedIndex(tabBarContainer, tabs)
+            if (detectedIdx in tabs.indices && detectedIdx != selectedIndex &&
+                android.os.SystemClock.uptimeMillis() - lastUserSelectionTime > 400L) {
+                selectedIndex = detectedIdx
+            }
+
+            if (tabs.isEmpty() || tabs.any { it.inactiveBitmap == null && it.activeBitmap == null }) {
                 val extracted = extractTikTokTabs(tabBarContainer, isDark, accentColor, outlineBitmapsCache, filledBitmapsCache)
                 if (extracted.isNotEmpty()) {
                     tabs = extracted
                 }
             } else {
-                var badgesMutated = false
-                val updatedTabs = tabs.map { tab ->
+                var tabsMutated = false
+                val updatedTabs = tabs.mapIndexed { idx, tab ->
+                    val isTabSelected = (idx == selectedIndex || tab.tabView.isSelected)
+                    val isCreateTab = (idx == 2)
                     val iconView = findTabIconImageView(tab.tabView)
+                    val curDrawable = iconView?.drawable
+
+                    if (curDrawable != null) {
+                        if (isTabSelected) {
+                            if (!filledBitmapsCache.containsKey(idx)) {
+                                val bmp = drawableToBitmap(curDrawable, tint = if (isCreateTab) null else activeTint)
+                                if (bmp != null) {
+                                    filledBitmapsCache[idx] = bmp
+                                }
+                            }
+                        } else {
+                            if (!outlineBitmapsCache.containsKey(idx)) {
+                                val bmp = drawableToBitmap(curDrawable, tint = if (isCreateTab) null else inactiveTint)
+                                if (bmp != null) {
+                                    outlineBitmapsCache[idx] = bmp
+                                }
+                            }
+                        }
+                    }
+
+                    val inactiveBmp = outlineBitmapsCache[idx] ?: tab.inactiveBitmap
+                    val activeBmp = filledBitmapsCache[idx] ?: tab.activeBitmap ?: inactiveBmp
                     val (count, dot) = extractBadge(tab.tabView, iconView)
-                    if (count != tab.badgeCount || dot != tab.hasBadgeDot) {
-                        badgesMutated = true
-                        tab.copy(badgeCount = count, hasBadgeDot = dot)
+
+                    if (inactiveBmp != tab.inactiveBitmap ||
+                        activeBmp != tab.activeBitmap ||
+                        count != tab.badgeCount ||
+                        dot != tab.hasBadgeDot
+                    ) {
+                        tabsMutated = true
+                        tab.copy(
+                            inactiveBitmap = inactiveBmp,
+                            activeBitmap = activeBmp,
+                            badgeCount = count,
+                            hasBadgeDot = dot
+                        )
                     } else {
                         tab
                     }
                 }
-                if (badgesMutated) {
+                if (tabsMutated) {
                     tabs = updatedTabs
                 }
             }

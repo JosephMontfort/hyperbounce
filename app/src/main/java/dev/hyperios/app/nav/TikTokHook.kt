@@ -172,8 +172,60 @@ object TikTokHook {
         }
     }
 
+    private val COMMENT_FRAGMENT_CLASSES = listOf(
+        "com.ss.android.ugc.aweme.commentv2.commentlist.ui.CommentListFragmentV2",
+        "com.ss.android.ugc.aweme.commentv2.commentpage.commonvideo.BaseCommentPageContainerFragment",
+        "com.ss.android.ugc.aweme.commentv2.commentpage.commonvideo.DefaultCommentPageContainerFragment",
+        "com.ss.android.ugc.aweme.comment.ui.CommentListFragment",
+        "com.ss.android.ugc.aweme.comment.commentlist.CommentListFragmentV2"
+    )
+    @Volatile
+    private var isCommentSheetVisible = false
+
+    private fun isCommentSheetOpen(activity: Activity?): Boolean {
+        if (activity != null) {
+            try {
+                val getFmMethod = activity.javaClass.getMethod("getSupportFragmentManager")
+                val fm = getFmMethod.invoke(activity)
+                if (fm != null) {
+                    val getFragmentsMethod = fm.javaClass.getMethod("getFragments")
+                    val fragments = getFragmentsMethod.invoke(fm) as? List<*>
+                    if (fragments != null) {
+                        for (frag in fragments) {
+                            if (frag != null) {
+                                val isAdded = try {
+                                    frag.javaClass.getMethod("isAdded").invoke(frag) as? Boolean ?: false
+                                } catch (_: Throwable) { false }
+                                val isVisible = try {
+                                    frag.javaClass.getMethod("isVisible").invoke(frag) as? Boolean ?: false
+                                } catch (_: Throwable) { false }
+                                val isHidden = try {
+                                    frag.javaClass.getMethod("isHidden").invoke(frag) as? Boolean ?: false
+                                } catch (_: Throwable) { false }
+
+                                if (isAdded && isVisible && !isHidden) {
+                                    val className = frag.javaClass.name
+                                    if (COMMENT_FRAGMENT_CLASSES.contains(className) ||
+                                        className.contains("CommentList") ||
+                                        className.contains("CommentPage") ||
+                                        className.contains("Comment")
+                                    ) {
+                                        isCommentSheetVisible = true
+                                        return true
+                                    }
+                                }
+                            }
+                        }
+                        isCommentSheetVisible = false
+                        return false
+                    }
+                }
+            } catch (_: Throwable) {}
+        }
+        return isCommentSheetVisible
+    }
+
     private fun suppressNativeTabBar(tabBar: ViewGroup) {
-        tabBar.visibility = View.GONE
         tabBar.alpha = 0f
         tabBar.translationY = -9999f
         tabBar.layoutParams?.let { lp ->
@@ -531,12 +583,26 @@ object TikTokHook {
                 val setVisibilityMethod = tabBarClass.getMethod("setVisibility", Int::class.javaPrimitiveType)
                 module.hook(setVisibilityMethod).intercept { chain ->
                     val visibility = chain.args[0] as? Int ?: View.VISIBLE
-                    val shouldShow = (visibility == View.VISIBLE)
-                    isBarVisibleState.value = shouldShow
-                    val result = chain.proceed()
                     val tabBar = chain.thisObject as? View
-                    if (tabBar != null) {
+                    val isMoi = tabBar?.let { v ->
+                        if (v.id == ID_STOCK_TAB_BAR) true
+                        else {
+                            val resName = try {
+                                if (v.id != View.NO_ID && v.resources != null) {
+                                    v.resources.getResourceEntryName(v.id)
+                                } else null
+                            } catch (_: Throwable) { null }
+                            resName == "moi"
+                        }
+                    } ?: false
+
+                    if (isMoi) {
+                        isBarVisibleState.value = (visibility == View.VISIBLE)
+                    }
+                    val result = chain.proceed()
+                    if (isMoi && tabBar != null) {
                         tabBar.alpha = 0f
+                        tabBar.translationY = -9999f
                         tabBar.layoutParams?.let { lp ->
                             if (lp.height != 0) {
                                 lp.height = 0
@@ -640,7 +706,8 @@ object TikTokHook {
                         val result = chain.proceed()
                         val act = chain.thisObject as? Activity
                         if (act != null) {
-                            setBarVisibility(act, View.VISIBLE)
+                            val targetVisibility = if (isCommentSheetOpen(act)) View.GONE else View.VISIBLE
+                            setBarVisibility(act, targetVisibility)
                             val decor = act.window?.decorView as? ViewGroup
                             if (decor != null) {
                                 val tabBar = findTabBar(decor)
@@ -660,27 +727,50 @@ object TikTokHook {
     }
 
     private fun hookCommentFragments(module: XposedModule, classLoader: ClassLoader) {
-        val fragments = listOf(
-            "com.ss.android.ugc.aweme.comment.ui.CommentListFragment",
-            "com.ss.android.ugc.aweme.comment.commentlist.CommentListFragmentV2"
-        )
-        for (fragName in fragments) {
+        val showMethodNames = setOf("onResume")
+        val hideMethodNames = setOf("onPause", "onStop", "onDestroy", "onDestroyView", "dismiss", "dismissAllowingStateLoss")
+        val hookedMethods = mutableSetOf<java.lang.reflect.Method>()
+
+        for (fragName in COMMENT_FRAGMENT_CLASSES) {
             try {
                 val fragClass = classLoader.loadClass(fragName)
-                try {
-                    val onResumeMethod = fragClass.getDeclaredMethod("onResume")
-                    module.hook(onResumeMethod).intercept { chain ->
-                        isBarVisibleState.value = false
-                        chain.proceed()
+                var curr: Class<*>? = fragClass
+                while (curr != null && curr != Any::class.java) {
+                    val cName = curr.name
+                    if (cName.startsWith("androidx.fragment.app.") || cName.startsWith("android.")) {
+                        break
                     }
-                } catch (_: Throwable) {}
-                try {
-                    val onDestroyViewMethod = fragClass.getDeclaredMethod("onDestroyView")
-                    module.hook(onDestroyViewMethod).intercept { chain ->
-                        isBarVisibleState.value = true
-                        chain.proceed()
+                    for (m in curr.declaredMethods) {
+                        if (m.parameterTypes.isNotEmpty()) continue
+                        if (!hookedMethods.add(m)) continue
+
+                        val mName = m.name
+                        if (mName in showMethodNames) {
+                            try {
+                                module.hook(m).intercept { chain ->
+                                    val thisClassName = chain.thisObject?.javaClass?.name
+                                    if (COMMENT_FRAGMENT_CLASSES.contains(thisClassName) || thisClassName?.contains("Comment") == true) {
+                                        isCommentSheetVisible = true
+                                        isBarVisibleState.value = false
+                                    }
+                                    chain.proceed()
+                                }
+                            } catch (_: Throwable) {}
+                        } else if (mName in hideMethodNames) {
+                            try {
+                                module.hook(m).intercept { chain ->
+                                    val thisClassName = chain.thisObject?.javaClass?.name
+                                    if (COMMENT_FRAGMENT_CLASSES.contains(thisClassName) || thisClassName?.contains("Comment") == true) {
+                                        isCommentSheetVisible = false
+                                        isBarVisibleState.value = true
+                                    }
+                                    chain.proceed()
+                                }
+                            } catch (_: Throwable) {}
+                        }
                     }
-                } catch (_: Throwable) {}
+                    curr = curr.superclass
+                }
             } catch (_: Throwable) {}
         }
     }
