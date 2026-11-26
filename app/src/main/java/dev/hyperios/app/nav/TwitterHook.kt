@@ -143,7 +143,14 @@ object TwitterHook {
                 }
 
                 val decor = activity.window?.decorView
-                val lifecycleOwner = activity as? LifecycleOwner ?: FakeLifecycleOwner.instance
+                val fallbackOwner by lazy {
+                    FakeLifecycleOwner().apply {
+                        registry.handleLifecycleEvent(androidx.lifecycle.Lifecycle.Event.ON_CREATE)
+                        registry.handleLifecycleEvent(androidx.lifecycle.Lifecycle.Event.ON_START)
+                        registry.handleLifecycleEvent(androidx.lifecycle.Lifecycle.Event.ON_RESUME)
+                    }
+                }
+                val lifecycleOwner = (activity as? LifecycleOwner) ?: fallbackOwner
 
                 if (content.findViewTreeLifecycleOwner() == null) {
                     decor?.findViewTreeLifecycleOwner()?.let { content.setViewTreeLifecycleOwner(it) }
@@ -151,11 +158,11 @@ object TwitterHook {
                 }
                 if (content.findViewTreeSavedStateRegistryOwner() == null) {
                     decor?.findViewTreeSavedStateRegistryOwner()?.let { content.setViewTreeSavedStateRegistryOwner(it) }
-                        ?: content.setViewTreeSavedStateRegistryOwner(activity as? SavedStateRegistryOwner ?: FakeLifecycleOwner.instance)
+                        ?: content.setViewTreeSavedStateRegistryOwner((activity as? SavedStateRegistryOwner) ?: (fallbackOwner as SavedStateRegistryOwner))
                 }
                 if (content.findViewTreeViewModelStoreOwner() == null) {
                     decor?.findViewTreeViewModelStoreOwner()?.let { content.setViewTreeViewModelStoreOwner(it) }
-                        ?: content.setViewTreeViewModelStoreOwner(activity as? ViewModelStoreOwner ?: FakeLifecycleOwner.instance)
+                        ?: content.setViewTreeViewModelStoreOwner((activity as? ViewModelStoreOwner) ?: (fallbackOwner as ViewModelStoreOwner))
                 }
 
                 val host = TwitterNavBarHost(
@@ -189,7 +196,7 @@ object TwitterHook {
             for (m in p3Methods) {
                 module.hook(m).intercept { chain ->
                     if (chain.args.size >= 7 && chain.args[6] is Boolean) {
-                        val newArgs = chain.args.clone()
+                        val newArgs = chain.args.copyOf()
                         newArgs[6] = true
                         return@intercept chain.proceed(newArgs)
                     }

@@ -8,6 +8,8 @@ import android.graphics.PorterDuff
 import android.util.AttributeSet
 import android.util.Log
 import android.view.View
+import android.view.ViewGroup
+import android.widget.FrameLayout
 import androidx.annotation.DrawableRes
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.Composable
@@ -134,17 +136,29 @@ class TwitterNavBarHost @JvmOverloads constructor(
     context: Context,
     val prefs: HyperBouncePrefs,
     val backdropSource: View = (context as? Activity)?.findViewById(android.R.id.content) ?: View(context),
-    attrs: AttributeSet? = null
-) : ComposeView(context, attrs) {
+    attrs: AttributeSet? = null,
+    defStyleAttr: Int = 0
+) : FrameLayout(context, attrs, defStyleAttr) {
 
     init {
-        setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindowOrReleasedFromPool)
-        setContent {
-            TwitterNavBarHost(
-                backdropSource = backdropSource,
-                hyperBouncePrefs = prefs
+        clipChildren = false
+        clipToPadding = false
+        val composeView = ComposeView(context).apply {
+            clipChildren = false
+            clipToPadding = false
+            layoutParams = LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
             )
+            setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindowOrReleasedFromPool)
+            setContent {
+                TwitterNavBarHost(
+                    backdropSource = backdropSource,
+                    hyperBouncePrefs = prefs
+                )
+            }
         }
+        addView(composeView)
     }
 }
 
