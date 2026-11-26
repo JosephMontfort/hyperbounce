@@ -11,12 +11,14 @@ import android.widget.TextView
 import androidx.annotation.DrawableRes
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.unit.dp
 import androidx.core.content.res.ResourcesCompat
 import dev.hyperios.app.R
@@ -51,6 +53,9 @@ private val ICON_CALLS_FILLED = IosIconDef(R.drawable.ic_wa_ios_calls_filled, "i
 
 private val ICON_SETTINGS_OUTLINE = IosIconDef(R.drawable.ic_wa_ios_settings_outline, "ic_wa_ios_settings_outline")
 private val ICON_SETTINGS_FILLED = IosIconDef(R.drawable.ic_wa_ios_settings_filled, "ic_wa_ios_settings_filled")
+
+private val ICON_PROFILE_OUTLINE = IosIconDef(R.drawable.ic_wa_ios_profile_outline, "ic_wa_ios_profile_outline")
+private val ICON_PROFILE_FILLED = IosIconDef(R.drawable.ic_wa_ios_profile_filled, "ic_wa_ios_profile_filled")
 
 @Volatile
 private var cachedModuleContext: Context? = null
@@ -154,6 +159,9 @@ private fun resolveIosIconPair(index: Int, label: String, entryName: String): Pa
         l.contains("call") || l.contains("ligaç") || l.contains("llamad") || l.contains("anruf") ->
             return Pair(ICON_CALLS_OUTLINE, ICON_CALLS_FILLED)
 
+        l == "you" || l == "você" || l == "tú" || l.contains("profile") || l.contains("perfil") || l.contains("profil") ->
+            return Pair(ICON_PROFILE_OUTLINE, ICON_PROFILE_FILLED)
+
         l.contains("setting") || l.contains("ajuste") || l.contains("configur") || l.contains("einstell") ->
             return Pair(ICON_SETTINGS_OUTLINE, ICON_SETTINGS_FILLED)
     }
@@ -175,17 +183,20 @@ private fun resolveIosIconPair(index: Int, label: String, entryName: String): Pa
         e.contains("call") ->
             return Pair(ICON_CALLS_OUTLINE, ICON_CALLS_FILLED)
 
+        e.contains("you") || e.contains("profile") ->
+            return Pair(ICON_PROFILE_OUTLINE, ICON_PROFILE_FILLED)
+
         e.contains("setting") ->
             return Pair(ICON_SETTINGS_OUTLINE, ICON_SETTINGS_FILLED)
     }
 
-    // Tier 3: Standard WhatsApp Android 4-tab index fallback
+    // Tier 3: Standard WhatsApp Android 5-tab index fallback
     return when (index) {
         0 -> Pair(ICON_CHATS_OUTLINE, ICON_CHATS_FILLED)
         1 -> Pair(ICON_UPDATES_OUTLINE, ICON_UPDATES_FILLED)
         2 -> Pair(ICON_COMMUNITIES_OUTLINE, ICON_COMMUNITIES_FILLED)
         3 -> Pair(ICON_CALLS_OUTLINE, ICON_CALLS_FILLED)
-        4 -> Pair(ICON_SETTINGS_OUTLINE, ICON_SETTINGS_FILLED)
+        4 -> Pair(ICON_PROFILE_OUTLINE, ICON_PROFILE_FILLED)
         else -> null
     }
 }
@@ -301,6 +312,17 @@ private fun clickStockTab(stockBar: ViewGroup, index: Int) {
     (stockBar.getChildAt(0) as? ViewGroup)?.getChildAt(index)?.performClick()
 }
 
+private fun computeMenuSignature(stockBar: ViewGroup): Int {
+    val menu = stockBar.getChildAt(0) as? ViewGroup ?: return -1
+    var visibleCount = 0
+    for (i in 0 until menu.childCount) {
+        if (menu.getChildAt(i).visibility != View.GONE) {
+            visibleCount++
+        }
+    }
+    return (menu.childCount shl 16) or visibleCount
+}
+
 @Composable
 fun WhatsAppNavBarHost(
     stockBar: ViewGroup,
@@ -315,8 +337,43 @@ fun WhatsAppNavBarHost(
         else -> isSystemInDarkTheme()
     }
 
-    val tabs = remember(stockBar, isDark) { extractWhatsAppTabs(stockBar, isDark) }
+    var menuVersion by remember(stockBar) { mutableIntStateOf(0) }
+    DisposableEffect(stockBar) {
+        var lastSignature = computeMenuSignature(stockBar)
+        val checkSignature = {
+            val sig = computeMenuSignature(stockBar)
+            if (sig != lastSignature) {
+                lastSignature = sig
+                menuVersion++
+            }
+        }
+        val layoutListener = View.OnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
+            checkSignature()
+        }
+        val menuGroup = stockBar.getChildAt(0) as? ViewGroup
+        val hierarchyListener = object : ViewGroup.OnHierarchyChangeListener {
+            override fun onChildViewAdded(parent: View?, child: View?) = checkSignature()
+            override fun onChildViewRemoved(parent: View?, child: View?) = checkSignature()
+        }
+        stockBar.addOnLayoutChangeListener(layoutListener)
+        menuGroup?.addOnLayoutChangeListener(layoutListener)
+        stockBar.setOnHierarchyChangeListener(hierarchyListener)
+        menuGroup?.setOnHierarchyChangeListener(hierarchyListener)
+        onDispose {
+            stockBar.removeOnLayoutChangeListener(layoutListener)
+            menuGroup?.removeOnLayoutChangeListener(layoutListener)
+            stockBar.setOnHierarchyChangeListener(null)
+            menuGroup?.setOnHierarchyChangeListener(null)
+        }
+    }
+
+    val tabs = remember(stockBar, isDark, menuVersion) { extractWhatsAppTabs(stockBar, isDark) }
     var selectedIndex by remember { mutableIntStateOf(externalTabState.value) }
+
+    val screenWidthDp = LocalConfiguration.current.screenWidthDp.toFloat()
+    val tabCount = tabs.size.coerceAtLeast(1)
+    val maxSafeTabWidth = ((screenWidthDp - 16f) / tabCount).coerceAtLeast(40f)
+    val effectiveTabWidth = live.tabWidth.coerceAtMost(maxSafeTabWidth)
 
     // Sync WhatsApp swipe navigation to our indicator
     val externalIdx by externalTabState
@@ -338,7 +395,7 @@ fun WhatsAppNavBarHost(
         barBlurIntensity = live.barBlurIntensity,
         containerAlpha = live.containerOpacity,
         barHeight = live.barHeight.dp,
-        tabWidth = live.tabWidth.dp,
+        tabWidth = effectiveTabWidth.dp,
         cornerRadius = live.cornerRadius.dp,
         pillGlassIntensity = live.pillGlassIntensity,
         pillContainerOpacity = live.pillContainerOpacity,

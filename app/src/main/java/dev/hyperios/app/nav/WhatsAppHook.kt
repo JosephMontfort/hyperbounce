@@ -21,35 +21,46 @@ import dev.hyperios.app.prefs.HyperBouncePrefs
 import io.github.libxposed.api.XposedModule
 import io.github.libxposed.api.XposedModuleInterface
 import java.lang.reflect.Constructor
+import java.util.concurrent.ConcurrentHashMap
 
 class WhatsAppHook(
     private val module: XposedModule,
     private val param: XposedModuleInterface.PackageReadyParam
 ) {
     companion object {
-        private const val ID_EXTENDED_MINI_FAB = 0x7f0b163c // extended_mini_fab (Ask Meta button)
-        private const val ID_MAIN_FAB = 0x7f0b1646 // fab
-        private const val ID_FAB_SECOND = 0x7f0b1649 // fab_second
+        private const val ID_EXTENDED_MINI_FAB = 0x7f0b163c // extended_mini_fab (Ask Meta AI)
+        private const val ID_MAIN_FAB = 0x7f0b1646          // fab
+        private const val ID_FAB_TEXT = 0x7f0b1647          // fabText (WDSExtendedFab)
         private const val ID_FAB_REQUEST_PAYMENT = 0x7f0b1648 // fab_request_payment
+        private const val ID_FAB_SECOND = 0x7f0b1649        // fab_second
+        private const val ID_FAB_TOOL_TIP = 0x7f0b164b      // fab_tool_tip
+        private const val ID_SECOND_FAB_TOOL_TIP = 0x7f0b3489 // second_fab_tool_tip
 
         private val TARGET_FAB_IDS = setOf(
             ID_MAIN_FAB,
             ID_EXTENDED_MINI_FAB,
+            ID_FAB_TEXT,
             ID_FAB_SECOND,
             ID_FAB_REQUEST_PAYMENT,
+            ID_FAB_TOOL_TIP,
+            ID_SECOND_FAB_TOOL_TIP,
         )
 
         private val TARGET_FAB_NAMES = setOf(
             "fab",
             "extended_mini_fab",
+            "fabText",
             "fab_second",
             "fab_request_payment",
+            "fab_tool_tip",
+            "second_fab_tool_tip",
         )
     }
 
     private var lastUiMode = -1
     private var externalTabState: MutableState<Int>? = null
     private val hyperBouncePrefs = HyperBouncePrefs(module)
+    private val fabIdCache = ConcurrentHashMap<Int, Boolean>()
 
     fun onPackageReady() {
         if (!hyperBouncePrefs.appEnabled("whatsapp")) {
@@ -67,6 +78,43 @@ class WhatsAppHook(
                 result
             }
         } catch (t: Throwable) {}
+
+        try {
+            module.hook(
+                View::class.java.getDeclaredMethod("setTranslationY", Float::class.javaPrimitiveType)
+            ).intercept { chain ->
+                val view = chain.thisObject as? View
+                if (view != null && isTargetFab(view)) {
+                    val ty = chain.args[0] as? Float ?: 0f
+                    if (ty >= 0f) {
+                        computeFabShiftPx(view)?.let { shiftPx ->
+                            chain.args[0] = -shiftPx
+                        }
+                    }
+                }
+                chain.proceed()
+            }
+        } catch (t: Throwable) {
+            module.log(Log.WARN, "HyperiOS", "Failed to hook View.setTranslationY: ${t.message}")
+        }
+
+        try {
+            val tabConfigClass = param.classLoader.loadClass("X.0wf")
+            try {
+                val a05 = tabConfigClass.getDeclaredMethod("A05")
+                module.hook(a05).intercept { true }
+            } catch (t: Throwable) {
+                module.log(Log.WARN, "HyperiOS", "Failed to hook X.0wf.A05: ${t.message}")
+            }
+            try {
+                val a01 = tabConfigClass.getDeclaredMethod("A01")
+                module.hook(a01).intercept { 7 }
+            } catch (t: Throwable) {
+                module.log(Log.WARN, "HyperiOS", "Failed to hook X.0wf.A01: ${t.message}")
+            }
+        } catch (t: Throwable) {
+            module.log(Log.WARN, "HyperiOS", "X.0wf not found (WhatsApp version mismatch?): ${t.message}")
+        }
 
         try {
             val wdsClass = param.classLoader.loadClass("com.whatsapp.ui.wds.components.bottombar.WDSBottomBar")
@@ -135,59 +183,47 @@ class WhatsAppHook(
         } catch (t: Throwable) {}
     }
 
-    private fun isMetaAiFab(view: View): Boolean {
-        if (view.id == ID_EXTENDED_MINI_FAB) return true
-        val clsName = view.javaClass.name
-        if (clsName == "com.whatsapp.home.ExtendedMiniFab" || clsName.endsWith(".ExtendedMiniFab")) return true
-        try {
-            if (view.id != View.NO_ID && view.resources != null) {
-                val resName = view.resources.getResourceEntryName(view.id)
-                if (resName == "extended_mini_fab" || resName.contains("meta", ignoreCase = true)) return true
-            }
-        } catch (_: Throwable) {}
-        return false
-    }
-
-    private fun isStandardFab(view: View): Boolean {
-        if (view.id in TARGET_FAB_IDS && view.id != ID_EXTENDED_MINI_FAB) return true
-        val clsName = view.javaClass.name
-        if (clsName == "com.whatsapp.ui.wds.components.fab.WDSFab" || clsName.endsWith(".WDSFab")) return true
-        try {
-            if (view.id != View.NO_ID && view.resources != null) {
-                val resName = view.resources.getResourceEntryName(view.id)
-                if (resName in TARGET_FAB_NAMES && resName != "extended_mini_fab") return true
-            }
-        } catch (_: Throwable) {}
-        return false
-    }
-
     private fun isTargetFab(view: View): Boolean {
-        return isMetaAiFab(view) || isStandardFab(view)
+        val id = view.id
+        if (id in TARGET_FAB_IDS) return true
+
+        if (id != View.NO_ID) {
+            fabIdCache[id]?.let { return it }
+            val clsName = view.javaClass.name
+            val matched = clsName.endsWith(".WDSFab") ||
+                clsName.endsWith(".ExtendedMiniFab") ||
+                clsName.endsWith(".WDSExtendedFab") ||
+                try {
+                    val resName = view.resources?.getResourceEntryName(id)
+                    resName != null && (resName in TARGET_FAB_NAMES || resName.contains("meta", ignoreCase = true))
+                } catch (_: Throwable) {
+                    false
+                }
+            fabIdCache[id] = matched
+            return matched
+        }
+
+        val clsName = view.javaClass.name
+        return clsName.endsWith(".WDSFab") ||
+            clsName.endsWith(".ExtendedMiniFab") ||
+            clsName.endsWith(".WDSExtendedFab")
     }
 
-    private fun adjustFabTranslation(view: View) {
-        val density = view.resources?.displayMetrics?.density ?: return
+    private fun computeFabShiftPx(view: View): Float? {
+        val density = view.resources?.displayMetrics?.density ?: return null
         val barHeightDp = hyperBouncePrefs.appBarHeight("whatsapp")
         val bottomMarginDp = hyperBouncePrefs.appBottomMargin("whatsapp")
         // The floating bar top edge is at barHeightDp + bottomMarginDp (default 70 + 40 = 110dp).
         // Stock FAB bottom margin is 16dp.
         // To place the FAB bottom 14dp above the floating bar (at 124dp from bottom of screen):
         val fabShiftDp = ((barHeightDp + bottomMarginDp + 14f) - 16f).coerceAtLeast(0f)
+        return fabShiftDp * density
+    }
 
-        if (isMetaAiFab(view)) {
-            // Stack "Ask Meta" cleanly above the New Chat FAB (56dp tall with 12dp vertical gap)
-            val metaAiShiftDp = fabShiftDp + 56f + 12f // 108dp + 68dp = 176dp total upward shift
-            val metaAiShiftPx = metaAiShiftDp * density
-            val targetTy = -metaAiShiftPx
-            if (view.translationY != targetTy) {
-                view.translationY = targetTy
-            }
-        } else if (isStandardFab(view)) {
-            val fabShiftPx = fabShiftDp * density
-            val targetTy = -fabShiftPx
-            if (view.translationY != targetTy) {
-                view.translationY = targetTy
-            }
+    private fun adjustFabTranslation(view: View) {
+        val targetTy = -(computeFabShiftPx(view) ?: return)
+        if (view.translationY != targetTy) {
+            view.translationY = targetTy
         }
     }
 

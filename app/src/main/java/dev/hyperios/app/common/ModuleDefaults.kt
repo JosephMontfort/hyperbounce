@@ -555,7 +555,7 @@ object ModuleDefaults {
         object WhatsApp {
             const val BAR_HEIGHT: Float = 70.0f
 
-            const val TAB_WIDTH: Float = 92.0f
+            const val TAB_WIDTH: Float = 74.0f
             val TAB_WIDTH_RANGE = 40.0f..120.0f
 
             const val CORNER_RADIUS: Float = 36.0f
