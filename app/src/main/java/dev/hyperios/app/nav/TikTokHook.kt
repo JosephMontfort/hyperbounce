@@ -707,6 +707,7 @@ object TikTokHook {
                     val tabId = chain.args[0] as? String
                     val fth = chain.thisObject as? View
                     val act = fth?.let { findActivity(it) }
+                    isCommentSheetPresented = false
                     setBarVisibilityInternal(true, act)
                     if (tabId != null) {
                         val idx = when (tabId) {
@@ -748,6 +749,18 @@ object TikTokHook {
         }
     }
 
+    private fun findMethodInHierarchy(clazz: Class<*>, name: String, vararg paramTypes: Class<*>): java.lang.reflect.Method? {
+        var c: Class<*>? = clazz
+        while (c != null && c != Any::class.java) {
+            try {
+                return c.getDeclaredMethod(name, *paramTypes)
+            } catch (_: NoSuchMethodException) {
+                c = c.superclass
+            }
+        }
+        return null
+    }
+
     private fun hookActivities(module: XposedModule, classLoader: ClassLoader) {
         val targetActivities = listOf(
             "com.ss.android.ugc.aweme.splash.SplashActivity",
@@ -760,62 +773,80 @@ object TikTokHook {
 
                 // onPostCreate
                 try {
-                    val onPostCreateMethod = actClass.getDeclaredMethod("onPostCreate", android.os.Bundle::class.java)
-                    module.hook(onPostCreateMethod).intercept { chain ->
-                        val result = chain.proceed()
-                        val act = chain.thisObject as? Activity
-                        if (act != null) {
-                            act.window?.decorView?.post {
-                                val decor = act.window?.decorView as? ViewGroup ?: return@post
-                                val tabBar = findTabBar(decor)
-                                if (tabBar != null) {
-                                    suppressNativeTabBar(tabBar)
-                                    executeUIHeist(act, tabBar)
-                                }
-                            }
-                        }
-                        result
-                    }
-                } catch (_: Throwable) {}
-
-                // onResume
-                try {
-                    val onResumeMethod = actClass.getDeclaredMethod("onResume")
-                    module.hook(onResumeMethod).intercept { chain ->
-                        val result = chain.proceed()
-                        val act = chain.thisObject as? Activity
-                        if (act != null) {
-                            val isShowing = isCommentSheetActuallyShowing(act)
-                            if (!isShowing) {
-                                setBarVisibilityInternal(true, act)
-                                val decor = act.window?.decorView as? ViewGroup
-                                if (decor != null) {
+                    val onPostCreateMethod = findMethodInHierarchy(actClass, "onPostCreate", android.os.Bundle::class.java)
+                    if (onPostCreateMethod != null) {
+                        module.hook(onPostCreateMethod).intercept { chain ->
+                            val result = chain.proceed()
+                            val act = chain.thisObject as? Activity
+                            if (act != null && targetActivities.contains(act.javaClass.name)) {
+                                act.window?.decorView?.post {
+                                    val decor = act.window?.decorView as? ViewGroup ?: return@post
                                     val tabBar = findTabBar(decor)
                                     if (tabBar != null) {
                                         suppressNativeTabBar(tabBar)
                                         executeUIHeist(act, tabBar)
                                     }
                                 }
-                            } else {
-                                setBarVisibilityInternal(false, act)
                             }
+                            result
                         }
-                        result
+                    }
+                } catch (_: Throwable) {}
+
+                // onResume
+                try {
+                    val onResumeMethod = findMethodInHierarchy(actClass, "onResume")
+                    if (onResumeMethod != null) {
+                        module.hook(onResumeMethod).intercept { chain ->
+                            val result = chain.proceed()
+                            val act = chain.thisObject as? Activity
+                            if (act != null && targetActivities.contains(act.javaClass.name)) {
+                                val isShowing = isCommentSheetActuallyShowing(act)
+                                if (!isShowing) {
+                                    setBarVisibilityInternal(true, act)
+                                    val decor = act.window?.decorView as? ViewGroup
+                                    if (decor != null) {
+                                        val tabBar = findTabBar(decor)
+                                        if (tabBar != null) {
+                                            suppressNativeTabBar(tabBar)
+                                            executeUIHeist(act, tabBar)
+                                        }
+                                    }
+                                } else {
+                                    setBarVisibilityInternal(false, act)
+                                }
+                            }
+                            result
+                        }
+                    }
+                } catch (_: Throwable) {}
+
+                // onPostResume
+                try {
+                    val onPostResumeMethod = findMethodInHierarchy(actClass, "onPostResume")
+                    if (onPostResumeMethod != null) {
+                        module.hook(onPostResumeMethod).intercept { chain ->
+                            val result = chain.proceed()
+                            val act = chain.thisObject as? Activity
+                            if (act != null && targetActivities.contains(act.javaClass.name)) {
+                                if (!isCommentSheetActuallyShowing(act)) {
+                                    setBarVisibilityInternal(true, act)
+                                }
+                            }
+                            result
+                        }
                     }
                 } catch (_: Throwable) {}
 
                 // onWindowFocusChanged
                 try {
-                    val onWindowFocusChangedMethod = try {
-                        actClass.getDeclaredMethod("onWindowFocusChanged", Boolean::class.javaPrimitiveType)
-                    } catch (_: NoSuchMethodException) {
-                        actClass.getMethod("onWindowFocusChanged", Boolean::class.javaPrimitiveType)
-                    }
+                    val onWindowFocusChangedMethod = findMethodInHierarchy(actClass, "onWindowFocusChanged", Boolean::class.javaPrimitiveType)
+                        ?: actClass.getMethod("onWindowFocusChanged", Boolean::class.javaPrimitiveType)
                     module.hook(onWindowFocusChangedMethod).intercept { chain ->
                         val result = chain.proceed()
                         val hasFocus = chain.args.getOrNull(0) as? Boolean ?: false
                         val act = chain.thisObject as? Activity
-                        if (act != null && hasFocus) {
+                        if (act != null && hasFocus && targetActivities.contains(act.javaClass.name)) {
                             if (!isCommentSheetActuallyShowing(act)) {
                                 setBarVisibilityInternal(true, act)
                             }
