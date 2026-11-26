@@ -56,6 +56,7 @@ object TikTokHook {
     private const val ID_SEEK_BAR_SCRUBBER = 0x7f0b8c4d // @id/zll (0ODk)
     private const val ID_SEEK_BAR_SCRUBBER_ALT = 0x7f0b8a9e // @id/zll alt
     private const val ID_FEED_VIEW_PAGER = 0x7f0b8c70 // @id/zy7 (VerticalViewPager)
+    private const val ID_COMMENT_SHEET_CONTAINER = 0x7f0b6345 // @id/s9c (CommentPageSheetView / C0pUR)
 
     private const val TAG_TIKTOK_SHIFTED = 0x7F0B9910
     private const val TAG_TIKTOK_UNCLIPPED = 0x7F0B9911
@@ -176,57 +177,51 @@ object TikTokHook {
         }
     }
 
-    private val COMMENT_FRAGMENT_CLASSES = listOf(
-        "com.ss.android.ugc.aweme.commentv2.commentlist.ui.CommentListFragmentV2",
-        "com.ss.android.ugc.aweme.commentv2.commentpage.commonvideo.BaseCommentPageContainerFragment",
-        "com.ss.android.ugc.aweme.commentv2.commentpage.commonvideo.DefaultCommentPageContainerFragment",
-        "com.ss.android.ugc.aweme.comment.ui.CommentListFragment",
-        "com.ss.android.ugc.aweme.comment.commentlist.CommentListFragmentV2"
-    )
     @Volatile
     private var isCommentSheetVisible = false
 
-    private fun isCommentSheetOpen(activity: Activity?): Boolean {
-        if (activity != null) {
-            try {
-                val getFmMethod = activity.javaClass.getMethod("getSupportFragmentManager")
-                val fm = getFmMethod.invoke(activity)
-                if (fm != null) {
-                    val getFragmentsMethod = fm.javaClass.getMethod("getFragments")
-                    val fragments = getFragmentsMethod.invoke(fm) as? List<*>
-                    if (fragments != null) {
-                        for (frag in fragments) {
-                            if (frag != null) {
-                                val isAdded = try {
-                                    frag.javaClass.getMethod("isAdded").invoke(frag) as? Boolean ?: false
-                                } catch (_: Throwable) { false }
-                                val isVisible = try {
-                                    frag.javaClass.getMethod("isVisible").invoke(frag) as? Boolean ?: false
-                                } catch (_: Throwable) { false }
-                                val isHidden = try {
-                                    frag.javaClass.getMethod("isHidden").invoke(frag) as? Boolean ?: false
-                                } catch (_: Throwable) { false }
-
-                                if (isAdded && isVisible && !isHidden) {
-                                    val className = frag.javaClass.name
-                                    if (COMMENT_FRAGMENT_CLASSES.contains(className) ||
-                                        className.contains("CommentList") ||
-                                        className.contains("CommentPage") ||
-                                        className.contains("Comment")
-                                    ) {
-                                        isCommentSheetVisible = true
-                                        return true
-                                    }
-                                }
-                            }
+    /**
+     * Checks whether the comment sheet is physically attached and showing on screen.
+     * Prevents false positives from preloaded DefaultCommentPageContainerFragment.
+     */
+    private fun isCommentSheetActuallyShowing(activity: Activity?): Boolean {
+        val act = activity ?: return isCommentSheetVisible
+        try {
+            val decor = act.window?.decorView as? ViewGroup ?: return isCommentSheetVisible
+            var sheetView: View? = decor.findViewById(ID_COMMENT_SHEET_CONTAINER)
+            if (sheetView == null) {
+                fun findSheet(v: View): View? {
+                    if (v.id == ID_COMMENT_SHEET_CONTAINER) return v
+                    val resName = try {
+                        if (v.id != View.NO_ID && v.resources != null) {
+                            v.resources.getResourceEntryName(v.id)
+                        } else null
+                    } catch (_: Throwable) { null }
+                    if (resName == "s9c") return v
+                    val cls = v.javaClass.name
+                    if (cls.endsWith(".C0pUR") || cls.contains("CommentPageSheetView")) return v
+                    if (v is ViewGroup) {
+                        for (i in 0 until v.childCount) {
+                            val found = findSheet(v.getChildAt(i))
+                            if (found != null) return found
                         }
-                        isCommentSheetVisible = false
-                        return false
                     }
+                    return null
                 }
-            } catch (_: Throwable) {}
-        }
-        return isCommentSheetVisible
+                sheetView = findSheet(decor)
+            }
+
+            if (sheetView != null) {
+                val isAttached = sheetView.isAttachedToWindow
+                val isVisible = sheetView.visibility == View.VISIBLE
+                val isNotDismissed = sheetView.translationY <= 50f
+                val showing = isAttached && isVisible && isNotDismissed
+                isCommentSheetVisible = showing
+                return showing
+            }
+        } catch (_: Throwable) {}
+        isCommentSheetVisible = false
+        return false
     }
 
     private fun suppressNativeTabBar(tabBar: ViewGroup) {
@@ -370,28 +365,49 @@ object TikTokHook {
         }
     }
 
+    /**
+     * Synchronizes Compose state (isBarVisibleState.value) and activeFloatingBar View visibility.
+     * When hiding, delays setting View.GONE by 250ms so Compose slide-down / fade animations can complete.
+     */
+    fun setBarVisibilityInternal(visible: Boolean, activity: Activity? = null) {
+        isBarVisibleState.value = visible
+        isOverlayHidden = !visible
+        val act = activity ?: activeFloatingBar?.let { findActivity(it) }
+        val runnable = Runnable {
+            val bar = activeFloatingBar ?: act?.window?.decorView?.findViewWithTag<View>("HyperFloatingBar")
+            if (visible) {
+                bar?.visibility = View.VISIBLE
+            } else {
+                bar?.postDelayed({
+                    if (!isBarVisibleState.value) {
+                        bar.visibility = View.GONE
+                    }
+                }, 250L)
+            }
+        }
+        if (act != null) {
+            act.runOnUiThread(runnable)
+        } else {
+            activeFloatingBar?.post(runnable)
+        }
+    }
+
     private fun setBarVisibility(activity: Activity?, visibility: Int, isOverlay: Boolean = false) {
-        if (isOverlay) {
-            isOverlayHidden = (visibility == View.GONE)
-        }
-        isBarVisibleState.value = (visibility == View.VISIBLE)
-        activity?.runOnUiThread {
-            val bar = activeFloatingBar ?: activity.window?.decorView?.findViewWithTag<View>("HyperFloatingBar")
-            bar?.visibility = visibility
-        }
+        setBarVisibilityInternal(visibility == View.VISIBLE, activity)
     }
 
     // --- Feed Layout & Margin Shifter ---
 
-    private fun getShiftY(context: Context): Float {
+    private fun getShiftY(context: Context, isActionRailOrNotes: Boolean = false): Float {
         val density = context.resources.displayMetrics.density
         val barHeightDp = prefs.appBarHeight("tiktok")
         val bottomMarginDp = prefs.appBottomMargin("tiktok")
         val stockBarHeightDp = 47.0f
-        // Shift upward: totalBarTop - stockBarHeight
         val shiftDeltaDp = (barHeightDp + bottomMarginDp - stockBarHeightDp).coerceAtLeast(15.0f)
-        val shiftPx = (shiftDeltaDp + 35f) * density
-        return -shiftPx.coerceIn(160f * (density / 3f), 220f * (density / 3f))
+        val extraClearanceDp = if (isActionRailOrNotes) 50.0f else 35.0f
+        val shiftPx = (shiftDeltaDp + extraClearanceDp) * density
+        val maxShiftPx = if (isActionRailOrNotes) 280f * (density / 3f) else 220f * (density / 3f)
+        return -shiftPx.coerceIn(160f * (density / 3f), maxShiftPx)
     }
 
     private fun markUnclipped(vg: ViewGroup) {
@@ -415,7 +431,22 @@ object TikTokHook {
         }
     }
 
+    private fun isAnyAncestorShifted(view: View, root: ViewGroup): Boolean {
+        var p = view.parent
+        while (p is ViewGroup) {
+            if (sShiftedViews.contains(p) || p.getTag(TAG_TIKTOK_SHIFTED) != null) {
+                return true
+            }
+            if (p === root) break
+            p = p.parent
+        }
+        return false
+    }
+
     private fun shiftTargetView(view: View, shiftY: Float, root: ViewGroup) {
+        if (isAnyAncestorShifted(view, root)) {
+            return
+        }
         if (view.translationY != shiftY) {
             view.translationY = shiftY
         }
@@ -431,6 +462,26 @@ object TikTokHook {
         unclipAncestors(view, root)
     }
 
+    private fun isActionRail(v: View): Boolean {
+        if (v.id == ID_ACTION_RAIL_CONTAINER) return true
+        val resName = try {
+            if (v.id != View.NO_ID && v.resources != null) {
+                v.resources.getResourceEntryName(v.id)
+            } else null
+        } catch (_: Throwable) { null }
+        return resName == "jz8"
+    }
+
+    private fun isFloatingNotes(v: View): Boolean {
+        if (v.id == ID_FLOATING_NOTES) return true
+        val resName = try {
+            if (v.id != View.NO_ID && v.resources != null) {
+                v.resources.getResourceEntryName(v.id)
+            } else null
+        } catch (_: Throwable) { null }
+        return resName == "znw"
+    }
+
     private fun isTargetOverlayView(v: View): Boolean {
         if (v.id == 0x7f0b458c) return false
         val id = v.id
@@ -442,12 +493,12 @@ object TikTokHook {
         if (resName == "mon") return false
 
         if (id == ID_CAPTION_CONTAINER || id == ID_CAPTION_CONTAINER_ALT ||
-            id == ID_AUDIO_DISK || id == ID_FLOATING_NOTES ||
+            id == ID_FLOATING_NOTES ||
             id == ID_SEEK_BAR_SCRUBBER || id == ID_SEEK_BAR_SCRUBBER_ALT ||
             id == ID_ACTION_RAIL_CONTAINER) {
             return true
         }
-        if (resName == "b9i" || resName == "nlf" || resName == "znw" || resName == "zll" || resName == "jz8") {
+        if (resName == "b9i" || resName == "znw" || resName == "zll" || resName == "jz8") {
             return true
         }
         val clsName = v.javaClass.name
@@ -473,19 +524,26 @@ object TikTokHook {
     }
 
     private fun shiftFeedOverlaysInRoot(root: ViewGroup) {
-        val shiftY = getShiftY(root.context)
+        val defaultShiftY = getShiftY(root.context, isActionRailOrNotes = false)
+        val railShiftY = getShiftY(root.context, isActionRailOrNotes = true)
 
         fun traverse(v: View) {
             if (v.tag == "HyperFloatingBar") return
 
+            val isRail = isActionRail(v)
+            val isNotes = isFloatingNotes(v)
+
             if (isTargetOverlayView(v)) {
-                shiftTargetView(v, shiftY, root)
+                val shift = if (isRail || isNotes) railShiftY else defaultShiftY
+                shiftTargetView(v, shift, root)
                 if (v.id == ID_SEEK_BAR_SCRUBBER || v.id == ID_SEEK_BAR_SCRUBBER_ALT ||
                     v.javaClass.name.endsWith(".0ODk")
                 ) {
                     setupSeekBarTouchDelegate(v)
                 }
             }
+
+            if (isRail) return
 
             if (v is ViewGroup) {
                 for (i in 0 until v.childCount) {
@@ -586,7 +644,6 @@ object TikTokHook {
             try {
                 val setVisibilityMethod = tabBarClass.getMethod("setVisibility", Int::class.javaPrimitiveType)
                 module.hook(setVisibilityMethod).intercept { chain ->
-                    val visibility = chain.args[0] as? Int ?: View.VISIBLE
                     val tabBar = chain.thisObject as? View
                     val isMoi = tabBar?.let { v ->
                         if (v.id == ID_STOCK_TAB_BAR) true
@@ -600,9 +657,6 @@ object TikTokHook {
                         }
                     } ?: false
 
-                    if (isMoi) {
-                        isBarVisibleState.value = (visibility == View.VISIBLE)
-                    }
                     val result = chain.proceed()
                     if (isMoi && tabBar != null) {
                         tabBar.alpha = 0f
@@ -633,6 +687,9 @@ object TikTokHook {
                 val onTabChangedMethod = fthClass.getMethod("onTabChanged", String::class.java)
                 module.hook(onTabChangedMethod).intercept { chain ->
                     val tabId = chain.args[0] as? String
+                    val fth = chain.thisObject as? View
+                    val act = fth?.let { findActivity(it) }
+                    setBarVisibilityInternal(true, act)
                     if (tabId != null) {
                         val idx = when (tabId) {
                             "HOME" -> 0
@@ -710,8 +767,8 @@ object TikTokHook {
                         val result = chain.proceed()
                         val act = chain.thisObject as? Activity
                         if (act != null) {
-                            val targetVisibility = if (isCommentSheetOpen(act)) View.GONE else View.VISIBLE
-                            setBarVisibility(act, targetVisibility)
+                            val isShowing = isCommentSheetActuallyShowing(act)
+                            setBarVisibilityInternal(!isShowing, act)
                             val decor = act.window?.decorView as? ViewGroup
                             if (decor != null) {
                                 val tabBar = findTabBar(decor)
@@ -749,7 +806,7 @@ object TikTokHook {
                             if (m.parameterTypes.isEmpty()) {
                                 module.hook(m).intercept { chain ->
                                     isCommentSheetVisible = true
-                                    isBarVisibleState.value = false
+                                    setBarVisibilityInternal(false)
                                     chain.proceed()
                                 }
                                 Log.i(TAG, "Hooked Comment Show: ${clazz.name}.${m.name}")
@@ -759,7 +816,7 @@ object TikTokHook {
                             if (m.parameterTypes.isEmpty()) {
                                 module.hook(m).intercept { chain ->
                                     isCommentSheetVisible = false
-                                    isBarVisibleState.value = true
+                                    setBarVisibilityInternal(true)
                                     chain.proceed()
                                 }
                                 Log.i(TAG, "Hooked Comment Dismiss: ${clazz.name}.${m.name}")
@@ -770,74 +827,14 @@ object TikTokHook {
             } catch (_: Throwable) {}
         }
 
-        // 2. Hook Fragment.onHiddenChanged(boolean hidden) on all comment fragment classes
-        for (fragName in COMMENT_FRAGMENT_CLASSES) {
-            try {
-                val fragClass = classLoader.loadClass(fragName)
-                fragClass.methods.firstOrNull { 
-                    it.name == "onHiddenChanged" && it.parameterTypes.size == 1 && it.parameterTypes[0] == Boolean::class.javaPrimitiveType 
-                }?.let { m ->
-                    module.hook(m).intercept { chain ->
-                        val hidden = chain.args[0] as? Boolean ?: false
-                        isCommentSheetVisible = !hidden
-                        isBarVisibleState.value = hidden
-                        chain.proceed()
-                    }
-                    Log.i(TAG, "Hooked onHiddenChanged on $fragName")
-                }
-            } catch (_: Throwable) {}
-        }
-
-        // 3. Hook standard lifecycle fallback methods (onResume, onPause, onDestroy, etc.)
-        val showMethodNames = setOf("onResume")
-        val hideMethodNames = setOf("onPause", "onStop", "onDestroy", "onDestroyView")
-        val hookedMethods = mutableSetOf<java.lang.reflect.Method>()
-
-        for (fragName in COMMENT_FRAGMENT_CLASSES) {
-            try {
-                val fragClass = classLoader.loadClass(fragName)
-                var curr: Class<*>? = fragClass
-                while (curr != null && curr != Any::class.java) {
-                    val cName = curr.name
-                    if (cName.startsWith("androidx.fragment.app.") || cName.startsWith("android.")) {
-                        break
-                    }
-                    for (m in curr.declaredMethods) {
-                        if (m.parameterTypes.isNotEmpty()) continue
-                        if (!hookedMethods.add(m)) continue
-
-                        val mName = m.name
-                        if (mName in showMethodNames) {
-                            try {
-                                module.hook(m).intercept { chain ->
-                                    isCommentSheetVisible = true
-                                    isBarVisibleState.value = false
-                                    chain.proceed()
-                                }
-                            } catch (_: Throwable) {}
-                        } else if (mName in hideMethodNames) {
-                            try {
-                                module.hook(m).intercept { chain ->
-                                    isCommentSheetVisible = false
-                                    isBarVisibleState.value = true
-                                    chain.proceed()
-                                }
-                            } catch (_: Throwable) {}
-                        }
-                    }
-                    curr = curr.superclass
-                }
-            } catch (_: Throwable) {}
-        }
-
-        // 4. Hook TuxSheet dismiss callback
+        // 2. Hook TuxSheet dismiss callback
         try {
             val sheetClass = classLoader.loadClass("com.bytedance.tux.sheet.sheet.TuxSheet")
             sheetClass.declaredMethods.filter { it.name == "dismiss" || it.name == "dismissAllowingStateLoss" }.forEach { m ->
                 if (m.parameterTypes.isEmpty()) {
                     module.hook(m).intercept { chain ->
                         isCommentSheetVisible = false
-                        isBarVisibleState.value = true
+                        setBarVisibilityInternal(true)
                         chain.proceed()
                     }
                     Log.i(TAG, "Hooked TuxSheet.${m.name}")
