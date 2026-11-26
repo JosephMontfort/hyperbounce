@@ -840,8 +840,8 @@ object TikTokHook {
 
                 // onWindowFocusChanged
                 try {
-                    val onWindowFocusChangedMethod = findMethodInHierarchy(actClass, "onWindowFocusChanged", Boolean::class.javaPrimitiveType)
-                        ?: actClass.getMethod("onWindowFocusChanged", Boolean::class.javaPrimitiveType)
+                    val onWindowFocusChangedMethod = findMethodInHierarchy(actClass, "onWindowFocusChanged", java.lang.Boolean.TYPE)
+                        ?: actClass.getMethod("onWindowFocusChanged", java.lang.Boolean.TYPE)
                     module.hook(onWindowFocusChangedMethod).intercept { chain ->
                         val result = chain.proceed()
                         val hasFocus = chain.args.getOrNull(0) as? Boolean ?: false
