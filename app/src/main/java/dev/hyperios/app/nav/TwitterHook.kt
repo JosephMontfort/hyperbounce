@@ -196,9 +196,7 @@ object TwitterHook {
             for (m in p3Methods) {
                 module.hook(m).intercept { chain ->
                     if (chain.args.size >= 7 && chain.args[6] is Boolean) {
-                        val newArgs = chain.args.copyOf()
-                        newArgs[6] = true
-                        return@intercept chain.proceed(newArgs)
+                        chain.args[6] = true
                     }
                     chain.proceed()
                 }
