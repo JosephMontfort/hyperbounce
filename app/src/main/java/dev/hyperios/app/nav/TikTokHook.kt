@@ -152,6 +152,9 @@ object TikTokHook {
 
         // 6. Hook Feed VerticalViewPager onLayout
         hookFeedShifter(module, targetClassLoader)
+
+        // 7. Hook bottom spacers (c1x / ID_SPACER_BOTTOM) to eliminate opaque strips on Explore tab & other pages
+        hookBottomSpacers(module, targetClassLoader)
     }
 
     // --- Tab Bar Suppression ---
@@ -162,6 +165,7 @@ object TikTokHook {
             val c = parent.getChildAt(i)
             if (c.id == ID_HAIRLINE_DIVIDER || c.id == ID_SPACER_BOTTOM) {
                 c.visibility = View.GONE
+                c.setBackgroundColor(0)
                 c.layoutParams?.let { lp ->
                     if (lp.height != 0) {
                         lp.height = 0
@@ -727,8 +731,66 @@ object TikTokHook {
     }
 
     private fun hookCommentFragments(module: XposedModule, classLoader: ClassLoader) {
+        // 1. Hook TikTok's comment page visibility protocol methods (LJJJJ = open/show, LJLLI = close/dismiss)
+        val visibilityProtocolNames = listOf(
+            "com.ss.android.ugc.aweme.commentv2.commentpage.ICommentPageVisibilityProtocol",
+            "com.ss.android.ugc.aweme.commentv2.commentpage.commonvideo.BaseCommentPageContainerFragment",
+            "com.ss.android.ugc.aweme.commentv2.commentpage.commonvideo.DefaultCommentPageContainerFragment",
+            "com.ss.android.ugc.aweme.commentv2.commentpage.BaseCommentPageContainerFragment",
+            "com.ss.android.ugc.aweme.commentv2.commentpage.DefaultCommentPageContainerFragment"
+        )
+
+        for (className in visibilityProtocolNames) {
+            try {
+                val clazz = classLoader.loadClass(className)
+                for (m in clazz.declaredMethods) {
+                    when (m.name) {
+                        "LJJJJ" -> { // Comment Sheet Show (0 parameters)
+                            if (m.parameterTypes.isEmpty()) {
+                                module.hook(m).intercept { chain ->
+                                    isCommentSheetVisible = true
+                                    isBarVisibleState.value = false
+                                    chain.proceed()
+                                }
+                                Log.i(TAG, "Hooked Comment Show: ${clazz.name}.${m.name}")
+                            }
+                        }
+                        "LJLLI" -> { // Comment Sheet Dismiss (0 parameters)
+                            if (m.parameterTypes.isEmpty()) {
+                                module.hook(m).intercept { chain ->
+                                    isCommentSheetVisible = false
+                                    isBarVisibleState.value = true
+                                    chain.proceed()
+                                }
+                                Log.i(TAG, "Hooked Comment Dismiss: ${clazz.name}.${m.name}")
+                            }
+                        }
+                    }
+                }
+            } catch (_: Throwable) {}
+        }
+
+        // 2. Hook Fragment.onHiddenChanged(boolean hidden) on all comment fragment classes
+        for (fragName in COMMENT_FRAGMENT_CLASSES) {
+            try {
+                val fragClass = classLoader.loadClass(fragName)
+                fragClass.methods.firstOrNull { 
+                    it.name == "onHiddenChanged" && it.parameterTypes.size == 1 && it.parameterTypes[0] == Boolean::class.javaPrimitiveType 
+                }?.let { m ->
+                    module.hook(m).intercept { chain ->
+                        val hidden = chain.args[0] as? Boolean ?: false
+                        isCommentSheetVisible = !hidden
+                        isBarVisibleState.value = hidden
+                        chain.proceed()
+                    }
+                    Log.i(TAG, "Hooked onHiddenChanged on $fragName")
+                }
+            } catch (_: Throwable) {}
+        }
+
+        // 3. Hook standard lifecycle fallback methods (onResume, onPause, onDestroy, etc.)
         val showMethodNames = setOf("onResume")
-        val hideMethodNames = setOf("onPause", "onStop", "onDestroy", "onDestroyView", "dismiss", "dismissAllowingStateLoss")
+        val hideMethodNames = setOf("onPause", "onStop", "onDestroy", "onDestroyView")
         val hookedMethods = mutableSetOf<java.lang.reflect.Method>()
 
         for (fragName in COMMENT_FRAGMENT_CLASSES) {
@@ -748,22 +810,16 @@ object TikTokHook {
                         if (mName in showMethodNames) {
                             try {
                                 module.hook(m).intercept { chain ->
-                                    val thisClassName = chain.thisObject?.javaClass?.name
-                                    if (COMMENT_FRAGMENT_CLASSES.contains(thisClassName) || thisClassName?.contains("Comment") == true) {
-                                        isCommentSheetVisible = true
-                                        isBarVisibleState.value = false
-                                    }
+                                    isCommentSheetVisible = true
+                                    isBarVisibleState.value = false
                                     chain.proceed()
                                 }
                             } catch (_: Throwable) {}
                         } else if (mName in hideMethodNames) {
                             try {
                                 module.hook(m).intercept { chain ->
-                                    val thisClassName = chain.thisObject?.javaClass?.name
-                                    if (COMMENT_FRAGMENT_CLASSES.contains(thisClassName) || thisClassName?.contains("Comment") == true) {
-                                        isCommentSheetVisible = false
-                                        isBarVisibleState.value = true
-                                    }
+                                    isCommentSheetVisible = false
+                                    isBarVisibleState.value = true
                                     chain.proceed()
                                 }
                             } catch (_: Throwable) {}
@@ -773,6 +829,64 @@ object TikTokHook {
                 }
             } catch (_: Throwable) {}
         }
+
+        // 4. Hook TuxSheet dismiss callback
+        try {
+            val sheetClass = classLoader.loadClass("com.bytedance.tux.sheet.sheet.TuxSheet")
+            sheetClass.declaredMethods.filter { it.name == "dismiss" || it.name == "dismissAllowingStateLoss" }.forEach { m ->
+                if (m.parameterTypes.isEmpty()) {
+                    module.hook(m).intercept { chain ->
+                        isCommentSheetVisible = false
+                        isBarVisibleState.value = true
+                        chain.proceed()
+                    }
+                    Log.i(TAG, "Hooked TuxSheet.${m.name}")
+                }
+            }
+        } catch (_: Throwable) {}
+    }
+
+    private fun hookBottomSpacers(module: XposedModule, classLoader: ClassLoader) {
+        // Intercept View.setLayoutParams globally: force height = 0, GONE, and transparent background
+        try {
+            val setLayoutParamsMethod = View::class.java.getDeclaredMethod("setLayoutParams", ViewGroup.LayoutParams::class.java)
+            module.hook(setLayoutParamsMethod).intercept { chain ->
+                val view = chain.thisObject as? View
+                if (view != null && (view.id == ID_SPACER_BOTTOM || view.id == ID_HAIRLINE_DIVIDER)) {
+                    val lp = chain.args[0] as? ViewGroup.LayoutParams
+                    if (lp != null) {
+                        lp.height = 0
+                    }
+                    view.visibility = View.GONE
+                    view.setBackgroundColor(0)
+                }
+                chain.proceed()
+            }
+            Log.i(TAG, "Hooked View.setLayoutParams for bottom spacers (ID_SPACER_BOTTOM)")
+        } catch (t: Throwable) {
+            Log.w(TAG, "Failed to hook View.setLayoutParams for bottom spacers: ${t.message}")
+        }
+
+        // Intercept BaseExploreFeedFragment.initView(View) for defense-in-depth on Explore tab
+        try {
+            val exploreFragClass = classLoader.loadClass("com.ss.android.ugc.aweme.explore.ui.BaseExploreFeedFragment")
+            for (m in exploreFragClass.declaredMethods) {
+                if (m.name == "initView" && m.parameterTypes.size == 1 && View::class.java.isAssignableFrom(m.parameterTypes[0])) {
+                    module.hook(m).intercept { chain ->
+                        val result = chain.proceed()
+                        val rootView = chain.args.getOrNull(0) as? View
+                        rootView?.findViewById<View>(ID_SPACER_BOTTOM)?.let { spacer ->
+                            spacer.layoutParams?.height = 0
+                            spacer.visibility = View.GONE
+                            spacer.setBackgroundColor(0)
+                            spacer.requestLayout()
+                        }
+                        result
+                    }
+                    Log.i(TAG, "Hooked BaseExploreFeedFragment.initView for Explore tab edge-to-edge")
+                }
+            }
+        } catch (_: Throwable) {}
     }
 
     private fun hookFeedShifter(module: XposedModule, classLoader: ClassLoader) {

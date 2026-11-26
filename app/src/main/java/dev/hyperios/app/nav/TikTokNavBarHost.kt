@@ -65,10 +65,13 @@ private val TIKTOK_ICON_NAME_PAIRS = listOf(
     Pair("icon_tab_bottom_profile", "icon_tab_bottom_profile_fill"),
 )
 
+private const val RES_CREATE_ICON_DARK = 0x7f0103f5   // icon_color_create_dark (cyan/magenta + black body + white plus)
+private const val RES_CREATE_ICON_LIGHT = 0x7f0103f6  // icon_color_create_light (cyan/magenta + white body + black plus)
+
 private val TIKTOK_RAW_ICONS = listOf(
     Pair(0x7f0109e7, 0x7f0109e8), // Tab 0: Home (outline, filled)
     Pair(0x7f0109e5, 0x7f0109e6), // Tab 1: Friends (outline, filled)
-    Pair(0x7f0109e3, 0x7f0109e4), // Tab 2: Create (outline, filled)
+    Pair(RES_CREATE_ICON_DARK, RES_CREATE_ICON_LIGHT), // Tab 2: Create (dark multicolor, light multicolor)
     Pair(0x7f0109e9, 0x7f0109ea), // Tab 3: Inbox (outline, filled)
     Pair(0x7f0109eb, 0x7f0109ec), // Tab 4: Profile (outline, filled)
 )
@@ -337,10 +340,11 @@ private fun drawableToBitmap(
  * Dispatches a simulated tap onto the TikTok stock tab view with performClick and fallback motion events.
  */
 private fun clickTikTokTab(child: View) {
-    child.post {
-        try {
-            val handled = child.performClick()
-            if (!handled) {
+    try {
+        val handled = child.performClick()
+        if (!handled) {
+            val callHandled = try { child.callOnClick() } catch (_: Throwable) { false }
+            if (!callHandled) {
                 val now = android.os.SystemClock.uptimeMillis()
                 val w = child.width.coerceAtLeast(10)
                 val h = child.height.coerceAtLeast(10)
@@ -353,9 +357,9 @@ private fun clickTikTokTab(child: View) {
                 down.recycle()
                 up.recycle()
             }
-        } catch (t: Throwable) {
-            Log.e("HyperBounce", "clickTikTokTab error", t)
         }
+    } catch (t: Throwable) {
+        Log.e("HyperBounce", "clickTikTokTab error", t)
     }
 }
 
@@ -470,30 +474,57 @@ private fun extractTikTokTabs(
         val isCreateTab = (index == 2)
         val iconView = findTabIconImageView(child)
 
-        // Upfront attempt: Tux vector loaders via loadTikTokDrawable & raw bitmap fallback
-        if (context != null) {
+        if (isCreateTab) {
+            val liveDrawable = iconView?.drawable
+            var createBmp = if (liveDrawable != null) {
+                drawableToBitmap(liveDrawable, tint = null)
+            } else null
+
+            if (createBmp == null && context != null) {
+                val resId = if (isDark) RES_CREATE_ICON_DARK else RES_CREATE_ICON_LIGHT
+                val d = loadTikTokDrawable(context, resId) ?: try {
+                    androidx.core.content.res.ResourcesCompat.getDrawable(context.resources, resId, context.theme)
+                } catch (_: Throwable) { null }
+                if (d != null) {
+                    createBmp = drawableToBitmap(d, tint = null)
+                } else {
+                    val altResId = if (isDark) RES_CREATE_ICON_LIGHT else RES_CREATE_ICON_DARK
+                    val altD = loadTikTokDrawable(context, altResId) ?: try {
+                        androidx.core.content.res.ResourcesCompat.getDrawable(context.resources, altResId, context.theme)
+                    } catch (_: Throwable) { null }
+                    if (altD != null) {
+                        createBmp = drawableToBitmap(altD, tint = null)
+                    }
+                }
+            }
+
+            if (createBmp != null) {
+                outlineCache[2] = createBmp
+                filledCache[2] = createBmp
+            }
+        } else if (context != null) {
             val (rawOutlineId, rawFilledId) = TIKTOK_RAW_ICONS.getOrNull(index) ?: Pair(0, 0)
             if (rawOutlineId != 0 && !outlineCache.containsKey(index)) {
                 val d = loadTikTokDrawable(context, rawOutlineId)
                 if (d != null) {
-                    val bmp = drawableToBitmap(d, tint = if (isCreateTab) null else inactiveTint)
+                    val bmp = drawableToBitmap(d, tint = inactiveTint)
                     if (bmp != null) outlineCache[index] = bmp
                 } else {
                     val rawBmp = loadRawBitmap(context, rawOutlineId)
                     if (rawBmp != null) {
-                        outlineCache[index] = if (isCreateTab) rawBmp else tintBitmap(rawBmp, inactiveTint)
+                        outlineCache[index] = tintBitmap(rawBmp, inactiveTint)
                     }
                 }
             }
             if (rawFilledId != 0 && !filledCache.containsKey(index)) {
                 val d = loadTikTokDrawable(context, rawFilledId)
                 if (d != null) {
-                    val bmp = drawableToBitmap(d, tint = if (isCreateTab) null else activeTint)
+                    val bmp = drawableToBitmap(d, tint = activeTint)
                     if (bmp != null) filledCache[index] = bmp
                 } else {
                     val rawBmp = loadRawBitmap(context, rawFilledId)
                     if (rawBmp != null) {
-                        filledCache[index] = if (isCreateTab) rawBmp else tintBitmap(rawBmp, activeTint)
+                        filledCache[index] = tintBitmap(rawBmp, activeTint)
                     }
                 }
             }
@@ -687,7 +718,7 @@ fun TikTokNavBarHost(
         val activeTint = accentColor.toArgb()
 
         while (true) {
-            delay(150L)
+            delay(1000L)
 
             val detectedIdx = extractSelectedIndex(tabBarContainer, tabs)
             if (detectedIdx in tabs.indices && detectedIdx != selectedIndex &&
@@ -709,18 +740,28 @@ fun TikTokNavBarHost(
                     val curDrawable = iconView?.drawable
 
                     if (curDrawable != null) {
-                        if (isTabSelected) {
-                            if (!filledBitmapsCache.containsKey(idx)) {
-                                val bmp = drawableToBitmap(curDrawable, tint = if (isCreateTab) null else activeTint)
+                        if (isCreateTab) {
+                            if (!outlineBitmapsCache.containsKey(2) || !filledBitmapsCache.containsKey(2)) {
+                                val bmp = drawableToBitmap(curDrawable, tint = null)
                                 if (bmp != null) {
-                                    filledBitmapsCache[idx] = bmp
+                                    outlineBitmapsCache[2] = bmp
+                                    filledBitmapsCache[2] = bmp
                                 }
                             }
                         } else {
-                            if (!outlineBitmapsCache.containsKey(idx)) {
-                                val bmp = drawableToBitmap(curDrawable, tint = if (isCreateTab) null else inactiveTint)
-                                if (bmp != null) {
-                                    outlineBitmapsCache[idx] = bmp
+                            if (isTabSelected) {
+                                if (!filledBitmapsCache.containsKey(idx)) {
+                                    val bmp = drawableToBitmap(curDrawable, tint = activeTint)
+                                    if (bmp != null) {
+                                        filledBitmapsCache[idx] = bmp
+                                    }
+                                }
+                            } else {
+                                if (!outlineBitmapsCache.containsKey(idx)) {
+                                    val bmp = drawableToBitmap(curDrawable, tint = inactiveTint)
+                                    if (bmp != null) {
+                                        outlineBitmapsCache[idx] = bmp
+                                    }
                                 }
                             }
                         }
