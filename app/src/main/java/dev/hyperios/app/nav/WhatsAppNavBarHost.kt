@@ -4,6 +4,7 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.PorterDuff
+import android.util.Log
 import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageView
@@ -242,13 +243,14 @@ private fun extractWhatsAppTabs(stockBar: ViewGroup, isDark: Boolean): List<What
     val out = mutableListOf<WhatsAppTabData>()
     val menu = stockBar.getChildAt(0) as? ViewGroup ?: return out
     val moduleContext = getModuleContext(stockBar.context)
+    Log.i("HyperiOS", "extractWhatsAppTabs: menu.childCount=${menu.childCount}")
 
     for (i in 0 until menu.childCount) {
         val tab = menu.getChildAt(i) as? ViewGroup ?: continue
-        if (tab.visibility == View.GONE) continue
-
         val tv = findTextView(tab)
         val label = tv?.text?.toString() ?: ""
+        Log.i("HyperiOS", "extractWhatsAppTabs: child[$i] id=${tab.id} vis=${tab.visibility} label=\"$label\"")
+        if (tab.visibility == View.GONE) continue
         val contentDesc = tab.contentDescription?.toString()
             ?: findImageView(tab)?.contentDescription?.toString()
             ?: ""
@@ -287,6 +289,7 @@ private fun extractWhatsAppTabs(stockBar: ViewGroup, isDark: Boolean): List<What
 
         out.add(WhatsAppTabData(inactiveBmp, activeBmp, label))
     }
+    Log.i("HyperiOS", "extractWhatsAppTabs: out.size=${out.size}")
     return out
 }
 
@@ -312,7 +315,7 @@ private fun clickStockTab(stockBar: ViewGroup, index: Int) {
     (stockBar.getChildAt(0) as? ViewGroup)?.getChildAt(index)?.performClick()
 }
 
-private fun computeMenuSignature(stockBar: ViewGroup): Int {
+internal fun computeMenuSignature(stockBar: ViewGroup): Int {
     val menu = stockBar.getChildAt(0) as? ViewGroup ?: return -1
     var visibleCount = 0
     for (i in 0 until menu.childCount) {
@@ -327,6 +330,7 @@ private fun computeMenuSignature(stockBar: ViewGroup): Int {
 fun WhatsAppNavBarHost(
     stockBar: ViewGroup,
     externalTabState: State<Int>,
+    menuSignatureState: State<Int>,
     backdropSource: View,
     hyperBouncePrefs: HyperBouncePrefs,
 ) {
@@ -367,7 +371,10 @@ fun WhatsAppNavBarHost(
         }
     }
 
-    val tabs = remember(stockBar, isDark, menuVersion) { extractWhatsAppTabs(stockBar, isDark) }
+    val menuSignature by menuSignatureState
+    val tabs = remember(stockBar, isDark, menuVersion, menuSignature) {
+        extractWhatsAppTabs(stockBar, isDark)
+    }
     var selectedIndex by remember { mutableIntStateOf(externalTabState.value) }
 
     val screenWidthDp = LocalConfiguration.current.screenWidthDp.toFloat()

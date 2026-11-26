@@ -59,6 +59,7 @@ class WhatsAppHook(
 
     private var lastUiMode = -1
     private var externalTabState: MutableState<Int>? = null
+    private var externalMenuSignatureState: MutableState<Int>? = null
     private val hyperBouncePrefs = HyperBouncePrefs(module)
     private val fabIdCache = ConcurrentHashMap<Int, Boolean>()
 
@@ -87,8 +88,9 @@ class WhatsAppHook(
                 if (view != null && isTargetFab(view)) {
                     val ty = chain.args[0] as? Float ?: 0f
                     if (ty >= 0f) {
-                        computeFabShiftPx(view)?.let { shiftPx ->
-                            chain.args[0] = -shiftPx
+                        val shiftPx = computeFabShiftPx(view)
+                        if (shiftPx != null) {
+                            return@intercept chain.proceed(arrayOf(-shiftPx))
                         }
                     }
                 }
@@ -112,8 +114,30 @@ class WhatsAppHook(
             } catch (t: Throwable) {
                 module.log(Log.WARN, "HyperiOS", "Failed to hook X.0wf.A01: ${t.message}")
             }
+            try {
+                val a02 = tabConfigClass.getDeclaredMethod("A02")
+                module.hook(a02).intercept { true }
+            } catch (t: Throwable) {
+                module.log(Log.WARN, "HyperiOS", "Failed to hook X.0wf.A02: ${t.message}")
+            }
         } catch (t: Throwable) {
             module.log(Log.WARN, "HyperiOS", "X.0wf not found (WhatsApp version mismatch?): ${t.message}")
+        }
+
+        try {
+            val tabListClass = param.classLoader.loadClass("X.0rc")
+            val a06 = tabListClass.getDeclaredMethod("A06")
+            module.hook(a06).intercept { chain ->
+                val result = chain.proceed()
+                if (result is MutableList<*> && !result.contains(900)) {
+                    @Suppress("UNCHECKED_CAST")
+                    (result as MutableList<Int>).add(900)
+                    module.log(Log.INFO, "HyperiOS", "X.0rc.A06 injected tab 900")
+                }
+                result
+            }
+        } catch (t: Throwable) {
+            module.log(Log.WARN, "HyperiOS", "Failed to hook X.0rc.A06: ${t.message}")
         }
 
         try {
@@ -155,6 +179,13 @@ class WhatsAppHook(
                                             val state = externalTabState
                                             if (state != null && state.value != idx) {
                                                 state.value = idx
+                                            }
+                                        }
+
+                                        val sig = computeMenuSignature(stockBar)
+                                        externalMenuSignatureState?.let { state ->
+                                            if (state.value != sig) {
+                                                state.value = sig
                                             }
                                         }
 
@@ -276,6 +307,9 @@ class WhatsAppHook(
             val tabState = mutableStateOf(0)
             externalTabState = tabState
 
+            val menuSigState = mutableStateOf(computeMenuSignature(stockBar))
+            externalMenuSignatureState = menuSigState
+
             val backdropSource = rootGroup.findViewById<View>(android.R.id.content) ?: rootGroup
 
             // Direct scan and translationY adjustment for FABs already in rootGroup
@@ -297,6 +331,7 @@ class WhatsAppHook(
                     WhatsAppNavBarHost(
                         stockBar = stockBar,
                         externalTabState = tabState,
+                        menuSignatureState = menuSigState,
                         backdropSource = backdropSource,
                         hyperBouncePrefs = hyperBouncePrefs,
                     )

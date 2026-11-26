@@ -194,3 +194,84 @@ Currently `ModuleDefaults.NavApps.WhatsApp.TAB_WIDTH` is `92.0f` (designed for 4
    - Tapping or swiping to the 5th tab navigates to `SettingsFragment` (Profile + Settings), and tapping/swiping back works smoothly.
    - 5th tab renders `ic_wa_ios_profile_outline` (inactive) and `ic_wa_ios_profile_filled` (active, tinted with accent color).
    - Total bar width fits comfortably within screen bounds (`~370dp`) with no horizontal clipping.
+
+---
+
+## Revision 1: Runtime-Verified Fixes (FAB Crash, AOT Bypass, Async Menu Signature & Diagnostics)
+
+Runtime `logcat` and `whatsapp.log` verification on the initial implementation surfaced two concrete failures. The Coder Subagent must apply the exact fixes below in `WhatsAppHook.kt` and `WhatsAppNavBarHost.kt`.
+
+### 1. FAB Shifting Fix (`WhatsAppHook.kt`)
+- **Verified Root Cause:** `logcat` recorded `UnsupportedOperationException` in `WhatsAppHook.onPackageReady$lambda$1` because Vector's `Chain.args` list is unmodifiable; `chain.args[0] = -shiftPx` throws at runtime.
+- **Exact Fix:** Inside the `View.setTranslationY(float)` intercept lambda, do **not** mutate `chain.args[0]`. Instead, pass the replacement argument array directly to `chain.proceed(...)`:
+  ```kotlin
+  val view = chain.thisObject as? View
+  if (view != null && isTargetFab(view)) {
+      val ty = chain.args[0] as? Float ?: 0f
+      if (ty >= 0f) {
+          val shiftPx = computeFabShiftPx(view)
+          if (shiftPx != null) {
+              return@intercept chain.proceed(arrayOf(-shiftPx))
+          }
+      }
+  }
+  chain.proceed()
+  ```
+
+### 2. 5th Tab ("You" / Profile) Missing (`WhatsAppHook.kt` & `WhatsAppNavBarHost.kt`)
+- **Verified Root Causes:**
+  1. `whatsapp.log` showed ART AOT/profile inlining bypassed `X.0wf.A05()` / `A01()` on warm/subsequent launches (`setupMeTabLeftEntryPoint` ran instead of `missingIcon/menu=900`).
+  2. Setting `stockBar.layoutParams.height = 0` inside `WhatsAppHook`'s `OnPreDrawListener` prevents `OnLayoutChangeListener` in `WhatsAppNavBarHost` from reliably catching asynchronous `WDSBottomBar` menu population (`menu.childCount` or `visibility` changes).
+
+- **Exact Fixes:**
+
+  #### 2.1 Hook `X.0rc.A06()` Directly + Keep `X.0wf` Hooks (`WhatsAppHook.kt`)
+  1. Keep the existing `X.0wf.A05()` (`true`) and `X.0wf.A01()` (`7`) hooks, and also add a `try/catch` hook on `X.0wf.A02()` returning `true` (if present).
+  2. Hook `X.0rc.A06()` (which returns `ArrayList<Integer>` of tab IDs) inside `onPackageReady()`:
+     ```kotlin
+     try {
+         val tabListClass = param.classLoader.loadClass("X.0rc")
+         val a06 = tabListClass.getDeclaredMethod("A06")
+         module.hook(a06).intercept { chain ->
+             val result = chain.proceed()
+             @Suppress("UNCHECKED_CAST")
+             val list = result as? MutableList<Int>
+             if (list != null && !list.contains(900)) {
+                 list.add(900)
+                 module.log(Log.INFO, "HyperiOS", "Injected tab 900 into X.0rc.A06() -> $list")
+             }
+             result
+         }
+     } catch (t: Throwable) {
+         module.log(Log.WARN, "HyperiOS", "Failed to hook X.0rc.A06: ${t.message}")
+     }
+     ```
+
+  #### 2.2 Plumb `menuSignatureState: MutableState<Int>` from `WhatsAppHook.kt` to `WhatsAppNavBarHost.kt`
+  1. Make `computeMenuSignature(stockBar: ViewGroup): Int` `internal` in `WhatsAppNavBarHost.kt` so `WhatsAppHook.kt` reuses the exact same function without duplicating logic.
+  2. In `WhatsAppHook.kt`:
+     - Add field `private var externalMenuSignatureState: MutableState<Int>? = null`.
+     - In `executeUIHeist(stockBar)`: create `val menuSignatureState = mutableStateOf(computeMenuSignature(stockBar))`, assign `externalMenuSignatureState = menuSignatureState`, and pass `menuSignatureState = menuSignatureState` to `WhatsAppNavBarHost(...)`.
+     - In `stockBar.viewTreeObserver.addOnPreDrawListener`'s `onPreDraw()`: compute `val sig = computeMenuSignature(stockBar)` and update:
+       ```kotlin
+       externalMenuSignatureState?.let { state ->
+           if (state.value != sig) {
+               state.value = sig
+           }
+       }
+       ```
+  3. In `WhatsAppNavBarHost.kt`:
+     - Add parameter `menuSignatureState: State<Int>` (accepts `MutableState<Int>`) to `WhatsAppNavBarHost(...)`.
+     - Read `val menuSignature by menuSignatureState` and include it in the `remember` key:
+       ```kotlin
+       val tabs = remember(stockBar, isDark, menuVersion, menuSignature) {
+           extractWhatsAppTabs(stockBar, isDark)
+       }
+       ```
+
+  #### 2.3 Concise Diagnostic Logging (`HyperiOS` tag)
+  1. **`WhatsAppHook.kt`:** Log `X.0rc.A06()` tab-900 injection (as shown in 2.1) and any hook failure under `"HyperiOS"`.
+  2. **`WhatsAppNavBarHost.kt` (`extractWhatsAppTabs()`):** Log concise diagnostics via `Log.i("HyperiOS", ...)`:
+     - `menu.childCount` upon entering `extractWhatsAppTabs`.
+     - Per-tab `index`, `tab.id`, `tab.visibility`, and `label` (or `semanticText`).
+     - Final `out.size` before returning `out`.
