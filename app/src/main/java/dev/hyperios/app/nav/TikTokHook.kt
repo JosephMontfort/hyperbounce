@@ -178,16 +178,19 @@ object TikTokHook {
     }
 
     @Volatile
-    private var isCommentSheetVisible = false
+    private var isCommentSheetPresented = false
 
     /**
      * Checks whether the comment sheet is physically attached and showing on screen.
      * Prevents false positives from preloaded DefaultCommentPageContainerFragment.
      */
     private fun isCommentSheetActuallyShowing(activity: Activity?): Boolean {
-        val act = activity ?: return isCommentSheetVisible
+        if (!isCommentSheetPresented) {
+            return false
+        }
+        val act = activity ?: return false
         try {
-            val decor = act.window?.decorView as? ViewGroup ?: return isCommentSheetVisible
+            val decor = act.window?.decorView as? ViewGroup ?: return false
             var sheetView: View? = decor.findViewById(ID_COMMENT_SHEET_CONTAINER)
             if (sheetView == null) {
                 fun findSheet(v: View): View? {
@@ -216,11 +219,13 @@ object TikTokHook {
                 val isVisible = sheetView.visibility == View.VISIBLE
                 val isNotDismissed = sheetView.translationY <= 50f
                 val showing = isAttached && isVisible && isNotDismissed
-                isCommentSheetVisible = showing
+                if (!showing) {
+                    isCommentSheetPresented = false
+                }
                 return showing
             }
         } catch (_: Throwable) {}
-        isCommentSheetVisible = false
+        isCommentSheetPresented = false
         return false
     }
 
@@ -295,8 +300,13 @@ object TikTokHook {
             Log.w(TAG, "executeUIHeist aborted - decorView is null")
             return
         }
-        if (decorView.findViewWithTag<View>("HyperFloatingBar") != null) {
-            Log.d(TAG, "HyperFloatingBar already attached to decorView")
+        val existing = decorView.findViewWithTag<View>("HyperFloatingBar")
+        if (existing != null) {
+            Log.d(TAG, "HyperFloatingBar already attached to decorView, ensuring visible")
+            activity.runOnUiThread {
+                existing.visibility = View.VISIBLE
+                setBarVisibilityInternal(true, activity)
+            }
             return
         }
 
@@ -305,7 +315,12 @@ object TikTokHook {
         activity.runOnUiThread {
             try {
                 if (activity.isFinishing || activity.isDestroyed) return@runOnUiThread
-                if (decorView.findViewWithTag<View>("HyperFloatingBar") != null) return@runOnUiThread
+                val existingInUiThread = decorView.findViewWithTag<View>("HyperFloatingBar")
+                if (existingInUiThread != null) {
+                    existingInUiThread.visibility = View.VISIBLE
+                    setBarVisibilityInternal(true, activity)
+                    return@runOnUiThread
+                }
 
                 val lifecycleOwner = FakeLifecycleOwner().apply {
                     registry.handleLifecycleEvent(Lifecycle.Event.ON_CREATE)
@@ -374,7 +389,10 @@ object TikTokHook {
         isOverlayHidden = !visible
         val act = activity ?: activeFloatingBar?.let { findActivity(it) }
         val runnable = Runnable {
-            val bar = activeFloatingBar ?: act?.window?.decorView?.findViewWithTag<View>("HyperFloatingBar")
+            val bar = (act?.window?.decorView?.findViewWithTag<View>("HyperFloatingBar") as? ComposeView) ?: activeFloatingBar
+            if (bar != null) {
+                activeFloatingBar = bar
+            }
             if (visible) {
                 bar?.visibility = View.VISIBLE
             } else {
@@ -768,14 +786,38 @@ object TikTokHook {
                         val act = chain.thisObject as? Activity
                         if (act != null) {
                             val isShowing = isCommentSheetActuallyShowing(act)
-                            setBarVisibilityInternal(!isShowing, act)
-                            val decor = act.window?.decorView as? ViewGroup
-                            if (decor != null) {
-                                val tabBar = findTabBar(decor)
-                                if (tabBar != null) {
-                                    suppressNativeTabBar(tabBar)
-                                    executeUIHeist(act, tabBar)
+                            if (!isShowing) {
+                                setBarVisibilityInternal(true, act)
+                                val decor = act.window?.decorView as? ViewGroup
+                                if (decor != null) {
+                                    val tabBar = findTabBar(decor)
+                                    if (tabBar != null) {
+                                        suppressNativeTabBar(tabBar)
+                                        executeUIHeist(act, tabBar)
+                                    }
                                 }
+                            } else {
+                                setBarVisibilityInternal(false, act)
+                            }
+                        }
+                        result
+                    }
+                } catch (_: Throwable) {}
+
+                // onWindowFocusChanged
+                try {
+                    val onWindowFocusChangedMethod = try {
+                        actClass.getDeclaredMethod("onWindowFocusChanged", Boolean::class.javaPrimitiveType)
+                    } catch (_: NoSuchMethodException) {
+                        actClass.getMethod("onWindowFocusChanged", Boolean::class.javaPrimitiveType)
+                    }
+                    module.hook(onWindowFocusChangedMethod).intercept { chain ->
+                        val result = chain.proceed()
+                        val hasFocus = chain.args.getOrNull(0) as? Boolean ?: false
+                        val act = chain.thisObject as? Activity
+                        if (act != null && hasFocus) {
+                            if (!isCommentSheetActuallyShowing(act)) {
+                                setBarVisibilityInternal(true, act)
                             }
                         }
                         result
@@ -805,7 +847,7 @@ object TikTokHook {
                         "LJJJJ" -> { // Comment Sheet Show (0 parameters)
                             if (m.parameterTypes.isEmpty()) {
                                 module.hook(m).intercept { chain ->
-                                    isCommentSheetVisible = true
+                                    isCommentSheetPresented = true
                                     setBarVisibilityInternal(false)
                                     chain.proceed()
                                 }
@@ -815,7 +857,7 @@ object TikTokHook {
                         "LJLLI" -> { // Comment Sheet Dismiss (0 parameters)
                             if (m.parameterTypes.isEmpty()) {
                                 module.hook(m).intercept { chain ->
-                                    isCommentSheetVisible = false
+                                    isCommentSheetPresented = false
                                     setBarVisibilityInternal(true)
                                     chain.proceed()
                                 }
@@ -833,7 +875,7 @@ object TikTokHook {
             sheetClass.declaredMethods.filter { it.name == "dismiss" || it.name == "dismissAllowingStateLoss" }.forEach { m ->
                 if (m.parameterTypes.isEmpty()) {
                     module.hook(m).intercept { chain ->
-                        isCommentSheetVisible = false
+                        isCommentSheetPresented = false
                         setBarVisibilityInternal(true)
                         chain.proceed()
                     }
