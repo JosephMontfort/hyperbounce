@@ -25,6 +25,7 @@ object ModuleDefaults {
         const val APP_YOUTUBE_ENABLED = false
         const val APP_FACEBOOK_ENABLED = false
         const val APP_TIKTOK_ENABLED = false
+        const val APP_TWITTER_ENABLED = false
         const val MIUIX_APPS_HOOKING_ENABLED = false
     }
 
@@ -654,6 +655,37 @@ object ModuleDefaults {
             const val SAFE_MODE_ENABLE: Boolean = false
             const val LIQUID_GLASS: Boolean = true
             const val CUSTOM_ACCENT_COLOR: Int = 0xFFFE2C55.toInt() // TikTok iconic red/pink
+        }
+
+        object Twitter {
+            const val BAR_HEIGHT: Float = 56.0f
+
+            const val TAB_WIDTH: Float = 64.0f
+            val TAB_WIDTH_RANGE = 40.0f..100.0f
+
+            const val CORNER_RADIUS: Float = 32.0f
+            val CORNER_RADIUS_RANGE = 0.0f..50.0f
+
+            const val BOTTOM_MARGIN: Float = 20.0f
+            val BOTTOM_MARGIN_RANGE = 0.0f..80.0f
+
+            const val CONTAINER_OPACITY: Float = 0.40f
+            val CONTAINER_OPACITY_RANGE = 0.0f..1.0f
+
+            const val PILL_CONTAINER_OPACITY: Float = 1.0f
+            val PILL_CONTAINER_OPACITY_RANGE = 0.0f..1.0f
+
+            const val PILL_GLASS_INTENSITY: Float = 1.0f
+
+            const val AUTO_SHRINK: Boolean = false
+            const val AUTO_SHRINK_SCALE: Float = 0.90f
+            val AUTO_SHRINK_SCALE_RANGE = 0.50f..1.00f
+
+            const val SAFE_MODE_ENABLE: Boolean = false
+            const val LIQUID_GLASS: Boolean = true
+            const val SHOW_LABELS: Boolean = false
+            const val ACCENT: String = "Custom"
+            const val CUSTOM_ACCENT_COLOR: Long = 0xFF1D9BF0L // authentic X / Twitter blue
         }
     }
 

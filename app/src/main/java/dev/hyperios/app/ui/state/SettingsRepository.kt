@@ -482,6 +482,7 @@ class SettingsRepository(context: Context) {
     val youtube = AppSettingsHolder(NavApp.YouTube)
     val facebook = AppSettingsHolder(NavApp.Facebook)
     val tiktok = AppSettingsHolder(NavApp.TikTok)
+    val twitter = AppSettingsHolder(NavApp.Twitter)
 
     fun appSettings(app: NavApp): AppSettingsHolder = when (app) {
         NavApp.Instagram -> instagram
@@ -489,6 +490,7 @@ class SettingsRepository(context: Context) {
         NavApp.YouTube -> youtube
         NavApp.Facebook -> facebook
         NavApp.TikTok -> tiktok
+        NavApp.Twitter -> twitter
     }
 
     var togglesSlidersHookEnabled by prefsBooleanState("toggles_sliders_hook_enabled", false)
@@ -583,6 +585,7 @@ class SettingsRepository(context: Context) {
         youtube.reloadFromDefaults()
         facebook.reloadFromDefaults()
         tiktok.reloadFromDefaults()
+        twitter.reloadFromDefaults()
         toggleGlass.reloadFromDefaults()
         sliderGlass.reloadFromDefaults()
         globalGlass.reloadFromDefaults()
@@ -689,6 +692,22 @@ class SettingsRepository(context: Context) {
                 autoShrinkScale = ModuleDefaults.NavApps.TikTok.AUTO_SHRINK_SCALE,
                 accent = AccentPreset.Custom,
                 customAccentColor = ModuleDefaults.NavApps.TikTok.CUSTOM_ACCENT_COLOR.toLong() and 0xFFFFFFFFL,
+                pillShadow = false
+            )
+            NavApp.Twitter -> NavBarAppSettings(
+                liquidGlass = ModuleDefaults.NavApps.Twitter.LIQUID_GLASS,
+                barHeight = ModuleDefaults.NavApps.Twitter.BAR_HEIGHT,
+                tabWidth = ModuleDefaults.NavApps.Twitter.TAB_WIDTH,
+                cornerRadius = ModuleDefaults.NavApps.Twitter.CORNER_RADIUS,
+                bottomMargin = ModuleDefaults.NavApps.Twitter.BOTTOM_MARGIN,
+                containerOpacity = ModuleDefaults.NavApps.Twitter.CONTAINER_OPACITY,
+                pillContainerOpacity = ModuleDefaults.NavApps.Twitter.PILL_CONTAINER_OPACITY,
+                pillGlassIntensity = ModuleDefaults.NavApps.Twitter.PILL_GLASS_INTENSITY,
+                autoShrink = ModuleDefaults.NavApps.Twitter.AUTO_SHRINK,
+                autoShrinkScale = ModuleDefaults.NavApps.Twitter.AUTO_SHRINK_SCALE,
+                accent = AccentPreset.Custom,
+                customAccentColor = ModuleDefaults.NavApps.Twitter.CUSTOM_ACCENT_COLOR,
+                showLabels = ModuleDefaults.NavApps.Twitter.SHOW_LABELS,
                 pillShadow = false
             )
         }

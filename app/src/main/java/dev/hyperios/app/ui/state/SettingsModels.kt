@@ -60,7 +60,8 @@ enum class NavApp(val displayName: String, val packageName: String) {
     WhatsApp("WhatsApp", "com.whatsapp"),
     YouTube("YouTube", "com.google.android.youtube"),
     Facebook("Facebook", "com.facebook.katana"),
-    TikTok("TikTok", "com.ss.android.ugc.trill")
+    TikTok("TikTok", "com.ss.android.ugc.trill"),
+    Twitter("X (Twitter)", "com.twitter.android")
 }
 
 /** One app's floating nav bar settings. Stored independently per [NavApp] — changing

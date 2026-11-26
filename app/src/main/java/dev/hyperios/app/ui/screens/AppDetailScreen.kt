@@ -258,6 +258,23 @@ fun AppDetailScreen(
                     }
                 }
             }
+
+            NavApp.Twitter -> {
+                item {
+                    SectionHeader("X (Twitter) Settings", colors)
+                    GlassCard(backdrop, Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
+                        SettingsToggleRow(
+                            title = "Show Tab Labels",
+                            subtitle = "Display text labels below navigation icons",
+                            colors = colors,
+                            backdrop = backdrop,
+                            checked = s.showLabels,
+                            onCheckedChange = holder::setShowLabels,
+                            enabled = s.enabled
+                        )
+                    }
+                }
+            }
         }
     }
 }

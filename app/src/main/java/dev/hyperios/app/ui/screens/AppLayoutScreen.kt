@@ -32,6 +32,7 @@ fun AppLayoutScreen(
         NavApp.Instagram -> ModuleDefaults.NavApps.Instagram.CORNER_RADIUS
         NavApp.Facebook -> ModuleDefaults.NavApps.Facebook.CORNER_RADIUS
         NavApp.TikTok -> ModuleDefaults.NavApps.TikTok.CORNER_RADIUS
+        NavApp.Twitter -> ModuleDefaults.NavApps.Twitter.CORNER_RADIUS
     }
     val defaultBarHeight = when (app) {
         NavApp.WhatsApp -> ModuleDefaults.NavApps.WhatsApp.BAR_HEIGHT
@@ -39,6 +40,7 @@ fun AppLayoutScreen(
         NavApp.Instagram -> ModuleDefaults.NavApps.Instagram.BAR_HEIGHT
         NavApp.Facebook -> ModuleDefaults.NavApps.Facebook.BAR_HEIGHT
         NavApp.TikTok -> ModuleDefaults.NavApps.TikTok.BAR_HEIGHT
+        NavApp.Twitter -> ModuleDefaults.NavApps.Twitter.BAR_HEIGHT
     }
     val defaultTabWidth = when (app) {
         NavApp.WhatsApp -> ModuleDefaults.NavApps.WhatsApp.TAB_WIDTH
@@ -46,6 +48,7 @@ fun AppLayoutScreen(
         NavApp.Instagram -> ModuleDefaults.NavApps.Instagram.TAB_WIDTH
         NavApp.Facebook -> ModuleDefaults.NavApps.Facebook.TAB_WIDTH
         NavApp.TikTok -> ModuleDefaults.NavApps.TikTok.TAB_WIDTH
+        NavApp.Twitter -> ModuleDefaults.NavApps.Twitter.TAB_WIDTH
     }
     val defaultBottomMargin = when (app) {
         NavApp.WhatsApp -> ModuleDefaults.NavApps.WhatsApp.BOTTOM_MARGIN
@@ -53,6 +56,7 @@ fun AppLayoutScreen(
         NavApp.Instagram -> ModuleDefaults.NavApps.Instagram.BOTTOM_MARGIN
         NavApp.Facebook -> ModuleDefaults.NavApps.Facebook.BOTTOM_MARGIN
         NavApp.TikTok -> ModuleDefaults.NavApps.TikTok.BOTTOM_MARGIN
+        NavApp.Twitter -> ModuleDefaults.NavApps.Twitter.BOTTOM_MARGIN
     }
 
     ScreenScaffold(

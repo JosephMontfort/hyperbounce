@@ -675,6 +675,15 @@ object SearchIndex {
             keywords = listOf("tiktok", "navbar", "floating", "bottom bar", "musically")
         ),
         SearchItem(
+            id = "nav_twitter",
+            title = "X (Twitter) Navigation Bar",
+            category = "Floating Navigation Bar > X (Twitter)",
+            destination = Destination.AppDetail(NavApp.Twitter),
+            highlightKey = "X (Twitter) Navigation Bar",
+            scrollIndex = 0,
+            keywords = listOf("twitter", "x", "navbar", "floating", "bottom bar", "tweet")
+        ),
+        SearchItem(
             id = "nav_bar_blur",
             title = "Bar Blur Intensity",
             category = "Floating Navigation Bar > Appearance",

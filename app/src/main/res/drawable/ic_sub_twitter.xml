@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="28dp"
+    android:height="28dp"
+    android:viewportWidth="28"
+    android:viewportHeight="28">
+    <!-- Xiaomi HyperOS Continuous Squircle Background -->
+    <path
+        android:fillColor="#000000"
+        android:pathData="M-0.001,11.952C-0.001,7.768 -0.001,5.677 0.813,4.079C1.529,2.673 2.672,1.53 4.078,0.814C5.676,0 7.767,0 11.951,0H16.047C20.231,0 22.322,0 23.92,0.814C25.326,1.53 26.469,2.673 27.185,4.079C27.999,5.677 27.999,7.768 27.999,11.952V16.048C27.999,20.232 27.999,22.323 27.185,23.921C26.469,25.327 25.326,26.47 23.92,27.186C22.322,28 20.231,28 16.047,28H11.951C7.767,28 5.676,28 4.078,27.186C2.672,26.47 1.529,25.327 0.813,23.921C-0.001,22.323 -0.001,20.232 -0.001,16.048V11.952Z"/>
+    <!-- X Logo scaled and centered into 28x28 viewport (scale ~0.65, offset x=6.2, y=6.2) -->
+    <group
+        android:scaleX="0.65"
+        android:scaleY="0.65"
+        android:translateX="6.2"
+        android:translateY="6.2">
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="M21.8721 21.5L14.2083 10.321L21.3585 2H18.8698L13.1022 8.71376L8.50387 2H2.23061L9.61789 12.7753L2.12 21.5H4.60876L10.724 14.3825L15.6067 21.5H21.88H21.8721ZM7.68219 3.5676L18.9014 19.9324H16.4205L5.20132 3.5676H7.68219Z"
+            android:fillType="evenOdd" />
+    </group>
+</vector>

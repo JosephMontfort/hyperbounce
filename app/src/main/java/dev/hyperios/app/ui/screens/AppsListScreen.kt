@@ -110,6 +110,22 @@ fun AppsListScreen(
                         )
                     }
                 )
+
+                RowDivider(colors.separator, insetStart = 72.dp)
+
+                FeatureCategoryRow(
+                    title = "X (Twitter)",
+                    description = "Liquid Glass Floating Bottom Bar in X (Twitter)",
+                    colors = colors,
+                    onClick = { onNavigate(Destination.AppDetail(NavApp.Twitter)) },
+                    icon = {
+                        Image(
+                            painter = painterResource(R.drawable.ic_sub_twitter),
+                            contentDescription = "X (Twitter)",
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
+                )
             }
         }
     }

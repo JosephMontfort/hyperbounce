@@ -75,6 +75,7 @@ class HyperBouncePrefs(module: XposedInterface) {
             "whatsapp" -> ModuleDefaults.NavApps.WhatsApp.CORNER_RADIUS
             "facebook" -> ModuleDefaults.NavApps.Facebook.CORNER_RADIUS
             "tiktok" -> ModuleDefaults.NavApps.TikTok.CORNER_RADIUS
+            "twitter" -> ModuleDefaults.NavApps.Twitter.CORNER_RADIUS
             else -> ModuleDefaults.NavApps.Instagram.CORNER_RADIUS
         })
 
@@ -83,6 +84,7 @@ class HyperBouncePrefs(module: XposedInterface) {
             "whatsapp" -> ModuleDefaults.NavApps.WhatsApp.BAR_HEIGHT
             "facebook" -> ModuleDefaults.NavApps.Facebook.BAR_HEIGHT
             "tiktok" -> ModuleDefaults.NavApps.TikTok.BAR_HEIGHT
+            "twitter" -> ModuleDefaults.NavApps.Twitter.BAR_HEIGHT
             else -> 50f
         })
 
@@ -93,6 +95,7 @@ class HyperBouncePrefs(module: XposedInterface) {
             "youtube" -> ModuleDefaults.NavApps.YouTube.TAB_WIDTH
             "facebook" -> ModuleDefaults.NavApps.Facebook.TAB_WIDTH
             "tiktok" -> ModuleDefaults.NavApps.TikTok.TAB_WIDTH
+            "twitter" -> ModuleDefaults.NavApps.Twitter.TAB_WIDTH
             else -> 75f
         })
 
@@ -101,6 +104,7 @@ class HyperBouncePrefs(module: XposedInterface) {
             "whatsapp" -> ModuleDefaults.NavApps.WhatsApp.BOTTOM_MARGIN
             "facebook" -> ModuleDefaults.NavApps.Facebook.BOTTOM_MARGIN
             "tiktok" -> ModuleDefaults.NavApps.TikTok.BOTTOM_MARGIN
+            "twitter" -> ModuleDefaults.NavApps.Twitter.BOTTOM_MARGIN
             else -> ModuleDefaults.NavApps.Instagram.BOTTOM_MARGIN
         })
 
@@ -114,6 +118,7 @@ class HyperBouncePrefs(module: XposedInterface) {
         prefs.getString("app_${appKey}_accent", when (appKey) {
             "whatsapp" -> ModuleDefaults.NavApps.WhatsApp.ACCENT
             "facebook" -> ModuleDefaults.NavApps.Facebook.ACCENT
+            "twitter" -> ModuleDefaults.NavApps.Twitter.ACCENT
             else -> "Auto"
         }) ?: "Auto"
 
@@ -121,6 +126,7 @@ class HyperBouncePrefs(module: XposedInterface) {
         prefs.getLong("app_${appKey}_custom_accent_color", when (appKey) {
             "facebook" -> ModuleDefaults.NavApps.Facebook.CUSTOM_ACCENT_COLOR
             "tiktok" -> ModuleDefaults.NavApps.TikTok.CUSTOM_ACCENT_COLOR.toLong() and 0xFFFFFFFFL
+            "twitter" -> ModuleDefaults.NavApps.Twitter.CUSTOM_ACCENT_COLOR
             else -> 0xFF0088FFL
         })
 
@@ -138,7 +144,7 @@ class HyperBouncePrefs(module: XposedInterface) {
 
     fun appAutoShrink(appKey: String): Boolean =
         prefs.getBoolean("app_${appKey}_auto_shrink", when (appKey) {
-            "whatsapp", "facebook" -> false
+            "whatsapp", "facebook", "twitter" -> false
             else -> true
         })
 
@@ -147,11 +153,12 @@ class HyperBouncePrefs(module: XposedInterface) {
             "whatsapp" -> ModuleDefaults.NavApps.WhatsApp.AUTO_SHRINK_SCALE
             "facebook" -> ModuleDefaults.NavApps.Facebook.AUTO_SHRINK_SCALE
             "tiktok" -> ModuleDefaults.NavApps.TikTok.AUTO_SHRINK_SCALE
+            "twitter" -> ModuleDefaults.NavApps.Twitter.AUTO_SHRINK_SCALE
             else -> ModuleDefaults.NavApps.YouTube.AUTO_SHRINK_SCALE
         })
 
     fun appShowLabels(appKey: String): Boolean =
-        prefs.getBoolean("app_${appKey}_show_labels", true)
+        prefs.getBoolean("app_${appKey}_show_labels", if (appKey == "twitter") ModuleDefaults.NavApps.Twitter.SHOW_LABELS else true)
 
     val facebookReelsAutohide: Boolean
         get() = prefs.getBoolean("app_facebook_reels_autohide", ModuleDefaults.NavApps.Facebook.REELS_AUTOHIDE)

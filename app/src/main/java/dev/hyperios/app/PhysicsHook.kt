@@ -4,6 +4,7 @@ import android.util.Log
 import dev.hyperios.app.nav.FacebookHook
 import dev.hyperios.app.nav.InstagramHook
 import dev.hyperios.app.nav.TikTokHook
+import dev.hyperios.app.nav.TwitterHook
 import dev.hyperios.app.nav.WhatsAppHook
 import dev.hyperios.app.nav.YouTubeHook
 import dev.hyperios.app.prefs.HyperBouncePrefs
@@ -78,6 +79,12 @@ class PhysicsHook : XposedModule() {
                     val enabled = HyperBouncePrefs(this).appEnabled("tiktok")
                     Log.i("HyperBounce", "PhysicsHook: TikTok hook dispatching. app_tiktok_enabled=$enabled")
                     TikTokHook.init(this, param, HyperBouncePrefs(this))
+                }
+
+                param.packageName == "com.twitter.android" -> {
+                    val enabled = HyperBouncePrefs(this).appEnabled("twitter")
+                    Log.i("HyperBounce", "PhysicsHook: Twitter hook dispatching. app_twitter_enabled=$enabled")
+                    TwitterHook.init(this, param, HyperBouncePrefs(this))
                 }
 
                 param.packageName == "com.android.systemui" -> {
