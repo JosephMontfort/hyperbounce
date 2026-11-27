@@ -40,7 +40,8 @@ This document defines the strict, non-negotiable operational rules for Antigravi
   1. **Parallel Investigators**: Parallel subagents investigate the root cause, inspect decompiled bytecode/smali/resources, analyze runtime behaviors, and inspect device logs.
   2. **Implementation Architectural Planner**: A dedicated subagent synthesizes findings and drafts an architectural implementation plan/spec (`.md`).
   3. **Coder (Implementation)**: A dedicated implementation subagent writes the code cleanly in accordance with the architectural plan.
-- **Direct GitHub Push**: The verifier role is explicitly eliminated. Once the coder subagent completes their work, the coordinator / coder directly commits and pushes changes to GitHub to trigger the remote CI build.
+- **Direct GitHub Push & Mandatory Deployment Routine**: The verifier role is explicitly eliminated. Once the coder subagent completes their work, the coordinator / coder directly commits and pushes changes to GitHub to trigger the remote CI build.
+- **End-to-End Build & Verification Rule**: After the coder finishes implementation and pushes to GitHub, the routine is NOT finished until GitHub Actions finishes building, the release APK is downloaded, and the APK is installed on the user's rooted device (`su -c "pm install -r <apk>"`), target app restarted (`su -c "am force-stop com.twitter.android && monkey -p com.twitter.android -c android.intent.category.LAUNCHER 1"`), and verified.
 - **Full Context Seeding**: Every subagent invocation must receive:
   - Complete background context of the project and current branch.
   - Exact file paths, tools, working directories, and environment constraints.

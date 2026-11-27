@@ -1,6 +1,8 @@
 package dev.hyperios.app.nav
 
+import android.app.Activity
 import android.graphics.Bitmap
+import android.view.Window
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.EaseOut
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -108,8 +110,10 @@ fun LiquidNavigationBar(
     badgeCounts: List<String?> = emptyList(),
     badgeDots: List<Boolean> = emptyList(),
     enablePixelCopy: Boolean = false,
+    enableWindowPixelCopy: Boolean = false,
     drawerProgress: Float = 0f,
     onDrawerCloseClick: (() -> Unit)? = null,
+    window: Window? = (sourceView.context as? Activity)?.window ?: (sourceView.rootView.context as? Activity)?.window,
 ) {
     if (tabs.isEmpty()) return
 
@@ -129,8 +133,8 @@ fun LiquidNavigationBar(
     val density = LocalDensity.current
     val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
     val liveBackdrop = if (liquidGlass) {
-        remember(sourceView) {
-            LiquidGlassViewBackdrop(sourceView)
+        remember(sourceView, window) {
+            LiquidGlassViewBackdrop(sourceView, window)
         }
     } else null
     // Do not read capturedFrame during composition. The custom Backdrop reads the
@@ -142,6 +146,7 @@ fun LiquidNavigationBar(
 
     if (liveBackdrop != null) {
         liveBackdrop.enablePixelCopy = enablePixelCopy
+        liveBackdrop.enableWindowPixelCopy = enableWindowPixelCopy
         DisposableEffect(liveBackdrop) {
             sourceView.post { liveBackdrop.start() }
             onDispose { liveBackdrop.release() }

@@ -9,6 +9,7 @@ import android.graphics.drawable.Drawable
 import android.util.AttributeSet
 import android.view.View
 import android.view.ViewGroup
+import android.view.Window
 import android.widget.FrameLayout
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.Composable
@@ -48,12 +49,12 @@ private val TWITTER_TAB_SPECS = listOf(
         activeName = "ic_vector_search",
         activeStaticId = 0x7f08071b
     ),
-    // Tab 2: Grok
+    // Tab 2: Authentic Grok Tab
     TwitterTabSpec(
-        inactiveName = "ic_vector_grok_stroke",
-        inactiveStaticId = 0x7f0805aa,
-        activeName = "ic_vector_grok_icon_filled",
-        activeStaticId = 0x7f0805a7
+        inactiveName = "ic_vector_xai_grok_tab_stroke",
+        inactiveStaticId = 0x7f080816,
+        activeName = "ic_vector_xai_grok_tab",
+        activeStaticId = 0x7f080815
     ),
     // Tab 3: Notifications
     TwitterTabSpec(
@@ -95,8 +96,16 @@ private fun loadTwitterHostDrawable(context: Context, resName: String, staticRes
     val fallbackNames = when (resName) {
         "ic_vector_chat" -> listOf("ic_vector_messages")
         "ic_vector_chat_stroke" -> listOf("ic_vector_messages_stroke")
-        "ic_vector_grok_stroke" -> listOf("ic_vector_grok_icon", "ic_vector_grok_bot_logo")
-        "ic_vector_grok_icon_filled" -> listOf("ic_vector_grok_icon", "ic_vector_grok_logo")
+        "ic_vector_xai_grok_tab_stroke" -> listOf(
+            "ic_vector_grok_stroke",
+            "ic_vector_grok_icon",
+            "ic_vector_grok_shortcut",
+            "ic_vector_grok_bot_logo"
+        )
+        "ic_vector_xai_grok_tab" -> listOf(
+            "ic_vector_grok_icon_filled",
+            "ic_vector_grok_logo"
+        )
         else -> emptyList()
     }
     for (name in fallbackNames) {
@@ -163,6 +172,7 @@ class TwitterNavBarHost @JvmOverloads constructor(
     context: Context,
     val prefs: HyperBouncePrefs,
     val backdropSource: View = (context as? Activity)?.findViewById(android.R.id.content) ?: View(context),
+    val window: Window? = (context as? Activity)?.window,
     attrs: AttributeSet? = null,
     defStyleAttr: Int = 0
 ) : FrameLayout(context, attrs, defStyleAttr) {
@@ -181,7 +191,8 @@ class TwitterNavBarHost @JvmOverloads constructor(
             setContent {
                 TwitterNavBarHost(
                     backdropSource = backdropSource,
-                    hyperBouncePrefs = prefs
+                    hyperBouncePrefs = prefs,
+                    window = window
                 )
             }
         }
@@ -192,7 +203,8 @@ class TwitterNavBarHost @JvmOverloads constructor(
 @Composable
 fun TwitterNavBarHost(
     backdropSource: View,
-    hyperBouncePrefs: HyperBouncePrefs
+    hyperBouncePrefs: HyperBouncePrefs,
+    window: Window? = (backdropSource.context as? Activity)?.window
 ) {
     val live = rememberLiveNavBarSettings(hyperBouncePrefs, "twitter")
     val isDark = when (live.themeMode) {
@@ -244,6 +256,9 @@ fun TwitterNavBarHost(
             TwitterHook.dispatchTabClick(index)
         },
         sourceView = backdropSource,
+        enablePixelCopy = true,
+        enableWindowPixelCopy = true,
+        window = window,
         forceLightTheme = live.themeMode == "Light",
         forceDarkTheme = live.themeMode == "Dark",
         containerAlpha = live.containerOpacity,

@@ -1,5 +1,6 @@
 package dev.hyperios.app.nav.glass
 
+import android.app.Activity
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
@@ -20,6 +21,7 @@ import android.view.TextureView
 import android.view.View
 import android.view.ViewGroup
 import android.view.ViewTreeObserver
+import android.view.Window
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -49,9 +51,15 @@ internal data class LiquidGlassCapturedFrame(
 
 internal class LiquidGlassViewBackdrop(
     private val sourceView: View,
+    private val explicitWindow: Window? = null,
 ) : Backdrop {
 
     override val isCoordinatesDependent: Boolean = true
+
+    private val effectiveWindow: Window?
+        get() = explicitWindow
+            ?: (sourceView.context as? Activity)?.window
+            ?: (sourceView.rootView.context as? Activity)?.window
 
     private var front: Bitmap? = null
     private var back: Bitmap? = null
@@ -59,6 +67,13 @@ internal class LiquidGlassViewBackdrop(
 
     @Volatile
     var enablePixelCopy: Boolean = false
+
+    @Volatile
+    var enableWindowPixelCopy: Boolean = false
+
+    private var hasSoftwareRenderingFailed: Boolean = false
+    @Volatile
+    private var isWindowCopying: Boolean = false
 
     companion object {
         private val bgThread by lazy {
@@ -112,6 +127,11 @@ internal class LiquidGlassViewBackdrop(
         val currentRegion = region ?: return
         if (currentRegion.width <= 0 || currentRegion.height <= 0) return
 
+        if (hasSoftwareRenderingFailed || enableWindowPixelCopy) {
+            requestHardwareWindowCopy(currentRegion, now)
+            return
+        }
+
         val location = IntArray(2)
         sourceView.getLocationInWindow(location)
 
@@ -163,12 +183,68 @@ internal class LiquidGlassViewBackdrop(
             lastCaptureNanos = now
         } catch (e: IllegalArgumentException) {
             // Software rendering does not support RuntimeShader (e.g. if sourceView contains RuntimeShader / AGSL)
-            // Catch gracefully to prevent flooding logcat every 16ms
+            hasSoftwareRenderingFailed = true
+            requestHardwareWindowCopy(currentRegion, now)
         } catch (t: Throwable) {
             Log.e(
                 "HyperBounce-Backdrop",
                 "capture failed: ${t.javaClass.simpleName}: ${t.message}",
             )
+        }
+    }
+
+    private fun requestHardwareWindowCopy(currentRegion: RectFState, now: Long) {
+        val win = effectiveWindow ?: return
+        val decor = win.decorView ?: return
+        val decorWidth = decor.width
+        val decorHeight = decor.height
+        if (decorWidth <= 0 || decorHeight <= 0) return
+
+        if (isWindowCopying) return
+
+        val scale = 0.5f
+        val width = currentRegion.width
+        val height = currentRegion.height
+        val scaledWidth = (width * scale).toInt().coerceAtLeast(1)
+        val scaledHeight = (height * scale).toInt().coerceAtLeast(1)
+        ensureBuffers(scaledWidth, scaledHeight)
+
+        val target = back ?: return
+        if (target.isRecycled) return
+
+        val srcLeft = currentRegion.left.toInt().coerceIn(0, decorWidth - 1)
+        val srcTop = currentRegion.top.toInt().coerceIn(0, decorHeight - 1)
+        val srcRight = (currentRegion.left + width).toInt().coerceIn(srcLeft + 1, decorWidth)
+        val srcBottom = (currentRegion.top + height).toInt().coerceIn(srcTop + 1, decorHeight)
+        if (srcRight <= srcLeft || srcBottom <= srcTop) return
+
+        val srcRect = Rect(srcLeft, srcTop, srcRight, srcBottom)
+
+        isWindowCopying = true
+
+        val listener = PixelCopy.OnPixelCopyFinishedListener { result ->
+            isWindowCopying = false
+            if (result == PixelCopy.SUCCESS && !target.isRecycled) {
+                val previousFront = front
+                front = target
+                back = previousFront
+
+                capturedFrame = LiquidGlassCapturedFrame(
+                    bitmap = target,
+                    originInWindow = Offset(currentRegion.left, currentRegion.top),
+                )
+                lastCapturedFrame = frameNumber
+                lastCaptureNanos = now
+            } else {
+                Log.w("HyperBounce-Backdrop", "PixelCopy window copy failed: result=$result")
+            }
+        }
+
+        try {
+            PixelCopy.request(win, srcRect, target, listener, bgHandler)
+        } catch (t: Throwable) {
+            isWindowCopying = false
+            Log.w("HyperBounce-Backdrop", "PixelCopy window request error: ${t.message}")
         }
     }
 
@@ -489,6 +565,8 @@ internal class LiquidGlassViewBackdrop(
     fun release() {
         stop()
         clearHardwareSurfaces()
+        isWindowCopying = false
+        hasSoftwareRenderingFailed = false
         front?.recycle()
         back?.recycle()
         front = null

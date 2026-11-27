@@ -191,7 +191,8 @@ object TwitterHook {
                     setContent {
                         TwitterNavBarHost(
                             backdropSource = backdropSource,
-                            hyperBouncePrefs = prefs
+                            hyperBouncePrefs = prefs,
+                            window = activity.window
                         )
                     }
                 }
@@ -219,16 +220,19 @@ object TwitterHook {
 
     private fun hookMultiLayerSuppression(cl: ClassLoader) {
         // LAYER 1: Root Navigation Shell Hook: com.x.main.k0.j(...)
-        // Forces param 6 (z4) to true, simultaneously collapsing Pipeline A (glass) and Pipeline B (p3)
+        // Forces param 6 (z4 / isBottomBarHidden) to true
         try {
             val k0Class = cl.loadClass("com.x.main.k0")
             val jMethods = k0Class.declaredMethods.filter { it.name == "j" && it.parameterTypes.size >= 30 }
             for (m in jMethods) {
                 module.hook(m).intercept { chain ->
-                    if (chain.args.size >= 7 && chain.args[6] is Boolean) {
-                        chain.args[6] = true
+                    val args = chain.args.toTypedArray()
+                    if (args.size >= 7 && args[6] is Boolean) {
+                        args[6] = true
+                        chain.proceed(args)
+                    } else {
+                        chain.proceed()
                     }
-                    chain.proceed()
                 }
                 Log.i(TAG, "Layer 1 Hooked: com.x.main.k0.j (Root Shell Suppression)")
             }
@@ -240,22 +244,30 @@ object TwitterHook {
         try {
             val glassClass = cl.loadClass("com.x.ui.common.glass.c")
 
-            // Method e: Container - force param 3 (z2) = true (collapses size to 0 and skips c())
+            // Method e: Container - force param 3 (z2 / isBottomBarHidden) = true
             for (m in glassClass.declaredMethods.filter { it.name == "e" && it.parameterTypes.size >= 16 }) {
                 module.hook(m).intercept { chain ->
-                    if (chain.args.size >= 4 && chain.args[3] is Boolean) {
-                        chain.args[3] = true
+                    val args = chain.args.toTypedArray()
+                    if (args.size >= 4 && args[3] is Boolean) {
+                        args[3] = true
+                        chain.proceed(args)
+                    } else {
+                        chain.proceed()
                     }
-                    chain.proceed()
                 }
                 Log.i(TAG, "Layer 2 Hooked: com.x.ui.common.glass.c.e (Glass Container Suppression)")
             }
 
-            // Method c: Glass Bar Rendering - direct interception fallback
+            // Method c: Glass Bar Rendering - direct parameter neutralization with group balance
             for (m in glassClass.declaredMethods.filter { it.name == "c" && it.parameterTypes.size >= 16 }) {
-                module.hook(m).intercept { _ ->
-                    // Return null to suppress stock glass navigation bar if ever reached
-                    null
+                module.hook(m).intercept { chain ->
+                    val args = chain.args.toTypedArray()
+                    if (args.size >= 5 && args[4] is Boolean) {
+                        args[4] = true
+                        chain.proceed(args)
+                    } else {
+                        chain.proceed()
+                    }
                 }
                 Log.i(TAG, "Layer 2 Hooked: com.x.ui.common.glass.c.c (Glass Bar Neutralization)")
             }
@@ -264,14 +276,18 @@ object TwitterHook {
         }
 
         // LAYER 3: Pipeline B Hook: com.x.ui.common.p3.a
+        // Forces param 6 (isBottomBarHidden) = true
         try {
             val p3Class = cl.loadClass("com.x.ui.common.p3")
             for (m in p3Class.declaredMethods.filter { it.name == "a" && it.parameterTypes.size >= 10 }) {
                 module.hook(m).intercept { chain ->
-                    if (chain.args.size >= 7 && chain.args[6] is Boolean) {
-                        chain.args[6] = true
+                    val args = chain.args.toTypedArray()
+                    if (args.size >= 7 && args[6] is Boolean) {
+                        args[6] = true
+                        chain.proceed(args)
+                    } else {
+                        chain.proceed()
                     }
-                    chain.proceed()
                 }
                 Log.i(TAG, "Layer 3 Hooked: com.x.ui.common.p3.a (Legacy Bottom Bar Suppression)")
             }
