@@ -71,6 +71,9 @@ object TwitterHook {
     private var isAttaching = false
 
     @Volatile
+    private var isAttachScheduled = false
+
+    @Volatile
     private var activeFloatingBar: View? = null
 
     private var insetsListenerProxy: Any? = null
@@ -230,6 +233,7 @@ object TwitterHook {
             } finally {
                 activeFloatingBar = null
                 isAttaching = false
+                isAttachScheduled = false
             }
         }
     }
@@ -238,7 +242,7 @@ object TwitterHook {
         if (activity.isFinishing || activity.isDestroyed) return
 
         activity.runOnUiThread {
-            if (isAttaching || (activeFloatingBar != null && activeFloatingBar?.isAttachedToWindow == true)) {
+            if (isAttaching || isAttachScheduled || activeFloatingBar != null) {
                 return@runOnUiThread
             }
             isAttaching = true
@@ -259,7 +263,11 @@ object TwitterHook {
                 if (windowToken == null) {
                     // Defer until decorView is attached to the window
                     isAttaching = false
-                    decorView.post { attachNavBar(activity) }
+                    isAttachScheduled = true
+                    decorView.post {
+                        isAttachScheduled = false
+                        attachNavBar(activity)
+                    }
                     return@runOnUiThread
                 }
 
