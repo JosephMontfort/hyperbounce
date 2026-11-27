@@ -360,10 +360,9 @@ object TwitterHook {
                     val w = composeView.width
                     val h = composeView.height
                     if (w > 0 && h > 0) {
-                        val livePrefs = dev.hyperios.app.prefs.LivePrefs(prefs)
-                        val barHeightDp = livePrefs.getFloat("nav_bar_height_twitter", 64f)
-                        val bottomMarginDp = livePrefs.getFloat("nav_bottom_margin_twitter", 16f)
-                        val tabWidthDp = livePrefs.getFloat("nav_tab_width_twitter", 64f)
+                        val barHeightDp = prefs.appBarHeight("twitter")
+                        val bottomMarginDp = prefs.appBottomMargin("twitter")
+                        val tabWidthDp = prefs.appTabWidth("twitter")
 
                         val screenWidthDp = w / density
                         val tabCount = 5
