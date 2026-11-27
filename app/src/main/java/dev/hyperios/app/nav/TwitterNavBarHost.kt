@@ -255,7 +255,7 @@ fun TwitterNavBarHost(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .wrapContentHeight(),
+            .wrapContentHeight(align = Alignment.Bottom),
         contentAlignment = Alignment.BottomCenter
     ) {
         LiquidNavigationBar(

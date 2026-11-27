@@ -2,12 +2,15 @@ package dev.hyperios.app.nav
 
 import android.app.Activity
 import android.graphics.PixelFormat
+import android.graphics.Rect
+import android.graphics.Region
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
+import android.view.ViewTreeObserver
 import android.view.WindowInsets
 import android.view.WindowManager
 import android.widget.FrameLayout
@@ -28,6 +31,7 @@ import io.github.libxposed.api.XposedModule
 import io.github.libxposed.api.XposedModuleInterface
 import java.lang.reflect.InvocationHandler
 import java.lang.reflect.Proxy
+import kotlin.math.roundToInt
 
 /**
  * Production-Grade Xposed Hook for X (formerly Twitter) (com.twitter.android).
@@ -64,7 +68,12 @@ object TwitterHook {
     private var cachedFunction0Proxy: Any? = null
 
     @Volatile
+    private var isAttaching = false
+
+    @Volatile
     private var activeFloatingBar: View? = null
+
+    private var insetsListenerProxy: Any? = null
 
     @JvmStatic
     fun init(
@@ -150,18 +159,78 @@ object TwitterHook {
         }
     }
 
+    /**
+     * Uses reflection to register an OnComputeInternalInsetsListener on the window's ViewTreeObserver.
+     * Sets mTouchableInsets = TOUCHABLE_INSETS_REGION (3) and confines touch dispatch to the floating pill.
+     */
+    private fun applyTouchableInsets(view: View, pillBoundsSupplier: () -> Rect?) {
+        try {
+            val vto = view.viewTreeObserver
+            val listenerClass = Class.forName("android.view.ViewTreeObserver\$OnComputeInternalInsetsListener")
+            val infoClass = Class.forName("android.view.ViewTreeObserver\$InternalInsetsInfo")
+            val setTouchableInsetsMethod = infoClass.getMethod("setTouchableInsets", Int::class.javaPrimitiveType)
+            val touchableRegionField = infoClass.getField("touchableRegion")
+            val TOUCHABLE_INSETS_REGION = 3 // InternalInsetsInfo.TOUCHABLE_INSETS_REGION
+
+            val proxy = Proxy.newProxyInstance(
+                listenerClass.classLoader,
+                arrayOf(listenerClass)
+            ) { _, method, args ->
+                if (method.name == "onComputeInternalInsets" && args != null && args.isNotEmpty()) {
+                    val insetsInfo = args[0]
+                    val pillRect = pillBoundsSupplier()
+                    if (pillRect != null && !pillRect.isEmpty) {
+                        setTouchableInsetsMethod.invoke(insetsInfo, TOUCHABLE_INSETS_REGION)
+                        val region = touchableRegionField.get(insetsInfo) as Region
+                        region.set(pillRect)
+                    }
+                }
+                null
+            }
+
+            val addMethod = ViewTreeObserver::class.java.getMethod("addOnComputeInternalInsetsListener", listenerClass)
+            addMethod.invoke(vto, proxy)
+            insetsListenerProxy = proxy
+            Log.i(TAG, "Touch passthrough: OnComputeInternalInsetsListener successfully registered (TOUCHABLE_INSETS_REGION)")
+        } catch (t: Throwable) {
+            Log.w(TAG, "OnComputeInternalInsetsListener reflection setup: ${t.message}")
+        }
+    }
+
+    private fun removeTouchableInsets(view: View) {
+        val proxy = insetsListenerProxy ?: return
+        try {
+            val vto = view.viewTreeObserver
+            if (vto.isAlive) {
+                val listenerClass = Class.forName("android.view.ViewTreeObserver\$OnComputeInternalInsetsListener")
+                val removeMethod = ViewTreeObserver::class.java.getMethod("removeOnComputeInternalInsetsListener", listenerClass)
+                removeMethod.invoke(vto, proxy)
+                Log.i(TAG, "OnComputeInternalInsetsListener removed cleanly")
+            }
+        } catch (t: Throwable) {
+            Log.w(TAG, "Failed to remove OnComputeInternalInsetsListener: ${t.message}")
+        } finally {
+            insetsListenerProxy = null
+        }
+    }
+
     private fun detachNavBar(activity: Activity) {
         activity.runOnUiThread {
             try {
                 val bar = activeFloatingBar
-                if (bar != null && bar.isAttachedToWindow) {
-                    activity.windowManager?.removeViewImmediate(bar)
-                    Log.i(TAG, "TwitterNavBarHost cleanly removed from WindowManager")
+                if (bar != null) {
+                    removeTouchableInsets(bar)
+                    if (bar.isAttachedToWindow) {
+                        activity.windowManager?.removeViewImmediate(bar)
+                        Log.i(TAG, "TwitterNavBarHost cleanly removed from WindowManager")
+                    }
                 }
             } catch (t: Throwable) {
                 Log.w(TAG, "Error removing bar from WindowManager: ${t.message}")
+            } finally {
+                activeFloatingBar = null
+                isAttaching = false
             }
-            activeFloatingBar = null
         }
     }
 
@@ -169,18 +238,28 @@ object TwitterHook {
         if (activity.isFinishing || activity.isDestroyed) return
 
         activity.runOnUiThread {
+            if (isAttaching || (activeFloatingBar != null && activeFloatingBar?.isAttachedToWindow == true)) {
+                return@runOnUiThread
+            }
+            isAttaching = true
+
             try {
-                val window = activity.window ?: return@runOnUiThread
-                val decorView = window.decorView as? ViewGroup ?: return@runOnUiThread
+                val window = activity.window
+                if (window == null) {
+                    isAttaching = false
+                    return@runOnUiThread
+                }
+                val decorView = window.decorView as? ViewGroup
+                if (decorView == null) {
+                    isAttaching = false
+                    return@runOnUiThread
+                }
                 val windowToken = decorView.windowToken
 
                 if (windowToken == null) {
-                    // Wait until decorView is attached to window so windowToken is valid
+                    // Defer until decorView is attached to the window
+                    isAttaching = false
                     decorView.post { attachNavBar(activity) }
-                    return@runOnUiThread
-                }
-
-                if (activeFloatingBar != null && activeFloatingBar?.isAttachedToWindow == true) {
                     return@runOnUiThread
                 }
 
@@ -222,18 +301,27 @@ object TwitterHook {
                     }
                 })
 
+                val density = activity.resources.displayMetrics.density
+                val insets = decorView.rootWindowInsets
+                val bottomInset = try {
+                    insets?.getInsets(WindowInsets.Type.navigationBars())?.bottom
+                        ?: insets?.getInsets(WindowInsets.Type.systemBars())?.bottom
+                        ?: 0
+                } catch (_: Throwable) { 0 }
+
+                val barHeightPx = (110f * density).roundToInt() + bottomInset
+
                 val params = WindowManager.LayoutParams(
                     WindowManager.LayoutParams.MATCH_PARENT,
-                    WindowManager.LayoutParams.WRAP_CONTENT,
+                    barHeightPx,
                     WindowManager.LayoutParams.TYPE_APPLICATION_PANEL,
                     WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                         WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
                         WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
-                        WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
                         WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED,
                     PixelFormat.TRANSLUCENT
                 ).apply {
-                    gravity = Gravity.BOTTOM
+                    gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
                     token = windowToken
                     softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING
                 }
@@ -245,7 +333,7 @@ object TwitterHook {
                     clipToPadding = false
                     layoutParams = ViewGroup.LayoutParams(
                         ViewGroup.LayoutParams.MATCH_PARENT,
-                        ViewGroup.LayoutParams.WRAP_CONTENT
+                        barHeightPx
                     )
                     setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindowOrReleasedFromPool)
                     setViewTreeLifecycleOwner(lifecycleOwner)
@@ -267,6 +355,44 @@ object TwitterHook {
                     }
                 }
 
+                // Pill bounds calculation supplier for OnComputeInternalInsetsListener
+                val pillBoundsSupplier: () -> Rect? = {
+                    val w = composeView.width
+                    val h = composeView.height
+                    if (w > 0 && h > 0) {
+                        val livePrefs = dev.hyperios.app.prefs.LivePrefs(prefs)
+                        val barHeightDp = livePrefs.getFloat("nav_bar_height_twitter", 64f)
+                        val bottomMarginDp = livePrefs.getFloat("nav_bottom_margin_twitter", 16f)
+                        val tabWidthDp = livePrefs.getFloat("nav_tab_width_twitter", 64f)
+
+                        val screenWidthDp = w / density
+                        val tabCount = 5
+                        val maxSafeTabWidth = ((screenWidthDp - 16f) / tabCount).coerceAtLeast(40f)
+                        val effectiveTabWidth = tabWidthDp.coerceAtMost(maxSafeTabWidth)
+
+                        val pillWidthPx = (effectiveTabWidth * tabCount * density).roundToInt()
+                        val pillHeightPx = (barHeightDp * density).roundToInt()
+                        val bottomMarginPx = (bottomMarginDp * density).roundToInt()
+
+                        val left = ((w - pillWidthPx) / 2).coerceAtLeast(0)
+                        val right = ((w + pillWidthPx) / 2).coerceAtMost(w)
+                        val bottom = (h - bottomMarginPx).coerceAtMost(h)
+                        val top = (bottom - pillHeightPx).coerceAtLeast(0)
+
+                        // 8dp touch tolerance padding around the pill
+                        val pad = (8f * density).roundToInt()
+                        Rect(
+                            (left - pad).coerceAtLeast(0),
+                            (top - pad).coerceAtLeast(0),
+                            (right + pad).coerceAtMost(w),
+                            (bottom + pad).coerceAtMost(h)
+                        )
+                    } else null
+                }
+
+                // Register dynamic internal insets listener
+                applyTouchableInsets(composeView, pillBoundsSupplier)
+
                 // Automatic keyboard (IME) dodging: hide bar when soft keyboard is shown
                 composeView.setOnApplyWindowInsetsListener { v, insets ->
                     val imeBottom = try {
@@ -283,9 +409,11 @@ object TwitterHook {
                 val wm = activity.windowManager ?: return@runOnUiThread
                 wm.addView(composeView, params)
                 activeFloatingBar = composeView
-                Log.i(TAG, "TwitterNavBarHost attached via WindowManager (TYPE_APPLICATION_PANEL) - Window Isolation Active")
+                Log.i(TAG, "TwitterNavBarHost attached via WindowManager (height=${barHeightPx}px, gravity=BOTTOM) - Touch Passthrough Configured")
             } catch (t: Throwable) {
                 Log.e(TAG, "Failed to attach TwitterNavBarHost via WindowManager", t)
+            } finally {
+                isAttaching = false
             }
         }
     }

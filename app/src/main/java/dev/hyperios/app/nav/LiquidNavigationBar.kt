@@ -87,6 +87,7 @@ fun LiquidNavigationBar(
     selectedIndex: Int,
     onTabSelected: (Int) -> Unit,
     sourceView: android.view.View,
+    modifier: Modifier = Modifier.fillMaxWidth().wrapContentHeight(align = Alignment.Bottom),
     circularIndices: Set<Int> = emptySet(),
     multiColorIndices: Set<Int> = emptySet(),
     forceLightTheme: Boolean = false,
@@ -198,7 +199,7 @@ fun LiquidNavigationBar(
     val hamburgerAlpha = ((morphProgress - 0.35f) / 0.65f).coerceIn(0f, 1f)
 
     BoxWithConstraints(
-        modifier = Modifier.fillMaxSize(),
+        modifier = modifier,
         contentAlignment = Alignment.BottomCenter,
     ) {
         val isRootLtr = LocalLayoutDirection.current == LayoutDirection.Ltr
