@@ -1,12 +1,15 @@
 package dev.hyperios.app.nav
 
 import android.app.Activity
+import android.graphics.PixelFormat
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
+import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowInsets
+import android.view.WindowManager
 import android.widget.FrameLayout
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -59,6 +62,9 @@ object TwitterHook {
 
     @Volatile
     private var cachedFunction0Proxy: Any? = null
+
+    @Volatile
+    private var activeFloatingBar: View? = null
 
     @JvmStatic
     fun init(
@@ -122,10 +128,40 @@ object TwitterHook {
                 } catch (t: Throwable) {
                     Log.w(TAG, "Failed to hook onResume on $activityName: ${t.message}")
                 }
+
+                // Hook onDestroy()
+                try {
+                    val onDestroyMethod = actClass.declaredMethods.find {
+                        it.name == "onDestroy" && it.parameterTypes.isEmpty()
+                    } ?: actClass.getMethod("onDestroy")
+
+                    module.hook(onDestroyMethod).intercept { chain ->
+                        (chain.thisObject as? Activity)?.let { detachNavBar(it) }
+                        chain.proceed()
+                    }
+                    Log.i(TAG, "Hooked onDestroy on $activityName")
+                } catch (t: Throwable) {
+                    Log.w(TAG, "Failed to hook onDestroy on $activityName: ${t.message}")
+                }
             } catch (_: ClassNotFoundException) {
             } catch (t: Throwable) {
                 Log.e(TAG, "Error hooking activity $activityName", t)
             }
+        }
+    }
+
+    private fun detachNavBar(activity: Activity) {
+        activity.runOnUiThread {
+            try {
+                val bar = activeFloatingBar
+                if (bar != null && bar.isAttachedToWindow) {
+                    activity.windowManager?.removeViewImmediate(bar)
+                    Log.i(TAG, "TwitterNavBarHost cleanly removed from WindowManager")
+                }
+            } catch (t: Throwable) {
+                Log.w(TAG, "Error removing bar from WindowManager: ${t.message}")
+            }
+            activeFloatingBar = null
         }
     }
 
@@ -134,12 +170,23 @@ object TwitterHook {
 
         activity.runOnUiThread {
             try {
-                val decorView = activity.window?.decorView as? ViewGroup ?: return@runOnUiThread
-                if (decorView.findViewWithTag<View>(TAG_OVERLAY) != null ||
-                    decorView.findViewById<View>(OVERLAY_TAG_ID) != null
-                ) {
+                val window = activity.window ?: return@runOnUiThread
+                val decorView = window.decorView as? ViewGroup ?: return@runOnUiThread
+                val windowToken = decorView.windowToken
+
+                if (windowToken == null) {
+                    // Wait until decorView is attached to window so windowToken is valid
+                    decorView.post { attachNavBar(activity) }
                     return@runOnUiThread
                 }
+
+                if (activeFloatingBar != null && activeFloatingBar?.isAttachedToWindow == true) {
+                    return@runOnUiThread
+                }
+
+                // Clean up any legacy overlay view on DecorView if present
+                decorView.findViewWithTag<View>(TAG_OVERLAY)?.let { decorView.removeView(it) }
+                decorView.findViewById<View>(OVERLAY_TAG_ID)?.let { decorView.removeView(it) }
 
                 val backdropSource = activity.findViewById<View>(android.R.id.content) ?: decorView
 
@@ -168,14 +215,37 @@ object TwitterHook {
                     )
                 }
 
+                decorView.addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
+                    override fun onViewAttachedToWindow(v: View) {}
+                    override fun onViewDetachedFromWindow(v: View) {
+                        detachNavBar(activity)
+                    }
+                })
+
+                val params = WindowManager.LayoutParams(
+                    WindowManager.LayoutParams.MATCH_PARENT,
+                    WindowManager.LayoutParams.WRAP_CONTENT,
+                    WindowManager.LayoutParams.TYPE_APPLICATION_PANEL,
+                    WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                        WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
+                        WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                        WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
+                        WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED,
+                    PixelFormat.TRANSLUCENT
+                ).apply {
+                    gravity = Gravity.BOTTOM
+                    token = windowToken
+                    softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING
+                }
+
                 val composeView = ComposeView(activity).apply {
                     tag = TAG_OVERLAY
                     id = OVERLAY_TAG_ID
                     clipChildren = false
                     clipToPadding = false
-                    layoutParams = FrameLayout.LayoutParams(
+                    layoutParams = ViewGroup.LayoutParams(
                         ViewGroup.LayoutParams.MATCH_PARENT,
-                        ViewGroup.LayoutParams.MATCH_PARENT
+                        ViewGroup.LayoutParams.WRAP_CONTENT
                     )
                     setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindowOrReleasedFromPool)
                     setViewTreeLifecycleOwner(lifecycleOwner)
@@ -191,7 +261,8 @@ object TwitterHook {
                     setContent {
                         TwitterNavBarHost(
                             backdropSource = backdropSource,
-                            hyperBouncePrefs = prefs
+                            hyperBouncePrefs = prefs,
+                            window = activity.window
                         )
                     }
                 }
@@ -209,10 +280,12 @@ object TwitterHook {
                     insets
                 }
 
-                decorView.addView(composeView)
-                Log.i(TAG, "TwitterNavBarHost successfully attached to DecorView (Scroll Immune + IME Dodging)")
+                val wm = activity.windowManager ?: return@runOnUiThread
+                wm.addView(composeView, params)
+                activeFloatingBar = composeView
+                Log.i(TAG, "TwitterNavBarHost attached via WindowManager (TYPE_APPLICATION_PANEL) - Window Isolation Active")
             } catch (t: Throwable) {
-                Log.e(TAG, "Failed to attach TwitterNavBarHost to DecorView", t)
+                Log.e(TAG, "Failed to attach TwitterNavBarHost via WindowManager", t)
             }
         }
     }

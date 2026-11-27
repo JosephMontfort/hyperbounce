@@ -186,7 +186,7 @@ internal class LiquidGlassViewBackdrop(
             if (enableWindowPixelCopy) {
                 requestHardwareWindowCopy(currentRegion, now)
             } else {
-                // Fallback: retain previous valid frame without recursive window capture
+                Log.w("HyperBounce-Backdrop", "Software rendering rejected (AGSL/RuntimeShader). Enable enableWindowPixelCopy for hardware capture: ${e.message}")
             }
         } catch (t: Throwable) {
             Log.e(
@@ -215,10 +215,21 @@ internal class LiquidGlassViewBackdrop(
         val target = back ?: return
         if (target.isRecycled) return
 
-        val srcLeft = currentRegion.left.toInt().coerceIn(0, decorWidth - 1)
-        val srcTop = currentRegion.top.toInt().coerceIn(0, decorHeight - 1)
-        val srcRight = (currentRegion.left + width).toInt().coerceIn(srcLeft + 1, decorWidth)
-        val srcBottom = (currentRegion.top + height).toInt().coerceIn(srcTop + 1, decorHeight)
+        // Compute coordinate translation between panel window and activity window
+        val sourceLoc = IntArray(2)
+        sourceView.getLocationOnScreen(sourceLoc)
+        val decorLoc = IntArray(2)
+        decor.getLocationOnScreen(decorLoc)
+        val offsetX = sourceLoc[0] - decorLoc[0]
+        val offsetY = sourceLoc[1] - decorLoc[1]
+
+        val rawLeft = currentRegion.left + offsetX
+        val rawTop = currentRegion.top + offsetY
+
+        val srcLeft = rawLeft.toInt().coerceIn(0, decorWidth - 1)
+        val srcTop = rawTop.toInt().coerceIn(0, decorHeight - 1)
+        val srcRight = (rawLeft + width).toInt().coerceIn(srcLeft + 1, decorWidth)
+        val srcBottom = (rawTop + height).toInt().coerceIn(srcTop + 1, decorHeight)
         if (srcRight <= srcLeft || srcBottom <= srcTop) return
 
         val srcRect = Rect(srcLeft, srcTop, srcRight, srcBottom)

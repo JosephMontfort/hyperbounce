@@ -12,13 +12,19 @@ import android.view.ViewGroup
 import android.view.Window
 import android.widget.FrameLayout
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.compose.ui.unit.dp
 import androidx.core.content.res.ResourcesCompat
@@ -190,7 +196,8 @@ class TwitterNavBarHost @JvmOverloads constructor(
             setContent {
                 TwitterNavBarHost(
                     backdropSource = backdropSource,
-                    hyperBouncePrefs = prefs
+                    hyperBouncePrefs = prefs,
+                    window = (context as? Activity)?.window
                 )
             }
         }
@@ -201,7 +208,8 @@ class TwitterNavBarHost @JvmOverloads constructor(
 @Composable
 fun TwitterNavBarHost(
     backdropSource: View,
-    hyperBouncePrefs: HyperBouncePrefs
+    hyperBouncePrefs: HyperBouncePrefs,
+    window: Window? = (backdropSource.context as? Activity)?.window ?: (backdropSource.rootView.context as? Activity)?.window
 ) {
     val live = rememberLiveNavBarSettings(hyperBouncePrefs, "twitter")
     val isDark = when (live.themeMode) {
@@ -244,34 +252,44 @@ fun TwitterNavBarHost(
     val maxSafeTabWidth = ((screenWidthDp - 16f) / tabCount).coerceAtLeast(40f)
     val effectiveTabWidth = live.tabWidth.coerceAtMost(maxSafeTabWidth)
 
-    LiquidNavigationBar(
-        bottomPadding = live.bottomMargin.dp,
-        tabs = inactiveTabs,
-        activeTabs = activeTabs,
-        selectedIndex = currentTabIndex.coerceIn(0, 4),
-        onTabSelected = { index ->
-            TwitterHook.dispatchTabClick(index)
-        },
-        sourceView = backdropSource,
-        forceLightTheme = live.themeMode == "Light",
-        forceDarkTheme = live.themeMode == "Dark",
-        containerAlpha = live.containerOpacity,
-        effectMultiplier = live.glassIntensity,
-        barBlurIntensity = live.barBlurIntensity,
-        labels = if (live.showLabels) listOf("Home", "Explore", "Grok", "Notifications", "Messages") else emptyList(),
-        customAccentColor = resolveAccentColor(live.accent, live.customAccentColor),
-        barHeight = live.barHeight.dp,
-        tabWidth = effectiveTabWidth.dp,
-        cornerRadius = live.cornerRadius.dp,
-        pillGlassIntensity = live.pillGlassIntensity,
-        pillContainerOpacity = live.pillContainerOpacity,
-        pillChromaticAberration = live.pillChromaticAberration,
-        pillShadow = live.pillShadow,
-        liquidGlass = live.liquidGlass,
-        isShrunk = false,
-        shrinkScale = 1.0f,
-        scrollShrinkState = null,
-        badgeCounts = badgeCounts,
-        badgeDots = badgeDots
-    )
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .wrapContentHeight(),
+        contentAlignment = Alignment.BottomCenter
+    ) {
+        LiquidNavigationBar(
+            bottomPadding = live.bottomMargin.dp,
+            tabs = inactiveTabs,
+            activeTabs = activeTabs,
+            selectedIndex = currentTabIndex.coerceIn(0, 4),
+            onTabSelected = { index ->
+                TwitterHook.dispatchTabClick(index)
+            },
+            sourceView = LocalView.current,
+            enablePixelCopy = true,
+            enableWindowPixelCopy = true,
+            window = window,
+            forceLightTheme = live.themeMode == "Light",
+            forceDarkTheme = live.themeMode == "Dark",
+            containerAlpha = live.containerOpacity,
+            effectMultiplier = live.glassIntensity,
+            barBlurIntensity = live.barBlurIntensity,
+            labels = if (live.showLabels) listOf("Home", "Explore", "Grok", "Notifications", "Messages") else emptyList(),
+            customAccentColor = resolveAccentColor(live.accent, live.customAccentColor),
+            barHeight = live.barHeight.dp,
+            tabWidth = effectiveTabWidth.dp,
+            cornerRadius = live.cornerRadius.dp,
+            pillGlassIntensity = live.pillGlassIntensity,
+            pillContainerOpacity = live.pillContainerOpacity,
+            pillChromaticAberration = live.pillChromaticAberration,
+            pillShadow = live.pillShadow,
+            liquidGlass = live.liquidGlass,
+            isShrunk = false,
+            shrinkScale = 1.0f,
+            scrollShrinkState = null,
+            badgeCounts = badgeCounts,
+            badgeDots = badgeDots
+        )
+    }
 }
