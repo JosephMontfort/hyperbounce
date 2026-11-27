@@ -16,3 +16,5 @@ releases/
 .agents/
 active_prefs.xml
 build_apks/
+build_artifacts/
+agent-instructions.md

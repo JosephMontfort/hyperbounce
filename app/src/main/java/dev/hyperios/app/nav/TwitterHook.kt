@@ -1,39 +1,40 @@
 package dev.hyperios.app.nav
 
 import android.app.Activity
-import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import android.view.View
 import android.view.ViewGroup
+import android.view.WindowInsets
 import android.widget.FrameLayout
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
-import androidx.lifecycle.LifecycleOwner
-import androidx.lifecycle.ViewModelStoreOwner
+import androidx.compose.ui.platform.ComposeView
+import androidx.compose.ui.platform.ViewCompositionStrategy
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.findViewTreeLifecycleOwner
 import androidx.lifecycle.findViewTreeViewModelStoreOwner
 import androidx.lifecycle.setViewTreeLifecycleOwner
 import androidx.lifecycle.setViewTreeViewModelStoreOwner
-import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.findViewTreeSavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import dev.hyperios.app.FakeLifecycleOwner
 import dev.hyperios.app.prefs.HyperBouncePrefs
 import io.github.libxposed.api.XposedModule
 import io.github.libxposed.api.XposedModuleInterface
+import java.lang.reflect.InvocationHandler
+import java.lang.reflect.Proxy
 
 /**
- * Xposed Hook for X (formerly Twitter) (com.twitter.android).
+ * Production-Grade Xposed Hook for X (formerly Twitter) (com.twitter.android).
  *
- * Responsibilities:
- * 1. Inject HyperBounce's floating Compose LiquidNavigationBar (TwitterNavBarHost)
- *    into MainActivity's android.R.id.content, guaranteeing permanent scroll immunity.
- * 2. Suppress stock bottom navigation bar via `com.x.ui.common.p3.a` (forcing parameter 6 z2 = true)
- *    and `com.x.main.k0.b` (canceling stock item composition).
- * 3. Intercept tab controller (`com.x.main.k`), current tab enum (`com.x.navigation.vd`),
- *    and tab switcher lambda in `com.x.main.k0.i`.
- * 4. Extract badge counts and unread dots from `LandingBadgesState` (`w0.d`).
- * 5. Dispatch zero-latency tab switches and trigger native scroll-to-top / pull-to-refresh on re-clicks.
+ * Implements:
+ * 1. Multi-layer universal stock navigation bar suppression (Root k0.j, Pipeline A glass.c, Pipeline B p3.a).
+ * 2. Permanent scroll immunity via DecorView injection.
+ * 3. IME keyboard dodging.
+ * 4. Zero-latency tab switching with dynamic reflection and ClassLoader-safe Function0 Proxy.
+ * 5. Real-time badge and unread status synchronization.
  */
 object TwitterHook {
     private const val TAG = "TwitterHook"
@@ -52,7 +53,12 @@ object TwitterHook {
     var activeTabController: Any? = null
 
     @Volatile
-    var tabSwitchFunction: ((Any) -> Any?)? = null
+    var rawTabSwitchFunction: Any? = null
+
+    private val mainHandler = Handler(Looper.getMainLooper())
+
+    @Volatile
+    private var cachedFunction0Proxy: Any? = null
 
     @JvmStatic
     fun init(
@@ -71,10 +77,10 @@ object TwitterHook {
             return
         }
 
-        module.log(Log.INFO, TAG, "Initializing X (Twitter) Floating Liquid Navigation Bar Hook")
+        module.log(Log.INFO, TAG, "Initializing Redesigned Twitter Hook (Dual-Pipeline Neutralization & Proxy Tab Engine)")
 
         hookMainActivity(param.classLoader)
-        hookStockBarSuppression(param.classLoader)
+        hookMultiLayerSuppression(param.classLoader)
         hookNavigationAndBadges(param.classLoader)
     }
 
@@ -88,24 +94,20 @@ object TwitterHook {
             try {
                 val actClass = cl.loadClass(activityName)
 
-                // Hook onPostCreate(Bundle)
+                // Hook onStart()
                 try {
-                    val onPostCreateMethod = actClass.declaredMethods.find {
-                        it.name == "onPostCreate" &&
-                                it.parameterTypes.size == 1 &&
-                                Bundle::class.java.isAssignableFrom(it.parameterTypes[0])
-                    } ?: actClass.getMethod("onPostCreate", Bundle::class.java)
+                    val onStartMethod = actClass.declaredMethods.find {
+                        it.name == "onStart" && it.parameterTypes.isEmpty()
+                    } ?: actClass.getMethod("onStart")
 
-                    module.hook(onPostCreateMethod).intercept { chain ->
+                    module.hook(onStartMethod).intercept { chain ->
                         val result = chain.proceed()
-                        (chain.thisObject as? Activity)?.let { act ->
-                            attachNavBar(act)
-                        }
+                        (chain.thisObject as? Activity)?.let { attachNavBar(it) }
                         result
                     }
-                    Log.i(TAG, "Hooked onPostCreate on $activityName")
+                    Log.i(TAG, "Hooked onStart on $activityName")
                 } catch (t: Throwable) {
-                    Log.w(TAG, "Failed to hook onPostCreate on $activityName: ${t.message}")
+                    Log.w(TAG, "Failed to hook onStart on $activityName: ${t.message}")
                 }
 
                 // Hook onResume()
@@ -113,9 +115,7 @@ object TwitterHook {
                     val onResumeMethod = actClass.getMethod("onResume")
                     module.hook(onResumeMethod).intercept { chain ->
                         val result = chain.proceed()
-                        (chain.thisObject as? Activity)?.let { act ->
-                            attachNavBar(act)
-                        }
+                        (chain.thisObject as? Activity)?.let { attachNavBar(it) }
                         result
                     }
                     Log.i(TAG, "Hooked onResume on $activityName")
@@ -123,7 +123,6 @@ object TwitterHook {
                     Log.w(TAG, "Failed to hook onResume on $activityName: ${t.message}")
                 }
             } catch (_: ClassNotFoundException) {
-                // Ignore alternative activity names if absent
             } catch (t: Throwable) {
                 Log.e(TAG, "Error hooking activity $activityName", t)
             }
@@ -135,105 +134,149 @@ object TwitterHook {
 
         activity.runOnUiThread {
             try {
-                val content = activity.findViewById<ViewGroup>(android.R.id.content) ?: return@runOnUiThread
-                if (content.findViewWithTag<View>(TAG_OVERLAY) != null ||
-                    content.findViewById<View>(OVERLAY_TAG_ID) != null
+                val decorView = activity.window?.decorView as? ViewGroup ?: return@runOnUiThread
+                if (decorView.findViewWithTag<View>(TAG_OVERLAY) != null ||
+                    decorView.findViewById<View>(OVERLAY_TAG_ID) != null
                 ) {
                     return@runOnUiThread
                 }
 
-                val decor = activity.window?.decorView
+                val backdropSource = activity.findViewById<View>(android.R.id.content) ?: decorView
+
                 val fallbackOwner by lazy {
                     FakeLifecycleOwner().apply {
-                        registry.handleLifecycleEvent(androidx.lifecycle.Lifecycle.Event.ON_CREATE)
-                        registry.handleLifecycleEvent(androidx.lifecycle.Lifecycle.Event.ON_START)
-                        registry.handleLifecycleEvent(androidx.lifecycle.Lifecycle.Event.ON_RESUME)
+                        registry.handleLifecycleEvent(Lifecycle.Event.ON_CREATE)
+                        registry.handleLifecycleEvent(Lifecycle.Event.ON_START)
+                        registry.handleLifecycleEvent(Lifecycle.Event.ON_RESUME)
                     }
                 }
-                val lifecycleOwner = (activity as? LifecycleOwner) ?: fallbackOwner
+                val lifecycleOwner = (activity as? androidx.lifecycle.LifecycleOwner) ?: fallbackOwner
 
-                if (content.findViewTreeLifecycleOwner() == null) {
-                    decor?.findViewTreeLifecycleOwner()?.let { content.setViewTreeLifecycleOwner(it) }
-                        ?: content.setViewTreeLifecycleOwner(lifecycleOwner)
+                if (decorView.findViewTreeLifecycleOwner() == null) {
+                    decorView.setViewTreeLifecycleOwner(lifecycleOwner)
                 }
-                if (content.findViewTreeSavedStateRegistryOwner() == null) {
-                    decor?.findViewTreeSavedStateRegistryOwner()?.let { content.setViewTreeSavedStateRegistryOwner(it) }
-                        ?: content.setViewTreeSavedStateRegistryOwner((activity as? SavedStateRegistryOwner) ?: (fallbackOwner as SavedStateRegistryOwner))
+                if (decorView.findViewTreeSavedStateRegistryOwner() == null) {
+                    decorView.setViewTreeSavedStateRegistryOwner(
+                        activity as? androidx.savedstate.SavedStateRegistryOwner
+                            ?: (fallbackOwner as androidx.savedstate.SavedStateRegistryOwner)
+                    )
                 }
-                if (content.findViewTreeViewModelStoreOwner() == null) {
-                    decor?.findViewTreeViewModelStoreOwner()?.let { content.setViewTreeViewModelStoreOwner(it) }
-                        ?: content.setViewTreeViewModelStoreOwner((activity as? ViewModelStoreOwner) ?: (fallbackOwner as ViewModelStoreOwner))
+                if (decorView.findViewTreeViewModelStoreOwner() == null) {
+                    decorView.setViewTreeViewModelStoreOwner(
+                        activity as? androidx.lifecycle.ViewModelStoreOwner
+                            ?: (fallbackOwner as androidx.lifecycle.ViewModelStoreOwner)
+                    )
                 }
 
-                val host = TwitterNavBarHost(
-                    context = activity,
-                    prefs = prefs,
-                    backdropSource = content
-                ).apply {
+                val composeView = ComposeView(activity).apply {
                     tag = TAG_OVERLAY
                     id = OVERLAY_TAG_ID
                     clipChildren = false
                     clipToPadding = false
                     layoutParams = FrameLayout.LayoutParams(
-                        FrameLayout.LayoutParams.MATCH_PARENT,
-                        FrameLayout.LayoutParams.MATCH_PARENT
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.MATCH_PARENT
                     )
+                    setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindowOrReleasedFromPool)
+                    setViewTreeLifecycleOwner(lifecycleOwner)
+                    setViewTreeSavedStateRegistryOwner(
+                        activity as? androidx.savedstate.SavedStateRegistryOwner
+                            ?: (fallbackOwner as androidx.savedstate.SavedStateRegistryOwner)
+                    )
+                    setViewTreeViewModelStoreOwner(
+                        activity as? androidx.lifecycle.ViewModelStoreOwner
+                            ?: (fallbackOwner as androidx.lifecycle.ViewModelStoreOwner)
+                    )
+
+                    setContent {
+                        TwitterNavBarHost(
+                            backdropSource = backdropSource,
+                            hyperBouncePrefs = prefs
+                        )
+                    }
                 }
 
-                content.addView(host)
-                Log.i(TAG, "TwitterNavBarHost successfully attached to android.R.id.content")
+                // Automatic keyboard (IME) dodging: hide bar when soft keyboard is shown
+                composeView.setOnApplyWindowInsetsListener { v, insets ->
+                    val imeBottom = try {
+                        insets.getInsets(WindowInsets.Type.ime()).bottom
+                    } catch (_: Throwable) { 0 }
+
+                    val targetVisibility = if (imeBottom > 200) View.GONE else View.VISIBLE
+                    if (v.visibility != targetVisibility) {
+                        v.visibility = targetVisibility
+                    }
+                    insets
+                }
+
+                decorView.addView(composeView)
+                Log.i(TAG, "TwitterNavBarHost successfully attached to DecorView (Scroll Immune + IME Dodging)")
             } catch (t: Throwable) {
-                Log.e(TAG, "Failed to attach TwitterNavBarHost", t)
+                Log.e(TAG, "Failed to attach TwitterNavBarHost to DecorView", t)
             }
         }
     }
 
-    private fun hookStockBarSuppression(cl: ClassLoader) {
-        // 1. Primary hook: com.x.ui.common.p3.a(...) -> force param 6 (z2) to true
+    private fun hookMultiLayerSuppression(cl: ClassLoader) {
+        // LAYER 1: Root Navigation Shell Hook: com.x.main.k0.j(...)
+        // Forces param 6 (z4) to true, simultaneously collapsing Pipeline A (glass) and Pipeline B (p3)
         try {
-            val p3Class = cl.loadClass("com.x.ui.common.p3")
-            val p3Methods = p3Class.declaredMethods.filter { it.name == "a" }
-            for (m in p3Methods) {
+            val k0Class = cl.loadClass("com.x.main.k0")
+            val jMethods = k0Class.declaredMethods.filter { it.name == "j" && it.parameterTypes.size >= 30 }
+            for (m in jMethods) {
                 module.hook(m).intercept { chain ->
                     if (chain.args.size >= 7 && chain.args[6] is Boolean) {
                         chain.args[6] = true
                     }
                     chain.proceed()
                 }
-                Log.i(TAG, "Hooked com.x.ui.common.p3.a for stock bottom bar collapse")
+                Log.i(TAG, "Layer 1 Hooked: com.x.main.k0.j (Root Shell Suppression)")
+            }
+        } catch (t: Throwable) {
+            Log.e(TAG, "Failed to hook com.x.main.k0.j", t)
+        }
+
+        // LAYER 2: Pipeline A Hooks: com.x.ui.common.glass.c
+        try {
+            val glassClass = cl.loadClass("com.x.ui.common.glass.c")
+
+            // Method e: Container - force param 3 (z2) = true (collapses size to 0 and skips c())
+            for (m in glassClass.declaredMethods.filter { it.name == "e" && it.parameterTypes.size >= 16 }) {
+                module.hook(m).intercept { chain ->
+                    if (chain.args.size >= 4 && chain.args[3] is Boolean) {
+                        chain.args[3] = true
+                    }
+                    chain.proceed()
+                }
+                Log.i(TAG, "Layer 2 Hooked: com.x.ui.common.glass.c.e (Glass Container Suppression)")
+            }
+
+            // Method c: Glass Bar Rendering - direct interception fallback
+            for (m in glassClass.declaredMethods.filter { it.name == "c" && it.parameterTypes.size >= 16 }) {
+                module.hook(m).intercept { _ ->
+                    // Return null to suppress stock glass navigation bar if ever reached
+                    null
+                }
+                Log.i(TAG, "Layer 2 Hooked: com.x.ui.common.glass.c.c (Glass Bar Neutralization)")
+            }
+        } catch (t: Throwable) {
+            Log.e(TAG, "Failed to hook com.x.ui.common.glass.c", t)
+        }
+
+        // LAYER 3: Pipeline B Hook: com.x.ui.common.p3.a
+        try {
+            val p3Class = cl.loadClass("com.x.ui.common.p3")
+            for (m in p3Class.declaredMethods.filter { it.name == "a" && it.parameterTypes.size >= 10 }) {
+                module.hook(m).intercept { chain ->
+                    if (chain.args.size >= 7 && chain.args[6] is Boolean) {
+                        chain.args[6] = true
+                    }
+                    chain.proceed()
+                }
+                Log.i(TAG, "Layer 3 Hooked: com.x.ui.common.p3.a (Legacy Bottom Bar Suppression)")
             }
         } catch (t: Throwable) {
             Log.e(TAG, "Failed to hook com.x.ui.common.p3.a", t)
-        }
-
-        // 2. Secondary hook: com.x.main.k0.b(...) -> extract state and suppress item composition
-        try {
-            val k0Class = cl.loadClass("com.x.main.k0")
-            val bMethods = k0Class.declaredMethods.filter { it.name == "b" && it.parameterTypes.size >= 8 }
-            for (m in bMethods) {
-                module.hook(m).intercept { chain ->
-                    try {
-                        if (chain.args.size >= 5) {
-                            extractBadges(chain.args[1])
-                            val currentVd = chain.args[3]
-                            if (currentVd is Enum<*>) {
-                                currentTabIndexState.intValue = currentVd.ordinal.coerceIn(0, 4)
-                            }
-                            val fn1 = chain.args[4] as? ((Any) -> Any?)
-                            if (fn1 != null) {
-                                tabSwitchFunction = fn1
-                            }
-                        }
-                    } catch (t: Throwable) {
-                        Log.e(TAG, "Error in k0.b hook", t)
-                    }
-                    // Suppress stock navigation bar item emission
-                    null
-                }
-                Log.i(TAG, "Hooked com.x.main.k0.b for item suppression & state capture")
-            }
-        } catch (t: Throwable) {
-            Log.e(TAG, "Failed to hook com.x.main.k0.b", t)
         }
     }
 
@@ -245,11 +288,13 @@ object TwitterHook {
                 module.hook(m).intercept { chain ->
                     try {
                         if (chain.args.size >= 9) {
-                            val fn1 = chain.args[4] as? ((Any) -> Any?)
+                            val fn1 = chain.args[4]
                             val currentVd = chain.args[7]
                             val controller = chain.args[8]
 
-                            if (fn1 != null) tabSwitchFunction = fn1
+                            if (fn1 != null) {
+                                rawTabSwitchFunction = fn1
+                            }
                             if (controller != null) {
                                 activeTabController = controller
                                 pollBadgesFromController(controller)
@@ -263,29 +308,41 @@ object TwitterHook {
                     }
                     chain.proceed()
                 }
-                Log.i(TAG, "Hooked com.x.main.k0.i for navigation controller interception")
+                Log.i(TAG, "Hooked com.x.main.k0.i for Navigation & Badges")
             }
         } catch (t: Throwable) {
             Log.e(TAG, "Failed to hook com.x.main.k0.i", t)
         }
     }
 
-    private fun pollBadgesFromController(controller: Any) {
-        try {
-            val uMethod = controller.javaClass.methods.find { it.name == "u" && it.parameterTypes.isEmpty() }
-            if (uMethod != null) {
-                val stateFlow = uMethod.invoke(controller)
-                if (stateFlow != null) {
-                    val getValueMethod = stateFlow.javaClass.methods.find { it.name == "getValue" && it.parameterTypes.isEmpty() }
-                    if (getValueMethod != null) {
-                        val w0 = getValueMethod.invoke(stateFlow)
-                        extractBadges(w0)
-                    }
-                }
+    private fun getOrCreateFunction0Proxy(cl: ClassLoader): Any? {
+        cachedFunction0Proxy?.let { return it }
+        synchronized(this) {
+            cachedFunction0Proxy?.let { return it }
+            return try {
+                val fn0Class = cl.loadClass("kotlin.jvm.functions.Function0")
+                val proxy = Proxy.newProxyInstance(
+                    cl,
+                    arrayOf(fn0Class),
+                    InvocationHandler { _, _, _ -> null /* returns kotlin.Unit */ }
+                )
+                cachedFunction0Proxy = proxy
+                proxy
+            } catch (t: Throwable) {
+                Log.e(TAG, "Failed to create Function0 Proxy", t)
+                null
             }
-        } catch (_: Throwable) {
-            // Ignore reflection issues during fast recompositions
         }
+    }
+
+    fun pollBadgesFromController(controller: Any) {
+        try {
+            val uMethod = controller.javaClass.methods.find { it.name == "u" && it.parameterTypes.isEmpty() } ?: return
+            val stateFlow = uMethod.invoke(controller) ?: return
+            val getValueMethod = stateFlow.javaClass.methods.find { it.name == "getValue" && it.parameterTypes.isEmpty() } ?: return
+            val w0 = getValueMethod.invoke(stateFlow) ?: return
+            extractBadges(w0)
+        } catch (_: Throwable) {}
     }
 
     fun extractBadges(w0Var: Any?) {
@@ -318,30 +375,79 @@ object TwitterHook {
         }
     }
 
+    /**
+     * Dispatches zero-latency tab switches to Twitter's Decompose Router.
+     * Guaranteed crash-proof across rapid scrubbing and tab re-clicks.
+     */
     fun dispatchTabClick(index: Int) {
         val cl = classLoader ?: return
-        try {
-            val vdClass = cl.loadClass("com.x.navigation.vd")
-            val enums = vdClass.enumConstants as? Array<Enum<*>> ?: return
-            val targetVd = enums.getOrNull(index.coerceIn(0, 4)) ?: return
+        val targetIndex = index.coerceIn(0, 4)
 
-            // Method 1: Lambda invocation (zero-latency, preserves re-click scroll-to-top)
-            val fn = tabSwitchFunction
-            if (fn != null) {
-                fn.invoke(targetVd)
-            } else {
-                // Method 2: Controller invocation fallback
+        // Optimistic UI state update
+        currentTabIndexState.intValue = targetIndex
+
+        mainHandler.post {
+            try {
+                val vdClass = cl.loadClass("com.x.navigation.vd")
+                val enums = vdClass.enumConstants as? Array<Enum<*>> ?: return@post
+                val targetVd = enums.getOrNull(targetIndex) ?: return@post
+
+                var dispatched = false
+
+                // Method 1: Lambda invocation via reflective method call (ClassLoader safe)
+                val rawFn = rawTabSwitchFunction
+                if (rawFn != null) {
+                    try {
+                        val invokeMethod = rawFn.javaClass.methods.find {
+                            it.name == "invoke" && it.parameterTypes.size == 1 &&
+                                    (it.parameterTypes[0] == vdClass || it.parameterTypes[0].isAssignableFrom(targetVd.javaClass))
+                        } ?: rawFn.javaClass.methods.find {
+                            it.name == "invoke" && it.parameterTypes.size == 1
+                        }
+
+                        if (invokeMethod != null) {
+                            invokeMethod.invoke(rawFn, targetVd)
+                            dispatched = true
+                        }
+                    } catch (t: Throwable) {
+                        Log.w(TAG, "Method 1 lambda dispatch failed: ${t.message}")
+                    }
+                }
+
+                // Method 2: Controller invocation fallback with Proxy Function0
+                if (!dispatched) {
+                    val controller = activeTabController
+                    if (controller != null) {
+                        val fn0Class = cl.loadClass("kotlin.jvm.functions.Function0")
+                        val nMethod = controller.javaClass.methods.find {
+                            it.name == "n" && it.parameterTypes.size == 2 &&
+                                    (it.parameterTypes[0] == vdClass || it.parameterTypes[0].isAssignableFrom(targetVd.javaClass)) &&
+                                    (it.parameterTypes[1] == fn0Class || it.parameterTypes[1].name == "kotlin.jvm.functions.Function0")
+                        }
+
+                        val nonNullCallback = getOrCreateFunction0Proxy(cl)
+                        if (nMethod != null && nonNullCallback != null) {
+                            nMethod.invoke(controller, targetVd, nonNullCallback)
+                            dispatched = true
+                        }
+                    }
+                }
+
+                // Verify active tab in Decompose stack
                 val controller = activeTabController
                 if (controller != null) {
-                    val nMethod = controller.javaClass.methods.find {
-                        it.name == "n" && it.parameterTypes.size == 2 && it.parameterTypes[0] == vdClass
-                    }
-                    nMethod?.invoke(controller, targetVd, null)
+                    try {
+                        val qMethod = controller.javaClass.methods.find { it.name == "q" && it.parameterTypes.isEmpty() }
+                        val activeVd = qMethod?.invoke(controller) as? Enum<*>
+                        if (activeVd != null) {
+                            currentTabIndexState.intValue = activeVd.ordinal.coerceIn(0, 4)
+                        }
+                    } catch (_: Throwable) {}
                 }
+
+            } catch (t: Throwable) {
+                Log.e(TAG, "Failed to dispatch tab click to $targetIndex", t)
             }
-            currentTabIndexState.intValue = index
-        } catch (t: Throwable) {
-            Log.e(TAG, "Failed to dispatch tab click to $index", t)
         }
     }
 }
