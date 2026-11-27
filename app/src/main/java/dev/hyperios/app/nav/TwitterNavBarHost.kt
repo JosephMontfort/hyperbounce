@@ -172,7 +172,6 @@ class TwitterNavBarHost @JvmOverloads constructor(
     context: Context,
     val prefs: HyperBouncePrefs,
     val backdropSource: View = (context as? Activity)?.findViewById(android.R.id.content) ?: View(context),
-    val window: Window? = (context as? Activity)?.window,
     attrs: AttributeSet? = null,
     defStyleAttr: Int = 0
 ) : FrameLayout(context, attrs, defStyleAttr) {
@@ -191,8 +190,7 @@ class TwitterNavBarHost @JvmOverloads constructor(
             setContent {
                 TwitterNavBarHost(
                     backdropSource = backdropSource,
-                    hyperBouncePrefs = prefs,
-                    window = window
+                    hyperBouncePrefs = prefs
                 )
             }
         }
@@ -203,8 +201,7 @@ class TwitterNavBarHost @JvmOverloads constructor(
 @Composable
 fun TwitterNavBarHost(
     backdropSource: View,
-    hyperBouncePrefs: HyperBouncePrefs,
-    window: Window? = (backdropSource.context as? Activity)?.window
+    hyperBouncePrefs: HyperBouncePrefs
 ) {
     val live = rememberLiveNavBarSettings(hyperBouncePrefs, "twitter")
     val isDark = when (live.themeMode) {
@@ -256,9 +253,6 @@ fun TwitterNavBarHost(
             TwitterHook.dispatchTabClick(index)
         },
         sourceView = backdropSource,
-        enablePixelCopy = true,
-        enableWindowPixelCopy = true,
-        window = window,
         forceLightTheme = live.themeMode == "Light",
         forceDarkTheme = live.themeMode == "Dark",
         containerAlpha = live.containerOpacity,

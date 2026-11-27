@@ -191,8 +191,7 @@ object TwitterHook {
                     setContent {
                         TwitterNavBarHost(
                             backdropSource = backdropSource,
-                            hyperBouncePrefs = prefs,
-                            window = activity.window
+                            hyperBouncePrefs = prefs
                         )
                     }
                 }

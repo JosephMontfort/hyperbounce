@@ -127,7 +127,7 @@ internal class LiquidGlassViewBackdrop(
         val currentRegion = region ?: return
         if (currentRegion.width <= 0 || currentRegion.height <= 0) return
 
-        if (hasSoftwareRenderingFailed || enableWindowPixelCopy) {
+        if (enableWindowPixelCopy) {
             requestHardwareWindowCopy(currentRegion, now)
             return
         }
@@ -183,8 +183,11 @@ internal class LiquidGlassViewBackdrop(
             lastCaptureNanos = now
         } catch (e: IllegalArgumentException) {
             // Software rendering does not support RuntimeShader (e.g. if sourceView contains RuntimeShader / AGSL)
-            hasSoftwareRenderingFailed = true
-            requestHardwareWindowCopy(currentRegion, now)
+            if (enableWindowPixelCopy) {
+                requestHardwareWindowCopy(currentRegion, now)
+            } else {
+                // Fallback: retain previous valid frame without recursive window capture
+            }
         } catch (t: Throwable) {
             Log.e(
                 "HyperBounce-Backdrop",
@@ -198,7 +201,7 @@ internal class LiquidGlassViewBackdrop(
         val decor = win.decorView ?: return
         val decorWidth = decor.width
         val decorHeight = decor.height
-        if (decorWidth <= 0 || decorHeight <= 0) return
+        if (decorWidth <= 0 || decorHeight <= 0 || !decor.isAttachedToWindow || decor.windowToken == null) return
 
         if (isWindowCopying) return
 
