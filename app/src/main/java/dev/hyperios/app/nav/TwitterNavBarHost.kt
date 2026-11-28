@@ -11,6 +11,14 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.Window
 import android.widget.FrameLayout
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -252,44 +260,63 @@ fun TwitterNavBarHost(
     val maxSafeTabWidth = ((screenWidthDp - 16f) / tabCount).coerceAtLeast(40f)
     val effectiveTabWidth = live.tabWidth.coerceAtMost(maxSafeTabWidth)
 
+    val isBarVisible by TwitterHook.isBarVisibleState
+
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .wrapContentHeight(align = Alignment.Bottom),
         contentAlignment = Alignment.BottomCenter
     ) {
-        LiquidNavigationBar(
-            bottomPadding = live.bottomMargin.dp,
-            tabs = inactiveTabs,
-            activeTabs = activeTabs,
-            selectedIndex = currentTabIndex.coerceIn(0, 4),
-            onTabSelected = { index ->
-                TwitterHook.dispatchTabClick(index)
-            },
-            sourceView = LocalView.current,
-            enablePixelCopy = true,
-            enableWindowPixelCopy = true,
-            window = window,
-            forceLightTheme = live.themeMode == "Light",
-            forceDarkTheme = live.themeMode == "Dark",
-            containerAlpha = live.containerOpacity,
-            effectMultiplier = live.glassIntensity,
-            barBlurIntensity = live.barBlurIntensity,
-            labels = if (live.showLabels) listOf("Home", "Explore", "Grok", "Notifications", "Messages") else emptyList(),
-            customAccentColor = resolveAccentColor(live.accent, live.customAccentColor),
-            barHeight = live.barHeight.dp,
-            tabWidth = effectiveTabWidth.dp,
-            cornerRadius = live.cornerRadius.dp,
-            pillGlassIntensity = live.pillGlassIntensity,
-            pillContainerOpacity = live.pillContainerOpacity,
-            pillChromaticAberration = live.pillChromaticAberration,
-            pillShadow = live.pillShadow,
-            liquidGlass = live.liquidGlass,
-            isShrunk = false,
-            shrinkScale = 1.0f,
-            scrollShrinkState = null,
-            badgeCounts = badgeCounts,
-            badgeDots = badgeDots
-        )
+        AnimatedVisibility(
+            visible = isBarVisible,
+            enter = slideInVertically(
+                initialOffsetY = { fullHeight -> fullHeight },
+                animationSpec = spring(
+                    stiffness = Spring.StiffnessMediumLow,
+                    dampingRatio = Spring.DampingRatioLowBouncy
+                )
+            ) + fadeIn(animationSpec = tween(150)),
+            exit = slideOutVertically(
+                targetOffsetY = { fullHeight -> fullHeight },
+                animationSpec = spring(
+                    stiffness = Spring.StiffnessMediumLow
+                )
+            ) + fadeOut(animationSpec = tween(150))
+        ) {
+            LiquidNavigationBar(
+                bottomPadding = live.bottomMargin.dp,
+                tabs = inactiveTabs,
+                activeTabs = activeTabs,
+                selectedIndex = currentTabIndex.coerceIn(0, 4),
+                onTabSelected = { index ->
+                    TwitterHook.dispatchTabClick(index)
+                },
+                sourceView = LocalView.current,
+                enablePixelCopy = true,
+                enableWindowPixelCopy = true,
+                window = window,
+                forceLightTheme = live.themeMode == "Light",
+                forceDarkTheme = live.themeMode == "Dark",
+                containerAlpha = live.containerOpacity,
+                effectMultiplier = live.glassIntensity,
+                barBlurIntensity = live.barBlurIntensity,
+                labels = if (live.showLabels) listOf("Home", "Explore", "Grok", "Notifications", "Messages") else emptyList(),
+                customAccentColor = resolveAccentColor(live.accent, live.customAccentColor),
+                barHeight = live.barHeight.dp,
+                tabWidth = effectiveTabWidth.dp,
+                cornerRadius = live.cornerRadius.dp,
+                pillGlassIntensity = live.pillGlassIntensity,
+                pillContainerOpacity = live.pillContainerOpacity,
+                pillChromaticAberration = live.pillChromaticAberration,
+                pillShadow = live.pillShadow,
+                liquidGlass = live.liquidGlass,
+                isShrunk = false,
+                shrinkScale = 1.0f,
+                scrollShrinkState = null,
+                badgeCounts = badgeCounts,
+                badgeDots = badgeDots
+            )
+        }
     }
 }

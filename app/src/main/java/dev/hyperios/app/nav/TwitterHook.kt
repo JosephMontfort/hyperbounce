@@ -56,6 +56,27 @@ object TwitterHook {
     val badgeCountsState = mutableStateOf<List<String?>>(listOf(null, null, null, null, null))
     val badgeDotsState = mutableStateOf<List<Boolean>>(listOf(false, false, false, false, false))
 
+    @Volatile private var isRouteSuppressed: Boolean = false
+    @Volatile private var isScrollSuppressed: Boolean = false
+    @Volatile var currentDensity: Float = 2.75f
+
+    val isBarVisibleState = mutableStateOf(true)
+
+    private fun updateBarVisibility() {
+        val targetVisible = !isRouteSuppressed && !isScrollSuppressed
+        if (isBarVisibleState.value != targetVisible) {
+            val runnable = Runnable {
+                isBarVisibleState.value = targetVisible
+                activeFloatingBar?.postInvalidate()
+            }
+            if (Looper.myLooper() == Looper.getMainLooper()) {
+                runnable.run()
+            } else {
+                mainHandler.post(runnable)
+            }
+        }
+    }
+
     @Volatile
     var activeTabController: Any? = null
 
@@ -100,6 +121,7 @@ object TwitterHook {
         hookMainActivity(param.classLoader)
         hookMultiLayerSuppression(param.classLoader)
         hookNavigationAndBadges(param.classLoader)
+        hookVisibilityAndFab(param.classLoader)
     }
 
     private fun hookMainActivity(cl: ClassLoader) {
@@ -181,11 +203,15 @@ object TwitterHook {
             ) { _, method, args ->
                 if (method.name == "onComputeInternalInsets" && args != null && args.isNotEmpty()) {
                     val insetsInfo = args[0]
-                    val pillRect = pillBoundsSupplier()
+                    val isVisible = isBarVisibleState.value
+                    val pillRect = if (isVisible) pillBoundsSupplier() else null
+
+                    setTouchableInsetsMethod.invoke(insetsInfo, TOUCHABLE_INSETS_REGION)
+                    val region = touchableRegionField.get(insetsInfo) as Region
                     if (pillRect != null && !pillRect.isEmpty) {
-                        setTouchableInsetsMethod.invoke(insetsInfo, TOUCHABLE_INSETS_REGION)
-                        val region = touchableRegionField.get(insetsInfo) as Region
                         region.set(pillRect)
+                    } else {
+                        region.setEmpty() // 100% touch passthrough! Zero hit interception!
                     }
                 }
                 null
@@ -310,6 +336,7 @@ object TwitterHook {
                 })
 
                 val density = activity.resources.displayMetrics.density
+                currentDensity = density
                 val insets = decorView.rootWindowInsets
                 val bottomInset = try {
                     insets?.getInsets(WindowInsets.Type.navigationBars())?.bottom
@@ -435,13 +462,18 @@ object TwitterHook {
                 module.hook(m).intercept { chain ->
                     val args = chain.args.toTypedArray()
                     if (args.size >= 7 && args[6] is Boolean) {
+                        val originalHidden = args[6] as Boolean
+                        if (isRouteSuppressed != originalHidden) {
+                            isRouteSuppressed = originalHidden
+                            updateBarVisibility()
+                        }
                         args[6] = true
                         chain.proceed(args)
                     } else {
                         chain.proceed()
                     }
                 }
-                Log.i(TAG, "Layer 1 Hooked: com.x.main.k0.j (Root Shell Suppression)")
+                Log.i(TAG, "Layer 1 Hooked: com.x.main.k0.j (Root Shell Suppression & Route Sync)")
             }
         } catch (t: Throwable) {
             Log.e(TAG, "Failed to hook com.x.main.k0.j", t)
@@ -535,6 +567,83 @@ object TwitterHook {
             }
         } catch (t: Throwable) {
             Log.e(TAG, "Failed to hook com.x.main.k0.i", t)
+        }
+    }
+
+    private fun hookVisibilityAndFab(cl: ClassLoader) {
+        // 1. Scroll-driven visibility hook: com.x.ui.common.m3.e(Lcom/x/ui/common/k3;Z)V
+        try {
+            val m3Class = cl.loadClass("com.x.ui.common.m3")
+            val eMethods = m3Class.declaredMethods.filter {
+                it.name == "e" && it.parameterTypes.size == 2 &&
+                (it.parameterTypes[1] == Boolean::class.javaPrimitiveType || it.parameterTypes[1] == java.lang.Boolean::class.java)
+            }
+            for (m in eMethods) {
+                module.hook(m).intercept { chain ->
+                    val visible = chain.args[1] as? Boolean ?: true
+                    val scrollHidden = !visible
+                    if (isScrollSuppressed != scrollHidden) {
+                        isScrollSuppressed = scrollHidden
+                        updateBarVisibility()
+                    }
+                    chain.proceed()
+                }
+                Log.i(TAG, "Hooked: com.x.ui.common.m3.e (Scroll Visibility Sync)")
+            }
+        } catch (t: Throwable) {
+            Log.w(TAG, "Failed to hook com.x.ui.common.m3.e: ${t.message}")
+        }
+
+        // 2. Fallback hook on j3 implementations: setVisible(Z)
+        val j3ImplClasses = listOf("com.x.ui.common.glass.x", "com.x.ui.common.o3")
+        for (className in j3ImplClasses) {
+            try {
+                val clazz = cl.loadClass(className)
+                val setVisibleMethods = clazz.declaredMethods.filter {
+                    it.name == "setVisible" && it.parameterTypes.size == 1 &&
+                    (it.parameterTypes[0] == Boolean::class.javaPrimitiveType || it.parameterTypes[0] == java.lang.Boolean::class.java)
+                }
+                for (m in setVisibleMethods) {
+                    module.hook(m).intercept { chain ->
+                        val visible = chain.args[0] as? Boolean ?: true
+                        val scrollHidden = !visible
+                        if (isScrollSuppressed != scrollHidden) {
+                            isScrollSuppressed = scrollHidden
+                            updateBarVisibility()
+                        }
+                        chain.proceed()
+                    }
+                }
+                Log.i(TAG, "Hooked $className.setVisible for scroll fallback")
+            } catch (_: Throwable) {}
+        }
+
+        // 3. Dynamic FAB Shifting hook: getSize()I
+        for (className in j3ImplClasses) {
+            try {
+                val clazz = cl.loadClass(className)
+                val getSizeMethods = clazz.declaredMethods.filter {
+                    it.name == "getSize" && it.parameterTypes.isEmpty() && it.returnType == Int::class.javaPrimitiveType
+                }
+                for (m in getSizeMethods) {
+                    module.hook(m).intercept { chain ->
+                        val isVisible = isBarVisibleState.value
+                        if (isVisible) {
+                            val density = currentDensity
+                            val barHeight = prefs.appBarHeight("twitter")
+                            val bottomMargin = prefs.appBottomMargin("twitter")
+                            val clearance = 12f
+                            val totalDp = barHeight + bottomMargin + clearance
+                            (totalDp * density).roundToInt()
+                        } else {
+                            0
+                        }
+                    }
+                }
+                Log.i(TAG, "Hooked $className.getSize for Dynamic FAB Shifting")
+            } catch (t: Throwable) {
+                Log.w(TAG, "Failed to hook $className.getSize: ${t.message}")
+            }
         }
     }
 
