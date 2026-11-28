@@ -204,21 +204,29 @@ object TwitterHook {
             val proxy = Proxy.newProxyInstance(
                 listenerClass.classLoader,
                 arrayOf(listenerClass)
-            ) { _, method, args ->
-                if (method.name == "onComputeInternalInsets" && args != null && args.isNotEmpty()) {
-                    val insetsInfo = args[0]
-                    val isVisible = isBarVisibleState.value
-                    val pillRect = if (isVisible) pillBoundsSupplier() else null
+            ) { proxyInstance, method, args ->
+                when (method.name) {
+                    "onComputeInternalInsets" -> {
+                        if (args != null && args.isNotEmpty()) {
+                            val insetsInfo = args[0]
+                            val isVisible = isBarVisibleState.value
+                            val pillRect = if (isVisible) pillBoundsSupplier() else null
 
-                    setTouchableInsetsMethod.invoke(insetsInfo, TOUCHABLE_INSETS_REGION)
-                    val region = touchableRegionField.get(insetsInfo) as Region
-                    if (pillRect != null && !pillRect.isEmpty) {
-                        region.set(pillRect)
-                    } else {
-                        region.setEmpty() // 100% touch passthrough! Zero hit interception!
+                            setTouchableInsetsMethod.invoke(insetsInfo, TOUCHABLE_INSETS_REGION)
+                            val region = touchableRegionField.get(insetsInfo) as Region
+                            if (pillRect != null && !pillRect.isEmpty) {
+                                region.set(pillRect)
+                            } else {
+                                region.setEmpty() // 100% touch passthrough! Zero hit interception!
+                            }
+                        }
+                        null
                     }
+                    "hashCode" -> System.identityHashCode(proxyInstance)
+                    "equals" -> proxyInstance === args?.getOrNull(0)
+                    "toString" -> "TwitterInternalInsetsListenerProxy"
+                    else -> null
                 }
-                null
             }
 
             val addMethod = ViewTreeObserver::class.java.getMethod("addOnComputeInternalInsetsListener", listenerClass)
@@ -497,14 +505,22 @@ object TwitterHook {
             val proxy = Proxy.newProxyInstance(
                 cl,
                 arrayOf(function1Class)
-            ) { _, method, args ->
-                if (method.name == "invoke" && args != null && args.isNotEmpty()) {
-                    val childStack = args[0]
-                    if (childStack != null) {
-                        handleChildStackChanged(childStack)
+            ) { proxyInstance, method, args ->
+                when (method.name) {
+                    "invoke" -> {
+                        if (args != null && args.isNotEmpty()) {
+                            val childStack = args[0]
+                            if (childStack != null) {
+                                handleChildStackChanged(childStack)
+                            }
+                        }
+                        null
                     }
+                    "hashCode" -> System.identityHashCode(proxyInstance)
+                    "equals" -> proxyInstance === args?.getOrNull(0)
+                    "toString" -> "TwitterNavigationObserverProxy"
+                    else -> null
                 }
-                null
             }
 
             val bMethod = valueObj.javaClass.methods.find {
@@ -806,7 +822,15 @@ object TwitterHook {
                 val proxy = Proxy.newProxyInstance(
                     cl,
                     arrayOf(fn0Class),
-                    InvocationHandler { _, _, _ -> null /* returns kotlin.Unit */ }
+                    InvocationHandler { proxyInstance, method, args ->
+                        when (method.name) {
+                            "invoke" -> null /* returns kotlin.Unit */
+                            "hashCode" -> System.identityHashCode(proxyInstance)
+                            "equals" -> proxyInstance === args?.getOrNull(0)
+                            "toString" -> "TwitterFunction0Proxy"
+                            else -> null
+                        }
+                    }
                 )
                 cachedFunction0Proxy = proxy
                 proxy
