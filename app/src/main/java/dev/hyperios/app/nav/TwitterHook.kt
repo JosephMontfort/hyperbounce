@@ -60,6 +60,9 @@ object TwitterHook {
     @Volatile private var isScrollSuppressed: Boolean = false
     @Volatile var currentDensity: Float = 2.75f
 
+    @Volatile private var activeEaCoordinator: Any? = null
+    @Volatile private var navigationObserverProxy: Any? = null
+
     val isBarVisibleState = mutableStateOf(true)
 
     private fun updateBarVisibility() {
@@ -119,6 +122,7 @@ object TwitterHook {
         module.log(Log.INFO, TAG, "Initializing Redesigned Twitter Hook (Dual-Pipeline Neutralization & Proxy Tab Engine)")
 
         hookMainActivity(param.classLoader)
+        hookDecomposeNavigation(param.classLoader)
         hookMultiLayerSuppression(param.classLoader)
         hookNavigationAndBadges(param.classLoader)
         hookVisibilityAndFab(param.classLoader)
@@ -392,36 +396,40 @@ object TwitterHook {
 
                 // Pill bounds calculation supplier for OnComputeInternalInsetsListener
                 val pillBoundsSupplier: () -> Rect? = {
-                    val w = composeView.width
-                    val h = composeView.height
-                    if (w > 0 && h > 0) {
-                        val barHeightDp = prefs.appBarHeight("twitter")
-                        val bottomMarginDp = prefs.appBottomMargin("twitter")
-                        val tabWidthDp = prefs.appTabWidth("twitter")
+                    if (!isBarVisibleState.value) {
+                        null
+                    } else {
+                        val w = composeView.width
+                        val h = composeView.height
+                        if (w > 0 && h > 0) {
+                            val barHeightDp = prefs.appBarHeight("twitter")
+                            val bottomMarginDp = prefs.appBottomMargin("twitter")
+                            val tabWidthDp = prefs.appTabWidth("twitter")
 
-                        val screenWidthDp = w / density
-                        val tabCount = 5
-                        val maxSafeTabWidth = ((screenWidthDp - 16f) / tabCount).coerceAtLeast(40f)
-                        val effectiveTabWidth = tabWidthDp.coerceAtMost(maxSafeTabWidth)
+                            val screenWidthDp = w / density
+                            val tabCount = 5
+                            val maxSafeTabWidth = ((screenWidthDp - 16f) / tabCount).coerceAtLeast(40f)
+                            val effectiveTabWidth = tabWidthDp.coerceAtMost(maxSafeTabWidth)
 
-                        val pillWidthPx = (effectiveTabWidth * tabCount * density).roundToInt()
-                        val pillHeightPx = (barHeightDp * density).roundToInt()
-                        val bottomMarginPx = (bottomMarginDp * density).roundToInt()
+                            val pillWidthPx = (effectiveTabWidth * tabCount * density).roundToInt()
+                            val pillHeightPx = (barHeightDp * density).roundToInt()
+                            val bottomMarginPx = (bottomMarginDp * density).roundToInt()
 
-                        val left = ((w - pillWidthPx) / 2).coerceAtLeast(0)
-                        val right = ((w + pillWidthPx) / 2).coerceAtMost(w)
-                        val bottom = (h - bottomMarginPx).coerceAtMost(h)
-                        val top = (bottom - pillHeightPx).coerceAtLeast(0)
+                            val left = ((w - pillWidthPx) / 2).coerceAtLeast(0)
+                            val right = ((w + pillWidthPx) / 2).coerceAtMost(w)
+                            val bottom = (h - bottomMarginPx).coerceAtMost(h)
+                            val top = (bottom - pillHeightPx).coerceAtLeast(0)
 
-                        // 8dp touch tolerance padding around the pill
-                        val pad = (8f * density).roundToInt()
-                        Rect(
-                            (left - pad).coerceAtLeast(0),
-                            (top - pad).coerceAtLeast(0),
-                            (right + pad).coerceAtMost(w),
-                            (bottom + pad).coerceAtMost(h)
-                        )
-                    } else null
+                            // 8dp touch tolerance padding around the pill
+                            val pad = (8f * density).roundToInt()
+                            Rect(
+                                (left - pad).coerceAtLeast(0),
+                                (top - pad).coerceAtLeast(0),
+                                (right + pad).coerceAtMost(w),
+                                (bottom + pad).coerceAtMost(h)
+                            )
+                        } else null
+                    }
                 }
 
                 // Register dynamic internal insets listener
@@ -440,6 +448,8 @@ object TwitterHook {
                     insets
                 }
 
+                syncInitialRouteState(activity)
+
                 val wm = activity.windowManager ?: return@runOnUiThread
                 wm.addView(composeView, params)
                 activeFloatingBar = composeView
@@ -449,6 +459,151 @@ object TwitterHook {
             } finally {
                 isAttaching = false
             }
+        }
+    }
+
+    private fun hookDecomposeNavigation(cl: ClassLoader) {
+        try {
+            val eaClass = cl.loadClass("com.x.android.main.ea")
+            for (ctor in eaClass.declaredConstructors) {
+                module.hook(ctor).intercept { chain ->
+                    val result = chain.proceed()
+                    val eaInstance = chain.thisObject
+                    if (eaInstance != null) {
+                        activeEaCoordinator = eaInstance
+                        attachNavigationObserver(eaInstance, cl)
+                    }
+                    result
+                }
+                Log.i(TAG, "Hooked constructor on com.x.android.main.ea for Decompose Stack Observation")
+            }
+        } catch (t: Throwable) {
+            Log.e(TAG, "Failed to hook com.x.android.main.ea constructors", t)
+        }
+    }
+
+    private fun attachNavigationObserver(eaInstance: Any, cl: ClassLoader) {
+        try {
+            // ea.a() returns Value<ChildStack<pp, *>>
+            val aMethod = eaInstance.javaClass.methods.find { it.name == "a" && it.parameterTypes.isEmpty() }
+                ?: eaInstance.javaClass.getDeclaredMethod("a")
+            val valueObj = aMethod.invoke(eaInstance) ?: run {
+                // Fallback: direct reflection on u0 field
+                val u0Field = eaInstance.javaClass.declaredFields.find { it.name == "u0" }?.apply { isAccessible = true }
+                u0Field?.get(eaInstance)
+            } ?: return
+
+            val function1Class = cl.loadClass("kotlin.jvm.functions.Function1")
+            val proxy = Proxy.newProxyInstance(
+                cl,
+                arrayOf(function1Class)
+            ) { _, method, args ->
+                if (method.name == "invoke" && args != null && args.isNotEmpty()) {
+                    val childStack = args[0]
+                    if (childStack != null) {
+                        handleChildStackChanged(childStack)
+                    }
+                }
+                null
+            }
+
+            val bMethod = valueObj.javaClass.methods.find {
+                it.name == "b" && it.parameterTypes.size == 1 && it.parameterTypes[0].isAssignableFrom(function1Class)
+            } ?: valueObj.javaClass.getMethod("b", function1Class)
+
+            bMethod.invoke(valueObj, proxy)
+            navigationObserverProxy = proxy
+            Log.i(TAG, "Successfully subscribed to Decompose ChildStack via ea.u0.b(Function1)")
+
+            // Immediately inspect current stack state
+            val getStackMethod = valueObj.javaClass.methods.find { it.name == "a" && it.parameterTypes.isEmpty() }
+            val currentStack = getStackMethod?.invoke(valueObj)
+            if (currentStack != null) {
+                handleChildStackChanged(currentStack)
+            }
+        } catch (t: Throwable) {
+            Log.e(TAG, "Failed to attach Decompose navigation observer", t)
+        }
+    }
+
+    private fun handleChildStackChanged(childStack: Any) {
+        try {
+            // childStack is com.arkivanov.decompose.router.stack.a
+            // Field a is com.arkivanov.decompose.b (active Child)
+            val activeChildField = childStack.javaClass.declaredFields.find { it.name == "a" }?.apply { isAccessible = true }
+                ?: childStack.javaClass.getField("a")
+            val activeChild = activeChildField.get(childStack) ?: return
+
+            // In activeChild, field a is the configuration (com.x.navigation.pp)
+            val configField = activeChild.javaClass.declaredFields.find { it.name == "a" }?.apply { isAccessible = true }
+                ?: activeChild.javaClass.getField("a")
+            val configuration = configField.get(activeChild) ?: return
+
+            val configClassName = configuration.javaClass.name
+            // Universal Invariant: .wd represents MainLanding (Home, Explore, Grok, Notifs, DMs)
+            val isRootLanding = configClassName.endsWith(".wd") || configClassName == "com.x.navigation.wd"
+
+            val targetRouteSuppressed = !isRootLanding
+
+            if (isRouteSuppressed != targetRouteSuppressed) {
+                isRouteSuppressed = targetRouteSuppressed
+                // When popping back from a subroute to root landing, reset scroll suppression
+                // so the navigation bar re-appears gracefully!
+                if (!isRouteSuppressed) {
+                    isScrollSuppressed = false
+                }
+                Log.i(TAG, "Decompose Stack Transition: config=$configClassName -> isRouteSuppressed=$isRouteSuppressed, isScrollSuppressed=$isScrollSuppressed")
+                updateBarVisibility()
+            }
+        } catch (t: Throwable) {
+            Log.w(TAG, "Error handling child stack update: ${t.message}")
+        }
+    }
+
+    private fun syncInitialRouteState(activity: Activity) {
+        try {
+            val ea = activeEaCoordinator
+            if (ea != null) {
+                val sMethod = ea.javaClass.methods.find { it.name == "s" && it.parameterTypes.isEmpty() }
+                val currentRoute = sMethod?.invoke(ea)
+                if (currentRoute != null) {
+                    val name = currentRoute.javaClass.name
+                    val isRoot = name.endsWith(".wd") || name == "com.x.navigation.wd"
+                    isRouteSuppressed = !isRoot
+                    if (!isRouteSuppressed) {
+                        isScrollSuppressed = false
+                    }
+                    updateBarVisibility()
+                    Log.i(TAG, "Initial route synced from active ea: config=$name, suppressed=$isRouteSuppressed")
+                    return
+                }
+            }
+
+            // Secondary fallback via MainActivity.m (ly0)
+            val mField = activity.javaClass.declaredFields.find { it.name == "m" }?.apply { isAccessible = true }
+            val ly0 = mField?.get(activity) ?: return
+            val uField = ly0.javaClass.declaredFields.find { it.name == "u" }?.apply { isAccessible = true }
+            val rootValue = uField?.get(ly0) ?: return
+            val aMethod = rootValue.javaClass.methods.find { it.name == "a" && it.parameterTypes.isEmpty() }
+            val rootStack = aMethod?.invoke(rootValue) ?: return
+            val activeChild = rootStack.javaClass.declaredFields.find { it.name == "a" }?.apply { isAccessible = true }?.get(rootStack) ?: return
+            val cy0 = activeChild.javaClass.declaredFields.find { it.name == "b" }?.apply { isAccessible = true }?.get(activeChild) ?: return
+            val eaInstance = cy0.javaClass.declaredFields.find { it.name == "a" }?.apply { isAccessible = true }?.get(cy0) ?: return
+
+            activeEaCoordinator = eaInstance
+            val sMethod = eaInstance.javaClass.methods.find { it.name == "s" && it.parameterTypes.isEmpty() }
+            val route = sMethod?.invoke(eaInstance)
+            if (route != null) {
+                val name = route.javaClass.name
+                isRouteSuppressed = !(name.endsWith(".wd") || name == "com.x.navigation.wd")
+                if (!isRouteSuppressed) {
+                    isScrollSuppressed = false
+                }
+                updateBarVisibility()
+                Log.i(TAG, "Initial route synced from MainActivity.m: config=$name, suppressed=$isRouteSuppressed")
+            }
+        } catch (t: Throwable) {
+            Log.w(TAG, "syncInitialRouteState non-fatal: ${t.message}")
         }
     }
 
@@ -462,18 +617,13 @@ object TwitterHook {
                 module.hook(m).intercept { chain ->
                     val args = chain.args.toTypedArray()
                     if (args.size >= 7 && args[6] is Boolean) {
-                        val originalHidden = args[6] as Boolean
-                        if (isRouteSuppressed != originalHidden) {
-                            isRouteSuppressed = originalHidden
-                            updateBarVisibility()
-                        }
                         args[6] = true
                         chain.proceed(args)
                     } else {
                         chain.proceed()
                     }
                 }
-                Log.i(TAG, "Layer 1 Hooked: com.x.main.k0.j (Root Shell Suppression & Route Sync)")
+                Log.i(TAG, "Layer 1 Hooked: com.x.main.k0.j (Root Shell Suppression)")
             }
         } catch (t: Throwable) {
             Log.e(TAG, "Failed to hook com.x.main.k0.j", t)
